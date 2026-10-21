@@ -1,0 +1,29 @@
+# Environnements
+.venv/
+.venv-*/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Donnees brutes et derivees (volumineuses)
+data/raw/
+data/staging/
+data/processed/
+data/profiles/
+data/quality/
+data/reports/
+outputs/
+
+# Artefacts
+*.duckdb
+*.parquet
+*.log
+backups/

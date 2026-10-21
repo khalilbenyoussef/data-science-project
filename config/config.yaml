@@ -1,0 +1,90 @@
+# Configuration centrale du pipeline BIFlow (chemins relatifs à la racine du projet)
+
+project:
+  name: BIFlow
+  domain: "Economy & Finance / Inclusion financière"
+  objective: >
+    Automatiser un pipeline BI multi-agents : profilage, qualité, ETL,
+    KPI, analyse, dashboard et explications XAI à partir des données
+    Findex (demande), FAS (offre) et WDI (contexte macro).
+
+paths:
+  profiles: outputs/profiles
+  reports: outputs/reports
+  logs: outputs/logs
+  staging: data/staging
+  processed: data/processed
+  quality: data/quality
+
+# --------------------------------------------------------------------------- LLM
+llm:
+  temperature: 0
+  max_retries: 2
+  max_calls_per_agent: 5          # garde-fou anti-boucle / anti-coût
+  cache_dir: outputs/llm_cache    # cache disque des réponses (pickle)
+  providers:
+    gemini:
+      type: google
+      model: gemini-3.5-flash
+    groq:
+      type: groq
+      model: llama-3.3-70b-versatile
+    claude:
+      type: anthropic
+      model: claude-sonnet-4-5
+  # ordre = primaire puis fallbacks ; les providers sans clé sont ignorés
+  routing:
+    orchestrator: [gemini, groq, claude]
+    collector:    [gemini, groq, claude]
+    profiler:     [groq, gemini, claude]
+    quality:      [gemini, groq, claude]
+    etl:          [gemini, groq, claude]
+    semantic:     [claude, gemini, groq]
+    analyst:      [claude, groq, gemini]
+    dashboard:    [gemini, groq, claude]
+    xai:          [claude, gemini, groq]
+
+# --------------------------------------------------------------------------- Collecte
+collector:
+  api_base: "https://api.worldbank.org/v2"
+  country: all                     # toutes les économies (agrégats inclus, ex. WLD pour le monde)
+  date_range: "2000:2024"          # période par défaut, surchargée par source si besoin
+  per_page: 20000                  # nb max d'observations par page de l'API
+  timeout: 60
+  retries: 3
+  refresh: false                   # false : réutilise le CSV local s'il existe déjà
+
+profiler:
+  high_missing_threshold: 0.8      # colonne "quasi vide" au-dessus de ce taux de NaN
+  metadata_text_length: 150        # colonne texte longue = métadonnée
+  isolation_forest_contamination: 0.02
+
+sources:
+  findex:                          # World Bank Global Findex (demande / usage) - source STATIQUE
+    type: csv
+    static: true                   # fichier local fourni, jamais réécrit par le Collector
+    path: data/raw/findex.csv
+    date_range: "2011:2024"
+    indicators:
+      - FX.OWN.TOTL.ZS             # Account ownership, population 15+
+      - FX.OWN.TOTL.FE.ZS          # Account ownership, femmes
+      - FX.OWN.TOTL.MA.ZS          # Account ownership, hommes
+  fas:                             # IMF Financial Access Survey (offre) - source STATIQUE
+    type: csv
+    static: true                   # fichier local fourni, jamais réécrit par le Collector
+    path: data/raw/fas.csv
+    date_range: "2004:2024"
+    header_marker: SERIES_CODE     # le fichier FAS a deux lignes d'en-tête
+    indicators:
+      - FB.CBK.BRCH.P5             # Agences bancaires pour 100 000 adultes
+      - FB.ATM.TOTL.P5             # Distributeurs automatiques pour 100 000 adultes
+      - FB.CBK.DPTR.P3             # Déposants auprès des banques pour 1 000 adultes
+      - FB.CBK.BRWR.P3             # Emprunteurs auprès des banques pour 1 000 adultes
+      - FB.AST.NPER.ZS             # Prêts non performants (% du total des prêts)
+  gdp:                             # PIB mondial (World Bank WDI) - source DYNAMIQUE
+    type: csv
+    dynamic: true                  # rafraîchie via hash SHA-256 (data/raw/gdp.csv.sha256)
+    path: data/raw/gdp.csv
+    indicators:
+      - NY.GDP.MKTP.CD             # PIB (USD courants)
+      - NY.GDP.PCAP.CD             # PIB par habitant (USD courants)
