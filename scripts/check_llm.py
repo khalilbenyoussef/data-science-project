@@ -25,10 +25,46 @@ from biflow.llm import (  # noqa: E402
     LLMConfigError,
     build_agent_llm,
     build_chat_model,
+    key_format_ok,
     provider_env_var,
 )
 
 PROMPT = "Reponds uniquement par le mot OK."
+
+
+def _key_format_hint(name: str, spec: dict, key: str) -> str:
+    if key_format_ok(name, spec, key):
+        return ""
+    ptype = str(spec.get("type", name)).lower()
+    expected = {
+        "google": "AQ. ou AIza",
+        "gemini": "AQ. ou AIza",
+        "groq": "gsk_",
+        "anthropic": "sk-ant-",
+        "claude": "sk-ant-",
+    }.get(ptype, "?")
+    return f"la cle ne ressemble pas a une cle {name} (prefixe attendu : {expected})"
+
+
+def _explain_error(exc: Exception) -> str:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    if "getaddrinfo" in text or "connection" in text or "timed out" in text:
+        return "reseau/DNS indisponible (verifier connexion ou VPN)"
+    if "429" in text or "rate limit" in text or "quota" in text:
+        return "quota / limite de debit atteint (fallback ou attendre)"
+    if "1010" in text or "403" in text or "forbidden" in text:
+        return "acces refuse 403 (cle restreinte ou blocage Cloudflare/reseau)"
+    if (
+        "401" in text
+        or "unauthorized" in text
+        or "invalid api key" in text
+        or "invalid x-api-key" in text
+        or "authentication" in text
+    ):
+        return "cle refusee 401 (invalide, revoquee ou mauvais service)"
+    if "404" in text or "not_found" in text or "not found" in text:
+        return "modele introuvable 404 (ajuster le champ model dans config.yaml)"
+    return ""
 
 
 def _content(message) -> str:
@@ -51,21 +87,30 @@ def _model_label(message) -> str:
 
 def test_provider(name: str, spec: dict, temperature: float) -> tuple[bool, str]:
     env_var = provider_env_var(name, spec)
-    if not os.getenv(env_var):
+    key = os.getenv(env_var)
+    if not key:
         return False, f"cle absente : {env_var}"
+
+    hint = _key_format_hint(name, spec, key)
+    if hint:
+        return False, hint
 
     try:
         llm = build_chat_model(name, spec, temperature)
     except ImportError as exc:
         return False, f"paquet manquant ({exc})"
     except Exception as exc:
-        return False, f"initialisation : {exc}"
+        detail = _explain_error(exc)
+        return False, f"initialisation : {exc}" + (f" -> {detail}" if detail else "")
 
     started = time.perf_counter()
     try:
         message = llm.invoke([HumanMessage(content=PROMPT)])
     except Exception as exc:
-        return False, f"appel : {type(exc).__name__}: {str(exc)[:160]}"
+        detail = _explain_error(exc)
+        return False, f"appel : {type(exc).__name__}: {str(exc)[:160]}" + (
+            f" -> {detail}" if detail else ""
+        )
     elapsed = time.perf_counter() - started
 
     model = _model_label(message) or spec.get("model", "?")
@@ -81,7 +126,10 @@ def test_agent(agent: str, cfg: dict) -> bool:
         print(f"  [FAIL] {exc}")
         return False
     except Exception as exc:
+        detail = _explain_error(exc)
         print(f"  [FAIL] appel : {type(exc).__name__}: {str(exc)[:200]}")
+        if detail:
+            print(f"         -> {detail}")
         return False
 
     print(f"  [OK] modele: {_model_label(message) or '?'} | reponse: {_content(message)!r}")

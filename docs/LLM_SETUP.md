@@ -5,11 +5,11 @@ Les clés sont lues depuis `.env` (jamais depuis `config.yaml` ni le code).
 
 ## 1. Créer les clés
 
-| Provider | Console | Variable |
-|---|---|---|
-| Google AI Studio (Gemini) | <https://aistudio.google.com/apikey> | `GOOGLE_API_KEY` |
-| Groq | <https://console.groq.com/keys> | `GROQ_API_KEY` |
-| Anthropic (Claude) | <https://console.anthropic.com/settings/keys> | `ANTHROPIC_API_KEY` |
+| Provider | Console | Variable | Prefixe de cle |
+|---|---|---|---|
+| Google AI Studio (Gemini) | <https://aistudio.google.com/apikey> | `GOOGLE_API_KEY` | `AQ.` ou `AIza` |
+| Groq | <https://console.groq.com/keys> | `GROQ_API_KEY` | `gsk_` |
+| Anthropic (Claude) | <https://console.anthropic.com/settings/keys> | `ANTHROPIC_API_KEY` | `sk-ant-` |
 
 1. Copier le modèle : `Copy-Item .env.example .env`
 2. Renseigner les trois variables dans `.env`.
@@ -18,7 +18,7 @@ Les clés sont lues depuis `.env` (jamais depuis `config.yaml` ni le code).
 ## 2. Quotas et coûts
 
 - **Gemini Flash** : tier gratuit avec quota journalier. Provider principal.
-- **Groq Llama 3.3 70B** : tier gratuit, rate-limit à la minute. Très rapide.
+- **Groq GPT-OSS 120B** : tier gratuit, rate-limit à la minute. Très rapide.
 - **Claude Sonnet** : API payante (pas de tier gratuit). Réservé aux agents
   `semantic`, `analyst` et `xai`, avec `llm.max_calls_per_agent` comme plafond.
 
@@ -60,10 +60,12 @@ providers:
 | Message | Cause / solution |
 |---|---|
 | `cle absente : GOOGLE_API_KEY` | variable non renseignée dans `.env` |
+| `ne ressemble pas a une cle ...` | mauvaise cle (autre service) : regenerer sur la console du provider |
 | `paquet manquant` | `pip install -r requirements.txt` |
-| `appel : Unauthorized` | clé invalide ou révoquée |
+| `appel : Unauthorized` / 401 | clé invalide ou révoquée |
+| `acces refuse 403` | cle restreinte ou blocage Cloudflare/reseau (VPN) |
 | `appel : 429` | quota atteint → le fallback prend le relais |
-| `model not found` | ajuster `llm.providers.<nom>.model` |
+| `model not found` / 404 | modèle retiré : lister les modeles disponibles et ajuster `llm.providers.<nom>.model` |
 
 Tester un seul provider : `python scripts/check_llm.py --provider groq`
 Tester une chaîne d'agent : `python scripts/check_llm.py --agent semantic`

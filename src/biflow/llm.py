@@ -34,6 +34,16 @@ PROVIDER_ENV = {
 # cles de configuration passees telles quelles au constructeur LangChain
 _PASSTHROUGH = {"max_tokens", "timeout", "max_retries", "top_p", "top_k"}
 
+# prefixes attendus par provider (detecte une cle du mauvais service)
+KEY_PREFIXES = {
+    "google": ("AQ.", "AIza"),
+    "gemini": ("AQ.", "AIza"),
+    "google_genai": ("AQ.", "AIza"),
+    "groq": ("gsk_",),
+    "anthropic": ("sk-ant-",),
+    "claude": ("sk-ant-",),
+}
+
 
 class LLMConfigError(RuntimeError):
     """Provider absent, cle manquante ou configuration LLM invalide."""
@@ -53,6 +63,19 @@ def provider_env_var(name: str, spec: dict[str, Any] | None = None) -> str:
     if ptype not in PROVIDER_ENV:
         raise LLMConfigError(f"Provider LLM inconnu : {name} (type={ptype})")
     return PROVIDER_ENV[ptype]
+
+
+def key_format_ok(name: str, spec: dict[str, Any], key: str) -> bool:
+    """Heuristique : la cle ressemble-t-elle au bon service ?
+
+    Desactive avec `skip_key_check: true` pour un provider passant par un
+    proxy compatible (base_url) qui n'utilise pas le prefixe officiel.
+    """
+    if spec.get("skip_key_check"):
+        return True
+    ptype = str(spec.get("type", name)).lower()
+    expected = KEY_PREFIXES.get(ptype)
+    return not expected or key.startswith(expected)
 
 
 def build_chat_model(name: str, spec: dict[str, Any], temperature: float = 0) -> BaseChatModel:
@@ -214,6 +237,14 @@ def build_agent_llm(agent: str, cfg: dict[str, Any] | None = None) -> AgentLLM:
         spec = providers.get(name)
         if not spec:
             skipped.append(f"{name} (provider inconnu)")
+            continue
+        try:
+            key = os.getenv(provider_env_var(name, spec), "")
+        except LLMConfigError as exc:
+            skipped.append(f"{name} ({exc})")
+            continue
+        if key and not key_format_ok(name, spec, key):
+            skipped.append(f"{name} (format de cle inattendu)")
             continue
         try:
             built.append(build_chat_model(name, spec, temperature))

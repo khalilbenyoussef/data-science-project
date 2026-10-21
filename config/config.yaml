@@ -28,10 +28,11 @@ llm:
       model: gemini-3.5-flash
     groq:
       type: groq
-      model: llama-3.3-70b-versatile
+      model: openai/gpt-oss-120b
     claude:
       type: anthropic
       model: claude-sonnet-4-5
+      skip_key_check: false
   # ordre = primaire puis fallbacks ; les providers sans clé sont ignorés
   routing:
     orchestrator: [gemini, groq, claude]
