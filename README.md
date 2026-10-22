@@ -21,7 +21,7 @@ Sources de données :
 - [x] **P1 — Données** : collector, profiler, quality gate, ETL (nœuds LangGraph).
 - [x] **P2 — Semantic / KPI** : catalogue KPI + calcul DuckDB (14 KPI).
 - [x] **P3 — BI Analyst** : tendances, classements, corrélations, insights.
-- [ ] **P4 — Dashboard** : Streamlit + Plotly.
+- [x] **P4 — Dashboard** : Streamlit + Plotly.
 - [ ] **P5 — Auditor / XAI** : lineage, explications, évaluation.
 - [ ] **P6 — Livrables** : docs, tests, démo.
 
@@ -83,6 +83,19 @@ python main.py run --to semantic --no-llm
 # 5. Tests
 python -m pytest tests -q
 ```
+
+## Dashboard
+
+```powershell
+streamlit run dashboard/app.py
+```
+
+Le dashboard est en lecture seule et lit les artefacts du dernier run :
+
+- `Vue d'ensemble` : cartes KPI, qualité et synthèse ;
+- `Tendances` : séries par KPI et par dimension ;
+- `Pays` : classements, comparaison et carte ISO3 ;
+- `Qualité et insights` : anomalies, plan de remédiation, constats et recommandations.
 
 ## Données et périmètre
 
