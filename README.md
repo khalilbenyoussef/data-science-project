@@ -117,3 +117,62 @@ python -m pytest tests -q
 
 Code et architecture, pipeline automatisé, documentation des sources,
 Data Quality Report, tables du modèle en étoile, lineage et tests unitaires.
+
+## Findex digital indicator definitions (verified 2026-10-22)
+
+| Raw/fact code | Meaning | `country_year` column |
+|---|---|---|
+| `dig_acc` | Adults with a digitally enabled account: mobile money, or a bank/similar account allowing payments by card or phone. This measures account ownership/enabling, not transaction frequency. | `digitally_enabled_account` |
+| `g20_any` | Adults who made or received a digital payment in the past year. The measure includes several payment purposes, not just remittances. | `digital_payment` |
+
+For total-population estimates, the population is adults aged 15+; facts also
+retain the survey subgroups. Both raw/fact measures remain fractions. The wide
+table continues to display percentages (`100 * value`), preserving missing values.
+
+Sources: [World Bank indicator `dig-acc`](https://genderdata.worldbank.org/en/indicator/dig-acc),
+[Little Data Book 2025, glossary p. 160](https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/Little-Data-Book-2025-Web.pdf),
+and [Global Findex 2025 glossary, sheet `Glossary`, row 118, code `g20.any`](https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx).
+The official portal/glossary use hyphens/dots in codes; the local CSV uses underscores.
+
+Schema correction: `digital_payment` previously contained `dig_acc`; it now
+contains `g20_any`. The misleading `remittance_use` column is removed rather
+than retained as a false remittance measure. Consumers must update references;
+existing warehouse files are not migrated by this code change.
+
+No remittance-specific or digital-account transaction-frequency KPI has been
+verified from these two columns. Do not infer either one or substitute one
+measure when the other is missing. This verification does not certify other
+Findex labels or every historical wave's detailed questionnaire construction.
+
+## Source schema validation
+
+Quality checks use the mandatory column lists from the ETL. Missing columns,
+null/blank keys, malformed country/indicator/annual FAS series codes, and
+nonnumeric, nonfinite or fractional key years are critical errors. FAS also
+requires at least one four-digit year column. Country aliases and aggregate
+codes retain their existing treatment; unknown three-letter codes retain warnings.
+
+Minimum structural indicator coverage is one selected Findex column, one
+configured FAS series, and one configured GDP indicator code. The Quality Agent
+passes its source configuration into these checks. Standalone checks without
+source configuration use dictionary indicators (Findex/GDP) or structural FAS
+series coverage. Missing optional indicators are listed in schema metrics.
+No complete annual panel, survey-wave list, or non-null value per indicator is
+required. Existing row-count, missingness, duplicate and range scoring still
+applies; missing observations alone are not new critical schema errors.
+
+## FAS percentage plausibility diagnostics
+
+`quality.fas_pct_gdp_threshold` defaults to `1000.0` (% GDP). Finite values
+strictly above this diagnostic threshold are flagged only for
+`OUTD_COMBANK.POGDP` (`deposits_pct_gdp`) and `OUTL_COMBANK.POGDP`
+(`loans_pct_gdp`). The check covers all four-digit year columns in the raw
+source, including years outside the ETL analysis period.
+
+Flags appear under `diagnostics` in the quality JSON, in a separate Markdown
+section, and in `quality_diagnostics.csv`. Each records country/ISO3, year,
+original series code and value, numeric value, unit, threshold and review reason.
+They are separate from structural/scored `issues` and do not change scores,
+critical issue counts or gate decisions. No value is dropped, clamped or rescaled.
+The threshold is a review trigger, not an official IMF validity limit; the
+underlying values and their denominators still require source verification.

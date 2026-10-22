@@ -124,7 +124,7 @@ def _clean_iso3(
     valid = normalized.map(
         lambda value: isinstance(value, str) and bool(re.fullmatch(r"[A-Z]{3}", value))
     )
-    missing = raw.isna()
+    missing = normalized.isna()
     invalid = ~valid & ~missing
     _reject(report, source, "iso3_missing", int(missing.sum()))
     _reject(report, source, "iso3_invalid", int(invalid.sum()))
@@ -549,7 +549,9 @@ def build_country_dim(
     if "codewb" in findex.columns:
         base = findex.copy()
         base["iso3"] = base["codewb"].map(normalize_iso3)
-        base = base.loc[base["iso3"].map(lambda value: bool(value and re.fullmatch(r"[A-Z]{3}", value)))]
+        base = base.loc[base["iso3"].map(
+            lambda value: isinstance(value, str) and bool(re.fullmatch(r"[A-Z]{3}", value))
+        )]
         base = base.drop_duplicates(subset=["iso3"]).copy()
         for _, row in base.iterrows():
             rows.append(
@@ -567,7 +569,9 @@ def build_country_dim(
         iso3 = iso3.map(normalize_iso3)
         names = fas["COUNTRY"] if "COUNTRY" in fas.columns else pd.Series(pd.NA, index=fas.index)
         frame = pd.DataFrame({"iso3": iso3, "country": names})
-        frame = frame.loc[frame["iso3"].map(lambda value: bool(value and re.fullmatch(r"[A-Z]{3}", value)))]
+        frame = frame.loc[frame["iso3"].map(
+            lambda value: isinstance(value, str) and bool(re.fullmatch(r"[A-Z]{3}", value))
+        )]
         frame = frame.drop_duplicates(subset=["iso3"])
         fas_names = dict(zip(frame["iso3"], frame["country"]))
 
@@ -577,7 +581,9 @@ def build_country_dim(
         frame = pd.DataFrame(
             {"iso3": gdp["iso3"].map(normalize_iso3), "country": names}
         )
-        frame = frame.loc[frame["iso3"].map(lambda value: bool(value and re.fullmatch(r"[A-Z]{3}", value)))]
+        frame = frame.loc[frame["iso3"].map(
+            lambda value: isinstance(value, str) and bool(re.fullmatch(r"[A-Z]{3}", value))
+        )]
         frame = frame.drop_duplicates(subset=["iso3"])
         gdp_names = dict(zip(frame["iso3"], frame["country"]))
 
@@ -643,11 +649,11 @@ SELECT
     max(CASE WHEN indicator_code = 'fiaccount_t_d' AND dimension_value = 'all' THEN value END) * 100 AS fi_account,
     max(CASE WHEN indicator_code = 'mobileaccount_t_d' AND dimension_value = 'all' THEN value END) * 100 AS mobile_account,
     max(CASE WHEN indicator_code = 'inactive_t_d' AND dimension_value = 'all' THEN value END) * 100 AS inactive,
-    max(CASE WHEN indicator_code = 'dig_acc' AND dimension_value = 'all' THEN value END) * 100 AS digital_payment,
+    max(CASE WHEN indicator_code = 'dig_acc' AND dimension_value = 'all' THEN value END) * 100 AS digitally_enabled_account,
     max(CASE WHEN indicator_code = 'save_any_t_d' AND dimension_value = 'all' THEN value END) * 100 AS savings,
     max(CASE WHEN indicator_code = 'borrow_any_t_d' AND dimension_value = 'all' THEN value END) * 100 AS borrowing,
     max(CASE WHEN indicator_code = 'merchant_pay' AND dimension_value = 'all' THEN value END) * 100 AS merchant_payment,
-    max(CASE WHEN indicator_code = 'g20_any' AND dimension_value = 'all' THEN value END) * 100 AS remittance_use,
+    max(CASE WHEN indicator_code = 'g20_any' AND dimension_value = 'all' THEN value END) * 100 AS digital_payment,
     max(CASE WHEN indicator_code = 'branch_density' THEN value END) AS brch_per_100k,
     max(CASE WHEN indicator_code = 'atm_density' THEN value END) AS atm_per_100k,
     max(CASE WHEN indicator_code = 'depositors_per_1k' THEN value END) AS depositors_per_1k,
@@ -709,11 +715,11 @@ def _check_country_year(df: pd.DataFrame) -> None:
         "fi_account",
         "mobile_account",
         "inactive",
+        "digitally_enabled_account",
         "digital_payment",
         "savings",
         "borrowing",
         "merchant_payment",
-        "remittance_use",
         "brch_per_100k",
         "atm_per_100k",
         "depositors_per_1k",
@@ -742,11 +748,11 @@ def _check_country_year(df: pd.DataFrame) -> None:
         "fi_account",
         "mobile_account",
         "inactive",
+        "digitally_enabled_account",
         "digital_payment",
         "savings",
         "borrowing",
         "merchant_payment",
-        "remittance_use",
     ]
     for column in rate_columns:
         values = pd.to_numeric(df[column], errors="coerce")

@@ -114,7 +114,7 @@ def run_steps(
 def _summary(state: PipelineState) -> dict[str, Any]:
     quality = state.get("quality") or {}
     profiles = state.get("profiles") or {}
-    return {
+    summary = {
         "run_id": state.get("run_id"),
         "status": state.get("status"),
         "raw_paths": state.get("raw_paths"),
@@ -140,6 +140,14 @@ def _summary(state: PipelineState) -> dict[str, Any]:
         "warnings": state.get("warnings"),
         "errors": state.get("errors"),
     }
+    if "semantic_kpi_request" in state:
+        summary["semantic_kpi_request"] = state["semantic_kpi_request"]
+        summary["semantic_kpi_response"] = state.get("semantic_kpi_response")
+        summary["lineage_path"] = state.get("lineage_path")
+    return summary
+
+
+_NO_SEMANTIC_REQUEST = object()
 
 
 def run_pipeline(
@@ -150,7 +158,15 @@ def run_pipeline(
     cfg: dict[str, Any] | None = None,
     run_id: str | None = None,
     use_llm: bool = True,
+    *,
+    semantic_kpi_request: Any = _NO_SEMANTIC_REQUEST,
 ) -> dict[str, Any]:
+    if semantic_kpi_request is not _NO_SEMANTIC_REQUEST:
+        if any(selection is not None for selection in (only, start, stop)):
+            raise ValueError("semantic_kpi_request cannot be combined with only, start or stop")
+        from biflow.semantic_graph import run_semantic_request
+
+        return run_semantic_request(semantic_kpi_request, cfg=cfg, run_id=run_id, objective=objective)
     cfg = deepcopy(cfg or load_config())
     if not use_llm:
         cfg.setdefault("llm", {})["enabled"] = False

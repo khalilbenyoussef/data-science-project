@@ -1,0 +1,357 @@
+# Declarative definitions only. No calculations, publication decisions or agents execute this file.
+schema_version: 1
+catalog_version: "1.0.0"
+catalog_id: biflow_core_kpis
+created_on: "2026-10-22"
+status: draft
+scope: country_year_total_population
+versioning:
+  definition_changes: increment catalog_version and the affected definition_version
+  breaking_changes: increment catalog major version; never reuse an ID for a different measure
+  historical_results: retain the exact catalog version and hash used for each result
+
+references:
+  findex_2025_book:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/Little-Data-Book-2025-Web.pdf
+    locator: Glossary, printed page 160, Account
+    evidence: account ownership definition; does not certify every historical questionnaire
+  findex_2025_glossary:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A118:C118, g20.any
+    evidence: made or received a digital payment in the past year, age 15+
+  fas_raw_metadata:
+    path: data/raw/fas.csv
+    locator: SERIES_CODE ending in FA26N.PHTADLT_NUM.A; INDICATOR, TYPE_OF_TRANSFORMATION, FREQUENCY, SCALE
+    evidence: commercial-bank branches, per 100000 adults, annual, units
+  local_dictionary:
+    path: src/biflow/tools/dictionary.py
+    locator: FINDEX_LABELS and UNITS
+    evidence: implemented labels and units; not authoritative verification of survey questions
+  etl_contract:
+    path: src/biflow/agents/etl.py
+    locator: findex_long, fas_long and PIVOT_SQL
+    evidence: implemented fact and country_year mappings
+  observed_availability:
+    path: data/raw/findex.csv
+    locator: total-population rows inspected during the offline real-data audit
+    evidence: observed nonmissing survey years, not a guarantee of coverage for each economy
+
+missing_data_policy:
+  id: preserve_missing_v1
+  null_result: unavailable
+  nonfinite_input: unavailable
+  out_of_range_input: require_review_never_clamp
+  zero_is_observed_value: true
+  zero_fill: false
+  interpolate: false
+  forward_fill: false
+  substitute_other_indicator: false
+  absent_country_year: unavailable
+  unavailable_survey_year: unavailable
+  out_of_catalog_year: unavailable_until_catalog_review
+  partial_wave_years: [2022]
+  partial_wave_rule: disclose coverage; never imply complete country coverage
+  derived_kpis: any missing dependency makes the result unavailable
+
+aggregation_policy:
+  id: compatible_denominators_v1
+  country_year: require one unique matching fact; duplicate inputs require review
+  entity_filter: country_dim.is_country = true AND country_dim.is_aggregate = false
+  unknown_entities: require_review
+  across_years: no sum or automatic average; retain separate observed periods
+  across_subgroups: use the total subgroup; never sum overlapping subgroup percentages
+  country_rollup:
+    default: unavailable_without_validated_weights
+    conditional_method: adult_population_weighted_mean
+    formula: sum(kpi_value * adult_population) / sum(adult_population)
+    requirements:
+      - same indicator definition, unit, reference period and denominator population
+      - unique countries only; exclude source aggregates to avoid double counting
+      - validated positive adult-population weights for the same country and year
+      - complete requested membership; disclose countries and population coverage
+      - all dependent input review requirements resolved
+    candidate_weights: population.pop_adult joined on iso3 and year
+    weight_limitation: Findex weights are sparse survey-year metadata, not automatically compatible FAS weights
+
+traceability_policy:
+  id: retain_input_lineage_v1
+  required_result_fields:
+    - kpi_id
+    - definition_version
+    - catalog_version
+    - catalog_sha256
+    - run_id
+    - iso3
+    - year
+    - subgroup
+    - source_dataset
+    - source_indicator
+    - raw_record_key
+    - raw_source_path
+    - raw_source_sha256
+    - warehouse_path
+    - warehouse_sha256
+    - lineage_path
+    - input_fact_key
+    - input_value
+    - input_unit
+    - formula
+    - quality_report_path
+    - quality_report_sha256
+    - diagnostic_references
+    - review_record_ids
+    - publication_status
+  fact_key: [iso3, year, source, indicator_code, dimension, dimension_value]
+  raw_keys:
+    findex: [codewb, year, group, group2]
+    fas: [SERIES_CODE, year_column]
+  country_normalization: preserve original key and record KOS->XKX / WBG->PSE normalization
+  missing_provenance: block_publication
+  archive_requirement: hashes identify inputs; retain source snapshots separately for reproducibility
+
+publication_review_policy:
+  id: review_flagged_dependencies_v1
+  implementation_status: specification_only
+  quality_gate_requirement: quality.passed must be true for the same run and source hashes
+  failed_structural_gate: block_publication
+  provisional_definition: block_publication_until_definition_verified
+  diagnostics_location: quality_report.json:diagnostics
+  diagnostics_csv: quality_diagnostics.csv
+  diagnostic_match_key: [source, iso3, year, indicator_code]
+  match_rule: match every input and inherited dependency; normalize ISO3 and preserve original series identity
+  source_hash_rule: quality report and KPI inputs must refer to the same raw-source hashes
+  fas_series_mapping: resolve diagnostic indicator_code through config/config.yaml sources.fas.series
+  unresolved_diagnostic_mapping: require_source_review
+  unrelated_diagnostics: disclose but do not automatically block unrelated indicators or years
+  affected_input: pending_review_do_not_publish
+  required_review_fields:
+    - diagnostic_reference
+    - input_source_sha256
+    - input_fact_key
+    - reviewer
+    - reviewed_at
+    - decision
+    - rationale
+    - evidence_reference
+  review_decisions:
+    accept_with_explanation: publish_with_review_note
+    reject: block_publication
+    unresolved: pending_review_do_not_publish
+  derived_kpis: inherit all dependency diagnostics and review decisions
+  mutate_values: false
+  change_existing_quality_gate: false
+  current_diagnostic_scope:
+    code: fas_pct_gdp_plausibility
+    indicators: [deposits_pct_gdp, loans_pct_gdp]
+    threshold_config: quality.fas_pct_gdp_threshold
+    applicability: neither percentage indicator is an input to these six KPIs; do not flag branch density by association
+
+kpis:
+  account_ownership:
+    definition_version: "1.0.0"
+    name: Account ownership rate
+    business_objective: financial_inclusion
+    definition: Share of adults owning a bank or similar financial-institution account or a mobile-money account.
+    verification:
+      status: verified
+      evidence: [findex_2025_book, etl_contract]
+      uncertainties: [Detailed historical questionnaire comparability has not been independently reverified.]
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: country_year
+      wide_column: account_own
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: account_own}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    subgroup: total_population
+    reference_period: ownership at survey time; mobile-money eligibility follows the source definition
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  branch_density:
+    definition_version: "1.0.0"
+    name: Commercial-bank branch density
+    business_objective: banking_infrastructure
+    definition: Number of commercial-bank branches per 100000 adults, as reported by IMF FAS.
+    verification:
+      status: verified_metadata
+      evidence: [fas_raw_metadata, etl_contract]
+      uncertainties:
+        - Exact adult-age convention and national reporting breaks require FAS methodology review before cross-country rollups.
+    source: {dataset: fas, indicator: FA26N.PHTADLT_NUM, series_code_template: "{iso3}.FA26N.PHTADLT_NUM.A"}
+    warehouse:
+      fact_table: fact
+      indicator_code: branch_density
+      source: fas
+      input_unit: per_100k_adults
+      dimension: bank_type
+      dimension_value: commercial_banks
+      wide_table: country_year
+      wide_column: brch_per_100k
+      wide_input_unit: per_100k_adults
+    formula: {from_fact: value, from_wide: brch_per_100k}
+    unit: per_100k_adults
+    denominator: {population: adult population used by FAS, basis: published_count_per_100000_adults}
+    subgroup: commercial_banks_all_adults
+    reference_period: annual observation; exact within-year reference date follows FAS metadata
+    valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
+    year_evidence: fas_raw_metadata
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  digital_payment_rate:
+    definition_version: "1.0.0"
+    name: Made or received a digital payment
+    business_objective: digital_finance
+    definition: Share of adults who made or received a digital payment in the past year, across the payment purposes included by Findex.
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary, etl_contract]
+      uncertainties: [Detailed historical questionnaire comparability has not been independently reverified.]
+    source: {dataset: findex, indicator: g20_any, official_indicator: g20.any}
+    warehouse:
+      fact_table: fact
+      indicator_code: g20_any
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: country_year
+      wide_column: digital_payment
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: digital_payment}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    subgroup: total_population
+    reference_period: past_year
+    valid_years: [2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [dig_acc, digitally_enabled_account, remittance_use, transaction_frequency]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  saving_rate:
+    definition_version: "1.0.0"
+    name: Any saving rate (definition pending verification)
+    business_objective: savings_deposits
+    definition: Candidate share reporting any saving; exact survey wording, reference period and cross-wave construction remain to be verified.
+    verification:
+      status: provisional
+      evidence: [local_dictionary, etl_contract]
+      uncertainties:
+        - Confirm the official save_any_t_d definition, denominator, recall period and cross-wave comparability before publishing.
+    source: {dataset: findex, indicator: save_any_t_d, official_indicator: null}
+    warehouse:
+      fact_table: fact
+      indicator_code: save_any_t_d
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: country_year
+      wide_column: savings
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: savings}
+    unit: percent
+    denominator: {population: "provisionally all surveyed adults aged 15+", basis: source_verification_required}
+    subgroup: total_population
+    reference_period: unverified
+    valid_years: [2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  borrowing_rate:
+    definition_version: "1.0.0"
+    name: Any borrowing rate (definition pending verification)
+    business_objective: credit
+    definition: Candidate share reporting any borrowing; exact lender/instrument scope, reference period and cross-wave construction remain to be verified.
+    verification:
+      status: provisional
+      evidence: [local_dictionary, etl_contract]
+      uncertainties:
+        - Confirm the official borrow_any_t_d definition, denominator, recall period and cross-wave comparability before publishing.
+    source: {dataset: findex, indicator: borrow_any_t_d, official_indicator: null}
+    warehouse:
+      fact_table: fact
+      indicator_code: borrow_any_t_d
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: country_year
+      wide_column: borrowing
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: borrowing}
+    unit: percent
+    denominator: {population: "provisionally all surveyed adults aged 15+", basis: source_verification_required}
+    subgroup: total_population
+    reference_period: unverified
+    valid_years: [2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  unbanked_share:
+    definition_version: "1.0.0"
+    name: Adults without an account
+    business_objective: financial_exclusion_vulnerability
+    definition: Complement of account ownership in the same population and year; includes adults with neither a bank/similar account nor mobile money.
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_book, etl_contract]
+      uncertainties:
+        - Measures account exclusion only; does not establish broader financial vulnerability or resilience.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: null}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: country_year
+      wide_column: account_own
+      wide_input_unit: percent
+    formula: {from_fact: "100 * (1 - value)", from_wide: "100 - account_own"}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    subgroup: total_population
+    reference_period: same_as_account_ownership
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: [account_ownership]

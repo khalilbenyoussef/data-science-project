@@ -2,23 +2,35 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any, Mapping
 
 import pandas as pd
 
 from biflow.agents.base import AgentError, BaseAgent
+from biflow.agents.etl import FAS_REQUIRED, FINDEX_REQUIRED, GDP_REQUIRED, YEAR_RE
 from biflow.config import resolve
 from biflow.state import PipelineState
-from biflow.tools.dictionary import FINDEX_LABELS
-from biflow.utils.countries import invalid_iso3, is_aggregate
+from biflow.tools.dictionary import FINDEX_LABELS, GDP_LABELS
+from biflow.utils.countries import invalid_iso3, is_aggregate, normalize_iso3
 from biflow.utils.io import load_source, save_json, write_csv
 
 SEVERITY_WEIGHT = {"critical": 0.35, "high": 0.15, "medium": 0.06, "low": 0.02}
+MANDATORY_SOURCES = ("findex", "fas", "gdp")
 KEY_COLUMNS = {
     "findex": ["codewb", "year", "group", "group2"],
     "fas": ["SERIES_CODE"],
     "gdp": ["iso3", "year", "indicator_code"],
 }
+REQUIRED_COLUMNS = {"findex": FINDEX_REQUIRED, "fas": FAS_REQUIRED, "gdp": GDP_REQUIRED}
+FAS_GDP_PERCENT_SERIES = {
+    "OUTD_COMBANK.POGDP": "deposits_pct_gdp",
+    "OUTL_COMBANK.POGDP": "loans_pct_gdp",
+}
+DIAGNOSTIC_COLUMNS = [
+    "source", "code", "iso3", "country", "year", "series_code", "indicator_code",
+    "original_value", "value", "unit", "threshold", "reason",
+]
 
 
 def _issue(
@@ -120,7 +132,129 @@ def _country_check(name: str, df: pd.DataFrame) -> tuple[list[dict], dict]:
     return issues, {}
 
 
-def check_frame(name: str, df: pd.DataFrame, cfg: dict | None = None) -> dict[str, Any]:
+def _check_schema(name: str, df: pd.DataFrame, source_cfg: dict) -> tuple[list[dict], dict]:
+    """Validate ETL structure, not completeness of survey waves or observations."""
+    if name not in REQUIRED_COLUMNS:
+        return [], {}
+    issues = []
+    missing_columns = [c for c in REQUIRED_COLUMNS[name] if c not in df.columns]
+    if missing_columns:
+        issues.append(_issue(
+            "missing_required_columns", "critical",
+            f"[{name}] colonnes obligatoires absentes : {', '.join(missing_columns)}",
+            count=len(missing_columns),
+        ))
+
+    for column in KEY_COLUMNS[name]:
+        if column not in df.columns:
+            continue
+        text = df[column].astype("string").str.strip()
+        missing = df[column].isna() | text.str.upper().isin(["", "NAN", "<NA>", "NONE", "NULL", "NAT"])
+        if missing.any():
+            issues.append(_issue(
+                "missing_key", "critical", f"[{name}] cle manquante : {column}",
+                column=column, count=int(missing.sum()),
+            ))
+        valid = pd.Series(True, index=df.index)
+        if column in ("codewb", "iso3"):
+            valid = df[column].map(normalize_iso3).map(
+                lambda value: isinstance(value, str) and len(value) == 3
+                and value.isascii() and value.isalpha()
+            )
+        elif column == "year":
+            numeric = pd.to_numeric(df[column], errors="coerce")
+            valid = numeric.notna() & numeric.mod(1).eq(0)
+        elif column == "SERIES_CODE":
+            valid = text.str.upper().str.fullmatch(
+                r"[A-Z]{3}\.[A-Z0-9_]+(?:\.[A-Z0-9_]+)+\.A", na=False,
+            )
+            prefix = text.str.split(".").str[0].map(normalize_iso3)
+            valid &= prefix.notna()
+        elif column == "indicator_code":
+            valid = df[column].astype("string").str.fullmatch(
+                r"[A-Z0-9_]+(?:\.[A-Z0-9_]+)+", na=False,
+            )
+        else:
+            valid = df[column].map(lambda value: isinstance(value, str))
+        invalid = ~valid.fillna(False) & ~missing
+        if invalid.any():
+            issues.append(_issue(
+                "invalid_key", "critical", f"[{name}] cle invalide : {column}",
+                column=column, count=int(invalid.sum()),
+            ))
+
+    if name == "findex":
+        expected = list(source_cfg.get("indicators", []) if source_cfg else FINDEX_LABELS)
+        available = [code for code in expected if code in df.columns]
+    elif name == "fas":
+        years = [c for c in df.columns if YEAR_RE.fullmatch(str(c))]
+        if not years:
+            issues.append(_issue(
+                "missing_year_columns", "critical", "[fas] aucune colonne annee exploitable",
+            ))
+        codes = df["SERIES_CODE"].astype("string").str.strip().str.upper() if "SERIES_CODE" in df else pd.Series(dtype="string")
+        suffixes = set(codes.str.split(".", n=1).str[1].str.rsplit(".", n=1).str[0].dropna())
+        # Without source configuration, only structural series coverage can be checked.
+        expected = list((source_cfg.get("series") or {}).values())
+        available = sorted(suffixes.intersection(expected) if source_cfg else suffixes)
+    else:
+        expected = list(source_cfg.get("indicators", GDP_LABELS))
+        codes = set(df["indicator_code"].dropna()) if "indicator_code" in df else set()
+        available = [code for code in expected if code in codes]
+    if not available:
+        issues.append(_issue(
+            "missing_indicator_coverage", "critical",
+            f"[{name}] aucun indicateur requis present (minimum : 1)",
+        ))
+    return issues, {
+        "missing_required_columns": missing_columns,
+        "available_indicators": available,
+        "missing_configured_indicators": sorted(set(expected) - set(available)),
+        "minimum_indicators": 1,
+    }
+
+
+def _fas_percentage_diagnostics(df: pd.DataFrame, cfg: dict) -> list[dict]:
+    """Non-scoring review flags across all raw years; never change source values."""
+    threshold = float(cfg.get("fas_pct_gdp_threshold", 1000.0))
+    if not math.isfinite(threshold) or threshold <= 0:
+        raise ValueError("quality.fas_pct_gdp_threshold must be finite and positive")
+    if "SERIES_CODE" not in df.columns:
+        return []
+    codes = df["SERIES_CODE"].astype("string").str.strip().str.upper()
+    parts = codes.str.extract(r"^([A-Z]{3})\.(.+)\.A$")
+    suffixes = parts[1]
+    selected = suffixes.isin(FAS_GDP_PERCENT_SERIES)
+    diagnostics = []
+    for index in df.index[selected]:
+        row = df.loc[index]
+        iso3 = normalize_iso3(parts.loc[index, 0])
+        country = row.get("COUNTRY")
+        for year in (c for c in df.columns if YEAR_RE.fullmatch(str(c))):
+            numeric = pd.to_numeric(row[year], errors="coerce")
+            if pd.isna(numeric) or not math.isfinite(numeric) or numeric <= threshold:
+                continue
+            diagnostics.append({
+                "source": "fas",
+                "code": "fas_pct_gdp_plausibility",
+                "iso3": iso3,
+                "country": country if pd.notna(country) else iso3,
+                "year": int(year),
+                "series_code": row["SERIES_CODE"],
+                "indicator_code": FAS_GDP_PERCENT_SERIES[suffixes.loc[index]],
+                "original_value": row[year],
+                "value": float(numeric),
+                "unit": "percent_of_gdp",
+                "threshold": threshold,
+                "reason": f"Value exceeds diagnostic threshold of {threshold:g}% GDP; "
+                "review source value, scale and GDP denominator before KPI use.",
+            })
+    return diagnostics
+
+
+def check_frame(
+    name: str, df: pd.DataFrame, cfg: dict | None = None, source_cfg: dict | None = None,
+) -> dict[str, Any]:
     """Controles qualite d'une source -> rapport + score [0, 1]."""
     cfg = cfg or {}
     issues: list[dict] = []
@@ -141,7 +275,11 @@ def check_frame(name: str, df: pd.DataFrame, cfg: dict | None = None) -> dict[st
             "issue_counts": {"critical": 1},
             "gate": False,
             "metrics": {},
+            "diagnostics": [],
         }
+
+    schema_issues, schema_metrics = _check_schema(name, df, source_cfg or {})
+    issues += schema_issues
 
     if n < min_rows:
         issues.append(
@@ -224,6 +362,7 @@ def check_frame(name: str, df: pd.DataFrame, cfg: dict | None = None) -> dict[st
         "cols": int(p),
         "score": round(score, 4),
         "issues": issues,
+        "diagnostics": _fas_percentage_diagnostics(df, cfg) if name == "fas" else [],
         "issue_counts": counts,
         "gate": score >= float(cfg.get("score_threshold", 0.7))
         and counts.get("critical", 0) == 0,
@@ -233,13 +372,19 @@ def check_frame(name: str, df: pd.DataFrame, cfg: dict | None = None) -> dict[st
             "missing_cells_pct": round(missing_cells, 2),
             "key_columns": key_columns,
             "fully_empty_columns": fully_empty,
+            "schema": schema_metrics,
             **country_meta,
         },
     }
 
 
-def build_report(frames: dict[str, pd.DataFrame], cfg: dict) -> dict[str, Any]:
-    checks = {name: check_frame(name, df, cfg) for name, df in frames.items()}
+def build_report(
+    frames: dict[str, pd.DataFrame], cfg: dict, sources: dict | None = None,
+) -> dict[str, Any]:
+    checks = {name: check_frame(name, df, cfg, (sources or {}).get(name)) for name, df in frames.items()}
+    for name in MANDATORY_SOURCES:
+        if name not in checks:
+            checks[name] = check_frame(name, pd.DataFrame(), cfg)
     total_rows = sum(c["rows"] for c in checks.values())
     overall = (
         sum(c["score"] * c["rows"] for c in checks.values()) / total_rows
@@ -252,7 +397,9 @@ def build_report(frames: dict[str, pd.DataFrame], cfg: dict) -> dict[str, Any]:
     ]
     return {
         "overall_score": round(overall, 4),
-        "passed": overall >= float(cfg.get("score_threshold", 0.7)) and critical == 0,
+        "passed": overall >= float(cfg.get("score_threshold", 0.7))
+        and critical == 0
+        and all(checks[name]["gate"] for name in MANDATORY_SOURCES),
         "critical_issues": critical,
         "checks": checks,
         "issue_counts": {
@@ -260,6 +407,7 @@ def build_report(frames: dict[str, pd.DataFrame], cfg: dict) -> dict[str, Any]:
             for severity in SEVERITY_WEIGHT
         },
         "issues": issue_rows,
+        "diagnostics": [d for check in checks.values() for d in check.get("diagnostics", [])],
     }
 
 
@@ -287,6 +435,14 @@ def _markdown(report: dict) -> str:
             f"- **{issue['source']}** `{issue['code']}` ({issue['severity']}) : "
             f"{issue['message']}"
         )
+    if report.get("diagnostics"):
+        lines += ["", "## Plausibility diagnostics (review only)", "",
+                  "These flags do not affect quality scores or the gate. Values are unchanged.", "",
+                  "| Country | ISO3 | Year | Series | Original value | Reason |",
+                  "|---|---|---|---|---|---|"]
+        for diagnostic in report["diagnostics"]:
+            fields = [diagnostic[k] for k in ("country", "iso3", "year", "series_code", "original_value", "reason")]
+            lines.append("| " + " | ".join(str(v).replace("|", "/") for v in fields) + " |")
     if report.get("llm_plan"):
         lines += ["", "## Plan de remediation (LLM)", ""]
         lines += [f"{index}. {step}" for index, step in enumerate(report["llm_plan"], 1)]
@@ -336,7 +492,7 @@ class QualityAgent(BaseAgent):
                 source_cfg["path"] = raw_paths[name]
             frames[name] = load_source(source_cfg)
 
-        report = build_report(frames, self.cfg.get("quality") or {})
+        report = build_report(frames, self.cfg.get("quality") or {}, sources)
         report["llm_plan"] = self._plan(report)
 
         quality_dir = resolve(self.cfg["paths"].get("quality", "data/quality"))
@@ -344,6 +500,8 @@ class QualityAgent(BaseAgent):
         report_path = quality_dir / "quality_report.json"
         save_json(report, report_path)
         write_csv(pd.DataFrame(report["issues"]), quality_dir / "quality_issues.csv")
+        diagnostics_path = quality_dir / "quality_diagnostics.csv"
+        write_csv(pd.DataFrame(report["diagnostics"], columns=DIAGNOSTIC_COLUMNS), diagnostics_path)
         md_path = quality_dir / "quality_report.md"
         md_path.write_text(_markdown(report), encoding="utf-8")
 
@@ -372,6 +530,7 @@ class QualityAgent(BaseAgent):
                 "json": str(report_path),
                 "csv": str(quality_dir / "quality_issues.csv"),
                 "markdown": str(md_path),
+                "diagnostics_csv": str(diagnostics_path),
             },
             "llm_notes": notes,
         }

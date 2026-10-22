@@ -25,6 +25,10 @@ class PipelineState(TypedDict, total=False):
     staging_paths: dict[str, str]      # source -> CSV long harmonise
     warehouse_path: str                # data/processed/warehouse.duckdb
     llm_notes: dict[str, str]          # commentaires libres produits par les LLM
+    # Optional opt-in semantic channels; normal pipeline defaults are unchanged.
+    semantic_kpi_request: dict[str, Any]
+    semantic_kpi_response: dict[str, Any]
+    lineage_path: str
 
     warnings: Annotated[list[str], operator.add]
     errors: Annotated[list[str], operator.add]

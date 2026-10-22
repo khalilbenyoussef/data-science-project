@@ -7,11 +7,11 @@ FINDEX_LABELS = {
     "fiaccount_t_d": "Compte aupres d'une institution financiere",
     "mobileaccount_t_d": "Compte mobile money",
     "inactive_t_d": "Compte inactif",
-    "dig_acc": "Paiement numerique",
+    "dig_acc": "Detention d'un compte permettant des paiements numeriques",
     "save_any_t_d": "Epargne",
     "borrow_any_t_d": "Emprunt",
     "merchant_pay": "Paiement chez un commercant",
-    "g20_any": "Envoi ou reception de fonds",
+    "g20_any": "Paiement numerique effectue ou recu dans l'annee",
     "fin17a": "Epargne formelle",
     "fin22a": "Emprunt formel",
     "fin24aP": "Paiement numerique (vague 2024)",
@@ -26,6 +26,8 @@ FAS_LABELS = {
     "borrowers_per_1k": "Emprunteurs (banques commerciales) pour 1 000 adultes",
     "loan_accounts_per_1k": "Comptes de pret pour 1 000 adultes",
     "deposit_accounts_per_1k": "Comptes de depot pour 1 000 adultes",
+    "deposits_pct_gdp": "Encours des depots (banques commerciales, % du PIB)",
+    "loans_pct_gdp": "Encours des prets (banques commerciales, % du PIB)",
 }
 
 GDP_LABELS = {
@@ -54,6 +56,8 @@ UNITS = {
     "borrowers_per_1k": "per_1k_adults",
     "loan_accounts_per_1k": "per_1k_adults",
     "deposit_accounts_per_1k": "per_1k_adults",
+    "deposits_pct_gdp": "percent_of_gdp",
+    "loans_pct_gdp": "percent_of_gdp",
     "NY.GDP.MKTP.CD": "usd_current",
     "NY.GDP.PCAP.CD": "usd_current_per_capita",
 }
