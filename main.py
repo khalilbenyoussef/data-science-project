@@ -53,21 +53,6 @@ def _print_state(state: dict) -> None:
     if state.get("warehouse_path"):
         print(f"\nWarehouse : {state['warehouse_path']}")
 
-    kpis = state.get("kpis") or {}
-    if kpis:
-        print(f"\nKPI : {kpis.get('count')} calcule(s)")
-        for item in (kpis.get("items") or [])[:10]:
-            print(
-                f"  {item['id']:26s} {item['latest_year']} "
-                f"{item['latest_value']:>8.2f} {item['unit']}"
-            )
-
-    insights = state.get("insights") or {}
-    if insights:
-        print("\nSynthese")
-        print(f"  {insights.get('summary')}")
-        print(f"  rapport : {insights.get('path')}")
-
     warnings = state.get("warnings") or []
     if warnings:
         print("\nAvertissements")

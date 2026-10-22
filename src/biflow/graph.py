@@ -1,4 +1,4 @@
-"""Graphe LangGraph du pipeline BIFlow (S6 -> S11)."""
+"""Graphe LangGraph du pipeline BIFlow (S6 -> S9)."""
 
 from __future__ import annotations
 
@@ -16,12 +16,10 @@ except Exception:  # noqa: BLE001
 
 from biflow.agents import (
     AgentError,
-    AnalystAgent,
     CollectorAgent,
     EtlAgent,
     ProfilerAgent,
     QualityAgent,
-    SemanticAgent,
 )
 from biflow.config import load_config
 from biflow.state import PipelineState, new_state
@@ -35,8 +33,6 @@ AGENT_CLASSES = {
     "profiler": ProfilerAgent,
     "quality": QualityAgent,
     "etl": EtlAgent,
-    "semantic": SemanticAgent,
-    "analyst": AnalystAgent,
 }
 STEP_ORDER = list(AGENT_CLASSES)
 
@@ -118,8 +114,6 @@ def run_steps(
 def _summary(state: PipelineState) -> dict[str, Any]:
     quality = state.get("quality") or {}
     profiles = state.get("profiles") or {}
-    kpis = state.get("kpis") or {}
-    insights = state.get("insights") or {}
     return {
         "run_id": state.get("run_id"),
         "status": state.get("status"),
@@ -142,25 +136,6 @@ def _summary(state: PipelineState) -> dict[str, Any]:
         },
         "warehouse": state.get("warehouse_path"),
         "staging_paths": state.get("staging_paths"),
-        "kpis": {
-            "count": kpis.get("count"),
-            "values_path": kpis.get("values_path"),
-            "latest": [
-                {
-                    "id": item.get("id"),
-                    "label": item.get("label"),
-                    "year": item.get("latest_year"),
-                    "value": item.get("latest_value"),
-                    "unit": item.get("unit"),
-                }
-                for item in (kpis.get("items") or [])[:12]
-            ],
-        },
-        "insights": {
-            "path": insights.get("path"),
-            "summary": insights.get("summary"),
-            "n_findings": len(insights.get("key_findings") or []),
-        },
         "llm_notes": state.get("llm_notes"),
         "warnings": state.get("warnings"),
         "errors": state.get("errors"),

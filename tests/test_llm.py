@@ -49,12 +49,12 @@ def test_build_agent_llm_without_any_key(monkeypatch):
                 "gemini": {"type": "google", "model": "gemini-3.5-flash"},
                 "groq": {"type": "groq", "model": "openai/gpt-oss-120b"},
             },
-            "routing": {"semantic": ["groq", "gemini"]},
+            "routing": {"quality": ["groq", "gemini"]},
         }
     }
 
     with pytest.raises(LLMConfigError, match="aucun LLM disponible"):
-        build_agent_llm("semantic", cfg)
+        build_agent_llm("quality", cfg)
 
 
 def test_build_agent_llm_skips_wrong_key_format(monkeypatch):
@@ -67,11 +67,11 @@ def test_build_agent_llm_skips_wrong_key_format(monkeypatch):
                 "gemini": {"type": "google", "model": "gemini-3.5-flash"},
                 "groq": {"type": "groq", "model": "openai/gpt-oss-120b"},
             },
-            "routing": {"semantic": ["groq", "gemini"]},
+            "routing": {"quality": ["groq", "gemini"]},
         }
     }
 
-    client = build_agent_llm("semantic", cfg)
+    client = build_agent_llm("quality", cfg)
 
-    assert client.agent == "semantic"
+    assert client.agent == "quality"
     assert client.max_calls is None

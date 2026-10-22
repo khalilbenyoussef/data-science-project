@@ -3,7 +3,7 @@
 Usage :
     python scripts/check_llm.py                 # teste Gemini et Groq
     python scripts/check_llm.py --provider groq
-    python scripts/check_llm.py --agent semantic
+    python scripts/check_llm.py --agent quality
 
 Sortie : un statut par provider, puis le budget et les tokens consommes.
 """
@@ -138,7 +138,7 @@ def test_agent(agent: str, cfg: dict) -> bool:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verifie les providers LLM de BIFlow")
     parser.add_argument("--provider", help="tester un seul provider (ex. gemini)")
-    parser.add_argument("--agent", help="tester la chaine de fallback d'un agent (ex. semantic)")
+    parser.add_argument("--agent", help="tester la chaine de fallback d'un agent (ex. quality)")
     args = parser.parse_args()
 
     cfg = load_config()
@@ -171,7 +171,6 @@ def main() -> int:
         print("1. Copie .env.example vers .env")
         print("2. Renseigne GOOGLE_API_KEY / GROQ_API_KEY")
         print("3. Relance : python scripts/check_llm.py")
-        print("Guide : docs/LLM_SETUP.md")
         return 1
 
     print(f"\n{sum(results)}/{len(results)} provider(s) operationnel(s).")

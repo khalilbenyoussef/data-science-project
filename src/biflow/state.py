@@ -24,12 +24,6 @@ class PipelineState(TypedDict, total=False):
     quality_paths: dict[str, str]      # artefacts du rapport qualite
     staging_paths: dict[str, str]      # source -> CSV long harmonise
     warehouse_path: str                # data/processed/warehouse.duckdb
-    kpis: dict[str, Any]               # catalogue + valeurs calculees
-    kpi_values_path: str
-    insights: dict[str, Any]           # analyse et recommandations
-    insights_path: str
-    dashboard: dict[str, Any]          # specs de visualisation
-    xai: dict[str, Any]                # lineage et explications
     llm_notes: dict[str, str]          # commentaires libres produits par les LLM
 
     warnings: Annotated[list[str], operator.add]
@@ -51,12 +45,6 @@ def new_state(objective: str, run_id: str | None = None) -> PipelineState:
         quality_paths={},
         staging_paths={},
         warehouse_path="",
-        kpis={},
-        kpi_values_path="",
-        insights={},
-        insights_path="",
-        dashboard={},
-        xai={},
         llm_notes={},
         warnings=[],
         errors=[],

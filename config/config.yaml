@@ -4,9 +4,8 @@ project:
   name: BIFlow
   domain: "Economy & Finance / Inclusion financière"
   objective: >
-    Automatiser un pipeline BI multi-agents : profilage, qualité, ETL,
-    KPI, analyse, dashboard et explications XAI à partir des données
-    Findex (demande), FAS (offre) et WDI (contexte macro).
+    Automatiser la collecte, le profilage, le controle qualite et l'ETL
+    des donnees Findex (demande), FAS (offre) et WDI (contexte macro).
 
 paths:
   profiles: outputs/profiles
@@ -36,10 +35,6 @@ llm:
   # collector, profiler et etl sont 100 % deterministes : aucun LLM
   routing:
     quality:      [groq, gemini]
-    semantic:     [groq, gemini]
-    analyst:      [groq, gemini]
-    dashboard:    [gemini, groq]
-    xai:          [gemini, groq]
 
 # --------------------------------------------------------------------------- Collecte
 collector:
@@ -72,15 +67,6 @@ etl:
   findex_total_group: all          # valeur de group2 pour la population totale
   output_format: parquet
   write_csv_copy: true
-
-kpis:
-  catalog: config/kpis.yaml
-  output: outputs/kpis
-
-analysis:
-  top_n: 10
-  min_years: 3                     # tendance calculee seulement au-dela
-  correlation_min_obs: 30
 
 sources:
   findex:                          # World Bank Global Findex (demande / usage) - source STATIQUE

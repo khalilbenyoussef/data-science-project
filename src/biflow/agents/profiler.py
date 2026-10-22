@@ -383,7 +383,7 @@ def profile(df: pd.DataFrame, name: str, cfg: dict | None = None) -> dict:
     for c, vals in low_card.items():
         if "all" in [str(v).lower() for v in vals] and len(vals) > 1:
             reco.append(f"{c} : GARDER tous les groupes dans le warehouse (comparaisons genre/revenu) ; "
-                        f"filtrer {c} == 'all' seulement pour les KPI globaux")
+                        f"filtrer {c} == 'all' seulement pour les agregats globaux")
     if metadata_cols:
         reco.append(f"sortir vers le catalogue de métadonnées (inutiles pour l'analyse) : {metadata_cols}")
     if overview["columns_fully_empty"]:
@@ -391,7 +391,7 @@ def profile(df: pd.DataFrame, name: str, cfg: dict | None = None) -> dict:
     if structural:
         reco.append("NE PAS supprimer (colonnes remplies seulement certaines années) : "
                     + "; ".join(f"{c} -> {', '.join(ys)}" for c, ys in structural.items())
-                    + " ; le dashboard doit afficher « disponible en [année] »")
+                    + " ; l'ETL doit conserver l'annee de disponibilite")
     if sparse:
         reco.append(f"à examiner (jamais bien remplies sur une année) : {sparse}")
     if descriptive_partial:
