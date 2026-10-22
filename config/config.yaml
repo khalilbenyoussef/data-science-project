@@ -18,10 +18,13 @@ paths:
 
 # --------------------------------------------------------------------------- LLM
 llm:
+  enabled: true
   temperature: 0
   max_retries: 2
   max_calls_per_agent: 5          # garde-fou anti-boucle / anti-coût
   cache_dir: outputs/llm_cache    # cache disque des réponses (pickle)
+  # Agents sans appel LLM : leurs notes/diagnostics utilisent le fallback deterministe
+  disabled_agents: [collector, profiler]
   providers:
     gemini:
       type: google
@@ -29,21 +32,14 @@ llm:
     groq:
       type: groq
       model: openai/gpt-oss-120b
-    claude:
-      type: anthropic
-      model: claude-sonnet-4-5
-      skip_key_check: false
   # ordre = primaire puis fallbacks ; les providers sans clé sont ignorés
+  # collector, profiler et etl sont 100 % deterministes : aucun LLM
   routing:
-    orchestrator: [gemini, groq, claude]
-    collector:    [gemini, groq, claude]
-    profiler:     [groq, gemini, claude]
-    quality:      [gemini, groq, claude]
-    etl:          [gemini, groq, claude]
-    semantic:     [claude, gemini, groq]
-    analyst:      [claude, groq, gemini]
-    dashboard:    [gemini, groq, claude]
-    xai:          [claude, gemini, groq]
+    quality:      [groq, gemini]
+    semantic:     [groq, gemini]
+    analyst:      [groq, gemini]
+    dashboard:    [gemini, groq]
+    xai:          [gemini, groq]
 
 # --------------------------------------------------------------------------- Collecte
 collector:
@@ -59,6 +55,32 @@ profiler:
   high_missing_threshold: 0.8      # colonne "quasi vide" au-dessus de ce taux de NaN
   metadata_text_length: 150        # colonne texte longue = métadonnée
   isolation_forest_contamination: 0.02
+  enable_isolation_forest: true    # desactive si scikit-learn indisponible (policy DLL)
+
+quality:
+  min_rows: 100                    # source suspecte en dessous
+  max_duplicate_pct: 0.5           # % de lignes dupliquees tolere
+  max_missing_cells_pct: 55        # au-dela : penalite forte (Findex ~49 %, FAS ~39 % structurels)
+  max_missing_column_pct: 99.5     # colonne quasi vide
+  score_threshold: 0.7             # seuil du quality gate
+  rate_columns_min: 0.0
+  rate_columns_max: 1.0
+
+etl:
+  min_year: 2011                   # periode d'analyse commune aux 3 sources
+  max_year: 2024
+  findex_total_group: all          # valeur de group2 pour la population totale
+  output_format: parquet
+  write_csv_copy: true
+
+kpis:
+  catalog: config/kpis.yaml
+  output: outputs/kpis
+
+analysis:
+  top_n: 10
+  min_years: 3                     # tendance calculee seulement au-dela
+  correlation_min_obs: 30
 
 sources:
   findex:                          # World Bank Global Findex (demande / usage) - source STATIQUE
@@ -66,22 +88,35 @@ sources:
     static: true                   # fichier local fourni, jamais réécrit par le Collector
     path: data/raw/findex.csv
     date_range: "2011:2024"
-    indicators:
-      - FX.OWN.TOTL.ZS             # Account ownership, population 15+
-      - FX.OWN.TOTL.FE.ZS          # Account ownership, femmes
-      - FX.OWN.TOTL.MA.ZS          # Account ownership, hommes
+    indicators:                    # colonnes de valeurs du fichier Findex
+      - account_t_d
+      - fiaccount_t_d
+      - mobileaccount_t_d
+      - inactive_t_d
+      - dig_acc
+      - save_any_t_d
+      - borrow_any_t_d
+      - merchant_pay
+      - g20_any
+      - fin17a
+      - fin22a
+      - fin24aP
+      - fin24sav
+      - fin24bor
   fas:                             # IMF Financial Access Survey (offre) - source STATIQUE
     type: csv
     static: true                   # fichier local fourni, jamais réécrit par le Collector
     path: data/raw/fas.csv
     date_range: "2004:2024"
     header_marker: SERIES_CODE     # le fichier FAS a deux lignes d'en-tête
-    indicators:
-      - FB.CBK.BRCH.P5             # Agences bancaires pour 100 000 adultes
-      - FB.ATM.TOTL.P5             # Distributeurs automatiques pour 100 000 adultes
-      - FB.CBK.DPTR.P3             # Déposants auprès des banques pour 1 000 adultes
-      - FB.CBK.BRWR.P3             # Emprunteurs auprès des banques pour 1 000 adultes
-      - FB.AST.NPER.ZS             # Prêts non performants (% du total des prêts)
+    # suffixe de SERIES_CODE (apres ISO3.) -> indicateur canonique
+    series:
+      branch_density: FA26N.PHTADLT_NUM          # agences / 100 000 adultes
+      atm_density: FA18N.PHTADLT_NUM             # ATM / 100 000 adultes
+      depositors_per_1k: FA29N_COMBANK.PTADLT_NUM    # deposants banques / 1 000 adultes
+      borrowers_per_1k: FA21N_COMBANK.PTADLT_NUM     # emprunteurs banques / 1 000 adultes
+      loan_accounts_per_1k: LOANACCN_COMBANK.PTADLT_NUM
+      deposit_accounts_per_1k: FA30N_COMBANK.PTADLT_NUM
   gdp:                             # PIB mondial (World Bank WDI) - source DYNAMIQUE
     type: csv
     dynamic: true                  # rafraîchie via hash SHA-256 (data/raw/gdp.csv.sha256)

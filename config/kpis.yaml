@@ -1,0 +1,137 @@
+# Catalogue des KPI BIFlow (expressions DuckDB sur data/processed/country_year.parquet)
+version: 1
+domain: "Economie & Finance / Inclusion financiere"
+kpis:
+  - id: inclusion_rate
+    label: "Taux de detention d'un compte"
+    description: >
+      Part des adultes declarant detenir un compte (banque ou mobile money).
+      Moyenne simple des pays couverts par la vague Findex.
+    unit: "%"
+    source: findex
+    expr: "avg(account_own)"
+    direction: up
+    decimals: 1
+    by: [income_group, region]
+
+  - id: gender_gap
+    label: "Ecart de genre (comptes)"
+    description: >
+      Difference en points de pourcentage entre la detention de compte des
+      hommes et celle des femmes.
+    unit: "pp"
+    source: findex
+    expr: "avg(gender_gap_pp)"
+    direction: down
+    decimals: 1
+    by: [income_group, region]
+
+  - id: mobile_account_rate
+    label: "Detention d'un compte mobile money"
+    description: "Part des adultes disposant d'un compte mobile money."
+    unit: "%"
+    source: findex
+    expr: "avg(mobile_account)"
+    direction: up
+    decimals: 1
+
+  - id: digital_payment_rate
+    label: "Usage du paiement numerique"
+    description: "Part des adultes ayant effectue un paiement numerique."
+    unit: "%"
+    source: findex
+    expr: "avg(digital_payment)"
+    direction: up
+    decimals: 1
+
+  - id: inactive_account_rate
+    label: "Comptes inactifs"
+    description: "Part des adultes ayant un compte mais aucun usage depuis 12 mois."
+    unit: "%"
+    source: findex
+    expr: "avg(inactive)"
+    direction: down
+    decimals: 1
+
+  - id: savings_rate
+    label: "Taux d'epargne"
+    description: "Part des adultes ayant epargne au cours des 12 derniers mois."
+    unit: "%"
+    source: findex
+    expr: "avg(savings)"
+    direction: up
+    decimals: 1
+
+  - id: borrowing_rate
+    label: "Taux d'emprunt"
+    description: "Part des adultes ayant emprunte au cours des 12 derniers mois."
+    unit: "%"
+    source: findex
+    expr: "avg(borrowing)"
+    direction: up
+    decimals: 1
+
+  - id: atm_density
+    label: "Densite d'ATM"
+    description: "Nombre moyen de distributeurs automatiques pour 100 000 adultes."
+    unit: "pour 100k adultes"
+    source: fas
+    expr: "avg(atm_per_100k)"
+    direction: up
+    decimals: 1
+    by: [income_group, region]
+
+  - id: branch_density
+    label: "Densite d'agences bancaires"
+    description: "Nombre moyen d'agences de banques commerciales pour 100 000 adultes."
+    unit: "pour 100k adultes"
+    source: fas
+    expr: "avg(brch_per_100k)"
+    direction: up
+    decimals: 1
+    by: [income_group, region]
+
+  - id: depositors_per_1k
+    label: "Deposants bancaires"
+    description: "Nombre moyen de deposants aupres des banques commerciales pour 1 000 adultes."
+    unit: "pour 1 000 adultes"
+    source: fas
+    expr: "avg(depositors_per_1k)"
+    direction: up
+    decimals: 1
+
+  - id: borrowers_per_1k
+    label: "Emprunteurs bancaires"
+    description: "Nombre moyen d'emprunteurs aupres des banques commerciales pour 1 000 adultes."
+    unit: "pour 1 000 adultes"
+    source: fas
+    expr: "avg(borrowers_per_1k)"
+    direction: up
+    decimals: 1
+
+  - id: deposit_accounts_per_1k
+    label: "Comptes de depot"
+    description: "Nombre moyen de comptes de depot en banque commerciale pour 1 000 adultes."
+    unit: "pour 1 000 adultes"
+    source: fas
+    expr: "avg(deposit_accounts_per_1k)"
+    direction: up
+    decimals: 1
+
+  - id: gdp_per_capita
+    label: "PIB par habitant"
+    description: "PIB par habitant en USD courants (moyenne des pays disponibles)."
+    unit: "USD"
+    source: gdp
+    expr: "avg(gdp_pc)"
+    direction: up
+    decimals: 0
+
+  - id: gdp_growth
+    label: "Croissance du PIB"
+    description: "Croissance annuelle moyenne du PIB en volume de valeur (USD courants)."
+    unit: "%"
+    source: gdp
+    expr: "avg(gdp_growth_pct)"
+    direction: up
+    decimals: 1

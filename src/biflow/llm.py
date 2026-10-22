@@ -1,4 +1,4 @@
-"""Fabrication des LLM multi-provider (Gemini / Groq / Claude).
+"""Fabrication des LLM multi-provider (Gemini / Groq).
 
 Chaque agent recoit une chaine de fallback definie dans config.llm.routing.
 Les cles sont lues dans l'environnement (.env), jamais dans la configuration.
@@ -27,8 +27,6 @@ PROVIDER_ENV = {
     "google": "GOOGLE_API_KEY",
     "google_genai": "GOOGLE_API_KEY",
     "groq": "GROQ_API_KEY",
-    "claude": "ANTHROPIC_API_KEY",
-    "anthropic": "ANTHROPIC_API_KEY",
 }
 
 # cles de configuration passees telles quelles au constructeur LangChain
@@ -40,8 +38,6 @@ KEY_PREFIXES = {
     "gemini": ("AQ.", "AIza"),
     "google_genai": ("AQ.", "AIza"),
     "groq": ("gsk_",),
-    "anthropic": ("sk-ant-",),
-    "claude": ("sk-ant-",),
 }
 
 
@@ -102,10 +98,6 @@ def build_chat_model(name: str, spec: dict[str, Any], temperature: float = 0) ->
         from langchain_groq import ChatGroq
 
         return ChatGroq(**kwargs)
-    if ptype in ("claude", "anthropic"):
-        from langchain_anthropic import ChatAnthropic
-
-        return ChatAnthropic(**kwargs)
     raise LLMConfigError(f"Provider LLM non supporte : {name} (type={ptype})")
 
 

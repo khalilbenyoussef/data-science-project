@@ -1,7 +1,7 @@
 """Verifie que les providers LLM sont configures et joignables.
 
 Usage :
-    python scripts/check_llm.py                 # teste Gemini, Groq et Claude
+    python scripts/check_llm.py                 # teste Gemini et Groq
     python scripts/check_llm.py --provider groq
     python scripts/check_llm.py --agent semantic
 
@@ -40,8 +40,6 @@ def _key_format_hint(name: str, spec: dict, key: str) -> str:
         "google": "AQ. ou AIza",
         "gemini": "AQ. ou AIza",
         "groq": "gsk_",
-        "anthropic": "sk-ant-",
-        "claude": "sk-ant-",
     }.get(ptype, "?")
     return f"la cle ne ressemble pas a une cle {name} (prefixe attendu : {expected})"
 
@@ -171,7 +169,7 @@ def main() -> int:
     if not any(results):
         print("\nAucun provider operationnel.")
         print("1. Copie .env.example vers .env")
-        print("2. Renseigne GOOGLE_API_KEY / GROQ_API_KEY / ANTHROPIC_API_KEY")
+        print("2. Renseigne GOOGLE_API_KEY / GROQ_API_KEY")
         print("3. Relance : python scripts/check_llm.py")
         print("Guide : docs/LLM_SETUP.md")
         return 1
