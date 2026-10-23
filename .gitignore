@@ -22,6 +22,9 @@ data/quality/
 data/reports/
 outputs/
 
+
+docs
+
 # Artefacts
 *.duckdb
 *.parquet

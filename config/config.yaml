@@ -60,6 +60,7 @@ quality:
   score_threshold: 0.7             # seuil du quality gate
   rate_columns_min: 0.0
   rate_columns_max: 1.0
+  fas_pct_gdp_threshold: 1000.0    # diagnostic uniquement : aucun effet sur le score/gate
 
 etl:
   min_year: 2011                   # periode d'analyse commune aux 3 sources
@@ -79,11 +80,11 @@ sources:
       - fiaccount_t_d
       - mobileaccount_t_d
       - inactive_t_d
-      - dig_acc
+      - dig_acc                    # compte permettant des paiements numeriques (pas un taux de paiement)
       - save_any_t_d
       - borrow_any_t_d
       - merchant_pay
-      - g20_any
+      - g20_any                    # paiement numerique effectue ou recu dans l'annee (pas seulement les remises)
       - fin17a
       - fin22a
       - fin24aP
@@ -103,6 +104,8 @@ sources:
       borrowers_per_1k: FA21N_COMBANK.PTADLT_NUM     # emprunteurs banques / 1 000 adultes
       loan_accounts_per_1k: LOANACCN_COMBANK.PTADLT_NUM
       deposit_accounts_per_1k: FA30N_COMBANK.PTADLT_NUM
+      deposits_pct_gdp: OUTD_COMBANK.POGDP       # encours des depots / PIB (% deja calcule)
+      loans_pct_gdp: OUTL_COMBANK.POGDP          # encours des prets / PIB (% deja calcule)
   gdp:                             # PIB mondial (World Bank WDI) - source DYNAMIQUE
     type: csv
     dynamic: true                  # rafraîchie via hash SHA-256 (data/raw/gdp.csv.sha256)

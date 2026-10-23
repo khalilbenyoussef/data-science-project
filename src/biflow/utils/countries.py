@@ -22,20 +22,21 @@ SPECIAL = {"XKX": "Kosovo"}
 ISO3_ALIASES = {"KOS": "XKX", "WBG": "PSE"}
 
 
-def normalize_iso3(code: str | None) -> str | None:
-    if code is None:
+def normalize_iso3(code: object) -> str | None:
+    """Normalise un code texte sans convertir les valeurs manquantes en codes."""
+    if not isinstance(code, str):
         return None
-    code = str(code).upper().strip()
-    return ISO3_ALIASES.get(code, code) or None
+    code = code.upper().strip()
+    if code in {"", "NAN", "<NA>", "NONE", "NULL", "NAT"}:
+        return None
+    return ISO3_ALIASES.get(code, code)
 
 
 def is_aggregate(code: str | None) -> bool:
-    return bool(code) and str(code).upper() in AGGREGATES
+    return normalize_iso3(code) in AGGREGATES
 
 
 def is_country(code: str | None) -> bool:
-    if not code:
-        return False
     code = normalize_iso3(code)
     if len(code or "") != 3 or code in AGGREGATES:
         return False
@@ -47,9 +48,9 @@ def is_country(code: str | None) -> bool:
 
 
 def country_name(code: str | None, fallback: str | None = None) -> str | None:
+    code = normalize_iso3(code)
     if not code:
         return fallback
-    code = normalize_iso3(code)
     if code in SPECIAL:
         return SPECIAL[code]
     if pycountry is not None:
@@ -62,7 +63,7 @@ def country_name(code: str | None, fallback: str | None = None) -> str | None:
 def invalid_iso3(codes) -> list[str]:
     """Codes a 3 lettres qui ne correspondent ni a un pays ni a un agregat connu."""
     out = []
-    for code in {normalize_iso3(c) for c in codes if c}:
+    for code in {normalize_iso3(c) for c in codes}:
         if code and len(code) == 3 and not is_country(code) and not is_aggregate(code):
             out.append(code)
     return sorted(out)

@@ -5,6 +5,7 @@ from biflow.agents.collector import CollectorAgent
 from biflow.agents.etl import EtlAgent
 from biflow.agents.profiler import ProfilerAgent
 from biflow.agents.quality import QualityAgent
+from biflow.agents.semantic_kpi import SemanticKpiAgent
 
 __all__ = [
     "AgentError",
@@ -13,4 +14,5 @@ __all__ = [
     "ProfilerAgent",
     "QualityAgent",
     "EtlAgent",
+    "SemanticKpiAgent",
 ]

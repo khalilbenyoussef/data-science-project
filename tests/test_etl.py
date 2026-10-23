@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from biflow.agents.base import AgentError
+from biflow.config import load_config
 from biflow.agents.etl import (
     EtlAgent,
     build_country_dim,
@@ -14,7 +15,7 @@ from biflow.agents.etl import (
     findex_long,
     gdp_long,
 )
-from biflow.tools.dictionary import FAS_LABELS
+from biflow.tools.dictionary import FAS_LABELS, FINDEX_LABELS
 
 
 def _write_inputs(tmp_path):
@@ -112,6 +113,82 @@ def test_long_transforms_are_canonical(tmp_path):
     assert set(fact_gdp["source"]) == {"gdp"}
 
 
+def _fas_percentage_inputs():
+    # Include all six existing indicators plus zero and >100% GDP observations.
+    specs = {
+        "branch_density": ("FA26N.PHTADLT_NUM", "per_100k_adults", 10.0, 10.5),
+        "atm_density": ("FA18N.PHTADLT_NUM", "per_100k_adults", 30.0, 31.0),
+        "depositors_per_1k": ("FA29N_COMBANK.PTADLT_NUM", "per_1k_adults", 1000.0, 1100.0),
+        "borrowers_per_1k": ("FA21N_COMBANK.PTADLT_NUM", "per_1k_adults", 200.0, 250.0),
+        "loan_accounts_per_1k": ("LOANACCN_COMBANK.PTADLT_NUM", "per_1k_adults", 500.0, 550.0),
+        "deposit_accounts_per_1k": ("FA30N_COMBANK.PTADLT_NUM", "per_1k_adults", 1500.0, 1600.0),
+        "deposits_pct_gdp": ("OUTD_COMBANK.POGDP", "percent_of_gdp", 0.0, 125.5),
+        "loans_pct_gdp": ("OUTL_COMBANK.POGDP", "percent_of_gdp", 42.75, 110.25),
+    }
+    rows = [
+        {"SERIES_CODE": f"MAR.{series}.A", "COUNTRY": "Morocco",
+         "INDICATOR": code, "2020": first, "2021": second}
+        for code, (series, unit, first, second) in specs.items()
+    ]
+    # An unmapped household series must not be mistaken for the total-bank series.
+    rows.append({"SERIES_CODE": "MAR.OUTD_COMBANK_S14.POGDP.A", "COUNTRY": "Morocco",
+                 "INDICATOR": "Household deposits", "2020": 500.0, "2021": 600.0})
+    return pd.DataFrame(rows), specs
+
+
+def test_fas_gdp_percentage_mappings_preserve_all_indicator_values_and_units():
+    raw, specs = _fas_percentage_inputs()
+    mapping = load_config()["sources"]["fas"]["series"]
+    assert mapping == {code: spec[0] for code, spec in specs.items()}
+
+    fact = fas_long(raw, mapping, 2011, 2024)
+    assert len(fact) == 16
+    assert set(fact["indicator_code"]) == set(specs)
+    assert set(fact["source"]) == {"fas"}
+    assert set(fact["dimension_value"]) == {"commercial_banks"}
+    for code, (series, unit, first, second) in specs.items():
+        rows = fact[fact["indicator_code"] == code].sort_values("year")
+        assert rows["year"].tolist() == [2020, 2021]
+        assert rows["value"].tolist() == pytest.approx([first, second])
+        assert rows["unit"].tolist() == [unit, unit]
+        assert rows["indicator_label"].tolist() == [FAS_LABELS[code]] * 2
+
+
+def test_fas_gdp_percentages_reach_warehouse_fact_and_indicator_dim(tmp_path):
+    paths = _write_inputs(tmp_path)
+    raw, specs = _fas_percentage_inputs()
+    raw.to_csv(paths["fas"], index=False)
+    cfg = _cfg(tmp_path, paths)
+    cfg["sources"]["fas"]["series"] = load_config()["sources"]["fas"]["series"]
+    out = EtlAgent(cfg=cfg, run_id="percent_test").execute(
+        {"sources": cfg["sources"], "raw_paths": paths}
+    )
+
+    con = duckdb.connect(out["warehouse_path"], read_only=True)
+    try:
+        fact = con.execute("SELECT * FROM fact WHERE source = 'fas'").df()
+        dim = con.execute("SELECT * FROM indicator_dim WHERE source = 'fas'").df()
+        branch = con.execute(
+            "SELECT brch_per_100k FROM country_year WHERE iso3 = 'MAR' AND year = 2021"
+        ).fetchone()[0]
+    finally:
+        con.close()
+    assert branch == 10.5
+    assert set(dim["indicator_code"]) == set(specs)
+    parquet = pd.read_parquet(tmp_path / "processed" / "fact_inclusion.parquet")
+    for frame in (fact, parquet[parquet["source"] == "fas"]):
+        assert len(frame) == 16
+        for code, (series, unit, first, second) in specs.items():
+            rows = frame[frame["indicator_code"] == code].sort_values("year")
+            assert rows["value"].tolist() == pytest.approx([first, second])
+            assert rows["unit"].tolist() == [unit, unit]
+    for code in ("deposits_pct_gdp", "loans_pct_gdp"):
+        row = dim[dim["indicator_code"] == code].iloc[0]
+        assert row["unit"] == "percent_of_gdp"
+        assert row["indicator_label"] == FAS_LABELS[code]
+        assert row["dimension"] == "bank_type"
+
+
 def test_etl_agent_builds_star_schema(tmp_path):
     out, processed = _run_agent(tmp_path)
     assert (processed / "fact_inclusion.parquet").exists()
@@ -127,6 +204,59 @@ def test_etl_agent_builds_star_schema(tmp_path):
     assert (processed / "country_year.csv").exists()
     assert (processed / "population.parquet").exists()
     assert (processed / "lineage.json").exists()
+
+
+@pytest.mark.parametrize("digital_account,payment", [
+    (0.2, 0.7), (None, 0.7), (0.2, None), (0.0, 1.0),
+])
+def test_findex_digital_accounts_and_payments_have_distinct_mappings(
+    tmp_path, digital_account, payment,
+):
+    paths = _write_inputs(tmp_path)
+    raw = pd.read_csv(paths["findex"])
+    raw["dig_acc"] = digital_account
+    raw["g20_any"] = payment
+    raw.to_csv(paths["findex"], index=False)
+    cfg = _cfg(tmp_path, paths)
+    cfg["sources"]["findex"]["indicators"] += ["dig_acc", "g20_any"]
+    assert {"dig_acc", "g20_any"} <= set(load_config()["sources"]["findex"]["indicators"])
+    assert FINDEX_LABELS["dig_acc"] == "Detention d'un compte permettant des paiements numeriques"
+    assert FINDEX_LABELS["g20_any"] == "Paiement numerique effectue ou recu dans l'annee"
+
+    out = EtlAgent(cfg=cfg, run_id="digital_test").execute(
+        {"sources": cfg["sources"], "raw_paths": paths}
+    )
+    con = duckdb.connect(out["warehouse_path"], read_only=True)
+    try:
+        fact = con.execute("SELECT * FROM fact WHERE source = 'findex'").df()
+        year = con.execute("SELECT * FROM country_year").df()
+        dim = con.execute("SELECT * FROM indicator_dim WHERE source = 'findex'").df()
+    finally:
+        con.close()
+    assert "remittance_use" not in year.columns
+    for code, column, value in [
+        ("dig_acc", "digitally_enabled_account", digital_account),
+        ("g20_any", "digital_payment", payment),
+    ]:
+        observations = fact[fact["indicator_code"] == code]
+        if value is None:
+            assert observations.empty
+            assert year[column].isna().all()
+        else:
+            assert observations["value"].tolist() == pytest.approx([value] * 4)
+            assert set(observations["unit"]) == {"fraction"}
+            assert set(observations["indicator_label"]) == {FINDEX_LABELS[code]}
+            assert year[column].tolist() == pytest.approx([100 * value] * 4)
+            metadata = dim[dim["indicator_code"] == code]
+            assert set(metadata["indicator_label"]) == {FINDEX_LABELS[code]}
+            assert set(metadata["unit"]) == {"fraction"}
+    maroc = year[(year["iso3"] == "MAR") & (year["year"] == 2021)].iloc[0]
+    assert maroc["account_own"] == pytest.approx(55.0)
+    exported = pd.read_parquet(tmp_path / "processed" / "country_year.parquet")
+    pd.testing.assert_frame_equal(
+        year.sort_values(["iso3", "year"]).reset_index(drop=True),
+        exported.sort_values(["iso3", "year"]).reset_index(drop=True),
+    )
 
 
 def test_indicator_dim_table_is_created_and_matches_parquet(tmp_path):
@@ -226,6 +356,55 @@ def test_invalid_and_unknown_iso3_are_traced(tmp_path):
     row = country_dim[country_dim["iso3"] == "XYZ"].iloc[0]
     assert not bool(row["is_country"])
     assert not bool(row["is_aggregate"])
+
+
+def test_missing_country_codes_never_reach_warehouse(tmp_path):
+    paths = _write_inputs(tmp_path)
+    frames = {name: pd.read_csv(path) for name, path in paths.items()}
+    missing_codes = [None, float("nan"), pd.NA, "", " \t", "nan", "<NA>"]
+    malformed_codes = ["M", "12A", "TOOLONG"]
+    for name, frame in frames.items():
+        column = {"findex": "codewb", "fas": "SERIES_CODE", "gdp": "iso3"}[name]
+        extra = []
+        for code in missing_codes + malformed_codes + [" kos ", "wbg"]:
+            row = frame.iloc[0].to_dict()
+            # FAS has both missing SERIES_CODE cells and missing/malformed prefixes.
+            row[column] = (
+                f"{code}.FA26N.PHTADLT_NUM.A"
+                if name == "fas" and isinstance(code, str)
+                else code
+            )
+            extra.append(row)
+        frames[name] = pd.concat([frame, pd.DataFrame(extra)], ignore_index=True)
+
+    report = {}
+    findex, population = findex_long(
+        frames["findex"], {"indicators": ["account_t_d", "mobileaccount_t_d"]},
+        2011, 2024, report=report,
+    )
+    fas = fas_long(frames["fas"], {"branch_density": "FA26N.PHTADLT_NUM"}, 2011, 2024)
+    gdp = gdp_long(frames["gdp"], 2011, 2024)
+    dim = build_country_dim(frames["findex"], frames["fas"], frames["gdp"])
+    expected = {"MAR", "FRA", "XKX", "PSE"}
+    for frame in (findex, population, fas, gdp, dim):
+        assert set(frame["iso3"]) == expected
+        assert frame["iso3"].notna().all()
+    assert report["rejected"]["findex"]["iso3_missing"] == len(missing_codes)
+    assert report["rejected"]["findex"]["iso3_invalid"] == len(malformed_codes)
+
+    # Only synthetic inputs and warehouse outputs under pytest's temporary directory.
+    for name, frame in frames.items():
+        frame.to_csv(paths[name], index=False)
+    _, processed = _run_agent(tmp_path, paths)
+    con = duckdb.connect(str(processed / "warehouse.duckdb"), read_only=True)
+    try:
+        for table in ("fact", "country_dim", "population", "country_year"):
+            codes = con.execute(f"SELECT DISTINCT iso3 FROM {table}").fetchall()
+            assert {row[0] for row in codes} == expected
+    finally:
+        con.close()
+    for filename in ("fact_inclusion", "country_dim", "population", "country_year"):
+        assert set(pd.read_parquet(processed / f"{filename}.parquet")["iso3"]) == expected
 
 
 def test_exact_duplicates_are_removed_but_conflicts_are_rejected(tmp_path):
