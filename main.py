@@ -53,6 +53,14 @@ def _print_state(state: dict) -> None:
     if state.get("warehouse_path"):
         print(f"\nWarehouse : {state['warehouse_path']}")
 
+    kpi = state.get("kpi_summary") or {}
+    if kpi:
+        print(
+            f"\nKPI : {kpi.get('rows')} valeurs ({kpi.get('kpis')} KPI, focus {kpi.get('focus')}, "
+            f"pairs {', '.join(kpi.get('peers') or [])}) - disponibles={kpi.get('available')} "
+            f"indisponibles={kpi.get('unavailable')} a_revoir={kpi.get('requires_review')}"
+        )
+
     warnings = state.get("warnings") or []
     if warnings:
         print("\nAvertissements")

@@ -170,8 +170,10 @@ def test_base_agent_failed_requests_preserve_error_reporting(agent):
     assert not report["outputs"]
 
 
-def test_request_union_schema_and_no_orchestrator_registration():
+def test_request_union_schema_and_pipeline_registration_after_etl():
     schema = REQUEST_ADAPTER.json_schema()
     assert schema["discriminator"]["propertyName"] == "action"
-    from biflow.graph import AGENT_CLASSES
-    assert set(AGENT_CLASSES) == {"collector", "profiler", "quality", "etl"}
+    from biflow.graph import AGENT_CLASSES, STEP_ORDER
+    assert set(AGENT_CLASSES) == {"collector", "profiler", "quality", "etl", "semantic_kpi"}
+    assert AGENT_CLASSES["semantic_kpi"] is SemanticKpiAgent
+    assert STEP_ORDER.index("semantic_kpi") == STEP_ORDER.index("etl") + 1

@@ -36,6 +36,11 @@ llm:
   routing:
     quality:      [groq, gemini]
 
+# --------------------------------------------------------------------------- KPI
+kpi:                               # etape semantic_kpi du pipeline (apres l'ETL)
+  focus: TUN                       # pays focus
+  peers: [DZA, EGY, JOR, MAR]      # groupe de pairs (ligne PEERS = moyenne non ponderee)
+
 # --------------------------------------------------------------------------- Collecte
 collector:
   api_base: "https://api.worldbank.org/v2"

@@ -1,4 +1,4 @@
-"""Graphe LangGraph du pipeline BIFlow (S6 -> S9)."""
+"""Graphe LangGraph du pipeline BIFlow (S6 -> S10)."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from biflow.agents import (
     EtlAgent,
     ProfilerAgent,
     QualityAgent,
+    SemanticKpiAgent,
 )
 from biflow.config import load_config
 from biflow.state import PipelineState, new_state
@@ -33,6 +34,7 @@ AGENT_CLASSES = {
     "profiler": ProfilerAgent,
     "quality": QualityAgent,
     "etl": EtlAgent,
+    "semantic_kpi": SemanticKpiAgent,   # mode pipeline : table kpi_values
 }
 STEP_ORDER = list(AGENT_CLASSES)
 
@@ -136,6 +138,7 @@ def _summary(state: PipelineState) -> dict[str, Any]:
         },
         "warehouse": state.get("warehouse_path"),
         "staging_paths": state.get("staging_paths"),
+        "kpi": {"summary": state.get("kpi_summary"), "paths": state.get("kpi_paths")},
         "llm_notes": state.get("llm_notes"),
         "warnings": state.get("warnings"),
         "errors": state.get("errors"),
