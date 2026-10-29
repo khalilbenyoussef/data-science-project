@@ -9,6 +9,7 @@ ses formules sont interpretees par une liste blanche (jamais eval) et la table
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import re
 from pathlib import Path
@@ -17,8 +18,9 @@ from typing import Any, Iterable, Mapping
 import pandas as pd
 import yaml
 
-from biflow.utils.countries import normalize_iso3
-from biflow.utils.io import read_csv_smart
+from biflow.tools.dictionary import FINDEX_UNVERIFIED
+from biflow.utils.countries import is_aggregate, is_country, normalize_iso3
+from biflow.utils.io import cached_sha256_file, read_csv_smart
 
 PEERS_ISO3 = "PEERS"
 YEAR_COLUMN = re.compile(r"^(19|20)\d{2}$")
@@ -34,13 +36,22 @@ SIMPLE_FORMULAS = {
 RAW_TO_FACT = {"findex": "identity", "fas": "identity", "gdp": "identity"}
 
 
+# Bornes de plausibilite par unite KPI
+UNIT_BOUNDS = {"percent": (0.0, 100.0), "percentage_points": (-100.0, 100.0),
+               "per_100k_adults": (0.0, math.inf)}
+
+
 # --------------------------------------------------------------------------- outils
 def make_check(check_id: str, category: str, result: str, detail: str,
-               affected_rows: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
+               affected_rows: Iterable[Mapping[str, Any]] = (),
+               affects_publication: bool = True) -> dict[str, Any]:
+    """affects_publication=False : information (ex. variation entre vagues),
+    sans effet sur le statut de publication des lignes citees."""
     if result not in ("pass", "warn", "fail"):
         raise ValueError(f"resultat de controle invalide : {result}")
     return {"check_id": check_id, "category": category, "result": result,
-            "detail": detail, "affected_rows": [dict(row) for row in affected_rows]}
+            "detail": detail, "affected_rows": [dict(row) for row in affected_rows],
+            "affects_publication": affects_publication}
 
 
 def row_key(row: Mapping[str, Any]) -> tuple[str, str, int]:
@@ -310,6 +321,249 @@ def raw_to_fact_check(recomputed: Mapping[tuple, Mapping[str, Any]], raw: RawSou
     return check, lookups
 
 
+# --------------------------------------------------------------------------- B : coherence
+def content_digest(con, tables: Iterable[str]) -> str:
+    """Re-implementation independante de l'empreinte de contenu du lineage :
+    [table, colonnes] puis une ligne JSON par enregistrement, ORDER BY ALL."""
+    digest = hashlib.sha256()
+    for table in tables:
+        if not re.fullmatch(r"[a-z_]+", str(table)):
+            raise ValueError(f"nom de table invalide : {table!r}")
+        cursor = con.execute(f"SELECT * FROM {table} ORDER BY ALL")
+        digest.update(json.dumps([table, [c[0] for c in cursor.description]]).encode("utf-8") + b"\n")
+        while batch := cursor.fetchmany(10_000):
+            for record in batch:
+                digest.update(json.dumps(record, default=str, separators=(",", ":")).encode("utf-8") + b"\n")
+    return digest.hexdigest()
+
+
+def unit_checks(rows: list[dict[str, Any]], catalog: Mapping[str, Any]) -> list[dict]:
+    """B1 : une unite par KPI (celle du catalogue) et bornes de plausibilite."""
+    kpis = catalog["kpis"]
+    unit_issues, range_issues = [], []
+    for row in rows:
+        kpi = kpis.get(row["kpi_id"])
+        if kpi is None:
+            continue
+        if row["unit"] != kpi["unit"]:
+            unit_issues.append(_ref(row, expected=kpi["unit"], found=row["unit"]))
+            continue
+        low, high = UNIT_BOUNDS.get(kpi["unit"], (None, None))
+        if low is None:
+            unit_issues.append(_ref(row, found=kpi["unit"], reason="unite sans bornes declarees"))
+        elif row["value"] is not None and not (low <= row["value"] <= high):
+            range_issues.append(_ref(row, found=row["value"], reason=f"hors [{low}, {high}]"))
+    return [
+        make_check("B1_one_unit_per_kpi", "units", "fail" if unit_issues else "pass",
+                   f"Unite de chaque ligne = unite du catalogue ; {len(unit_issues)} anomalie(s)", unit_issues),
+        make_check("B2_value_ranges", "units", "fail" if range_issues else "pass",
+                   "percent dans [0,100], points de % dans [-100,100], densites >= 0 ; "
+                   f"{len(range_issues)} anomalie(s)", range_issues),
+    ]
+
+
+def entity_checks(con, rows: list[dict[str, Any]], focus: str, peers: list[str]) -> list[dict]:
+    """B3-B4 : uniquement des pays (hors PEERS) ; PEERS = exactement les pairs configures."""
+    dim = {iso3: (c, a) for iso3, c, a in con.execute(
+        "SELECT iso3, is_country, is_aggregate FROM country_dim").fetchall()}
+    entity_issues, peer_issues = [], []
+    allowed = {focus, *peers}
+    for row in rows:
+        iso3 = row["iso3"]
+        if iso3 == PEERS_ISO3:
+            listed = list(row.get("peers_included") or []) + list(row.get("missing_peers") or [])
+            if sorted(listed) != sorted(peers) or len(set(listed)) != len(listed):
+                peer_issues.append(_ref(row, expected=peers, found=listed))
+            continue
+        reasons = []
+        if iso3 not in allowed:
+            reasons.append("hors pays focus et pairs configures")
+        if is_aggregate(iso3) or not is_country(iso3):
+            reasons.append("agregat ou code non-pays")
+        if dim.get(iso3) not in (None, (True, False)):
+            reasons.append(f"country_dim is_country/is_aggregate = {dim.get(iso3)}")
+        if reasons:
+            entity_issues.append(_ref(row, reason="; ".join(reasons)))
+    return [
+        make_check("B3_country_entities_only", "entities", "fail" if entity_issues else "pass",
+                   f"Aucun agregat ni code non-pays hors PEERS ; {len(entity_issues)} ligne(s) en cause",
+                   entity_issues),
+        make_check("B4_peers_are_configured_peers", "entities", "fail" if peer_issues else "pass",
+                   f"PEERS couvre exactement {', '.join(peers)} ; {len(peer_issues)} anomalie(s)", peer_issues),
+    ]
+
+
+def provenance_checks(con, rows: list[dict[str, Any]], *, run_id: str | None, require_same_run: bool,
+                      snapshot_id: str | None, index_entry: Mapping[str, Any] | None,
+                      manifest: Mapping[str, Any], snapshot_root: Path | None,
+                      lineage: Mapping[str, Any], quality: Mapping[str, Any]) -> list[dict]:
+    """B5-B7 : snapshot_id et run_id identiques partout, hash des sources concordants,
+    empreinte du contenu du warehouse re-verifiee."""
+    ids_issues = []
+    kv_snapshots = sorted({str(r.get("snapshot_id")) for r in rows})
+    kv_runs = sorted({str(r.get("run_id")) for r in rows})
+    expected_snapshot = str(snapshot_id)
+    for label, value in (("kpi_values", kv_snapshots), ("lineage.json", [str(lineage.get("snapshot_id"))]),
+                         ("quality_report.json", [str(quality.get("snapshot_id"))])):
+        if value != [expected_snapshot]:
+            ids_issues.append({"artifact": label, "field": "snapshot_id", "expected": expected_snapshot, "found": value})
+    if snapshot_id is None:
+        ids_issues.append({"artifact": "state", "field": "snapshot_id", "reason": "aucun snapshot candidat"})
+    elif index_entry is None:
+        ids_issues.append({"artifact": "snapshots/index.json", "field": "snapshot_id",
+                           "expected": expected_snapshot, "reason": "absent de l'index"})
+    elif index_entry.get("status") not in ("pending", "published"):
+        ids_issues.append({"artifact": "snapshots/index.json", "field": "status",
+                           "found": index_entry.get("status"), "reason": "candidat ni pending ni publie"})
+    elif index_entry.get("status") == "pending" and index_entry.get("run_id") != run_id:
+        ids_issues.append({"artifact": "snapshots/index.json", "field": "run_id",
+                           "expected": run_id, "found": index_entry.get("run_id")})
+    reference_run = str(lineage.get("run_id"))
+    for label, value in (("kpi_values", kv_runs), ("quality_report.json", [str(quality.get("run_id"))])):
+        if value != [reference_run]:
+            ids_issues.append({"artifact": label, "field": "run_id", "expected": reference_run, "found": value})
+    if require_same_run and reference_run != str(run_id):
+        ids_issues.append({"artifact": "lineage.json", "field": "run_id", "expected": run_id, "found": reference_run})
+
+    hash_issues = []
+    lineage_inputs = lineage.get("inputs") or {}
+    quality_inputs = quality.get("inputs") or {}
+    manifest_sources = manifest.get("sources") or {}
+    for source in sorted(set(lineage_inputs) | set(quality_inputs) | set(manifest_sources)):
+        found = {
+            "lineage": (lineage_inputs.get(source) or {}).get("sha256"),
+            "quality_report": (quality_inputs.get(source) or {}).get("sha256"),
+            "manifest": (manifest_sources.get(source) or {}).get("sha256"),
+        }
+        blob = (manifest_sources.get(source) or {}).get("blob")
+        if blob:
+            found["blob_name"] = Path(blob).stem
+            blob_path = Path(snapshot_root) / blob if snapshot_root else None
+            found["blob_content"] = cached_sha256_file(blob_path) if blob_path and blob_path.is_file() else None
+        if len(set(found.values())) != 1 or None in found.values():
+            hash_issues.append({"source": source, "found": found})
+
+    outputs = lineage.get("outputs") or {}
+    recorded = outputs.get("warehouse_content_sha256")
+    tables = outputs.get("warehouse_content_tables") or []
+    digest_issues = []
+    if not recorded or not tables:
+        digest_issues.append({"reason": "aucune empreinte de contenu enregistree dans lineage.json"})
+    else:
+        try:
+            observed = content_digest(con, tables)
+        except Exception as exc:  # noqa: BLE001 - table absente ou illisible
+            observed = None
+            digest_issues.append({"reason": f"empreinte non recalculable : {exc}"})
+        if observed is not None and observed != recorded:
+            digest_issues.append({"tables": list(tables), "expected": recorded, "found": observed})
+
+    return [
+        make_check("B5_snapshot_and_run_ids", "provenance", "fail" if ids_issues else "pass",
+                   f"snapshot_id {expected_snapshot} et run_id {reference_run} identiques dans index, lineage, "
+                   f"rapport qualite et kpi_values ; {len(ids_issues)} anomalie(s)", ids_issues),
+        make_check("B6_source_hashes", "provenance", "fail" if hash_issues else "pass",
+                   "SHA-256 des sources identiques : rapport qualite = lineage = manifeste = nom et contenu "
+                   f"du blob ; {len(hash_issues)} source(s) en ecart", hash_issues),
+        make_check("B7_warehouse_content_digest", "provenance", "fail" if digest_issues else "pass",
+                   f"Empreinte du contenu ({', '.join(tables) or 'aucune table'}) recalculee "
+                   f"independamment ; {len(digest_issues)} anomalie(s)", digest_issues),
+    ]
+
+
+def catalog_checks(rows: list[dict[str, Any]], catalog: Mapping[str, Any], catalog_sha256: str) -> list[dict]:
+    """B8 : definitions verifiees, codes verifies, preuves presentes, catalogue inchange."""
+    issues = []
+    references = catalog.get("references") or {}
+    for kpi_id, kpi in catalog["kpis"].items():
+        verification = kpi.get("verification") or {}
+        if verification.get("status") == "provisional":
+            issues.append({"kpi_id": kpi_id, "reason": "definition provisoire"})
+        if kpi["warehouse"]["indicator_code"] in FINDEX_UNVERIFIED:
+            issues.append({"kpi_id": kpi_id, "reason": f"code non verifie {kpi['warehouse']['indicator_code']}"})
+        evidence = verification.get("evidence") or []
+        if not evidence or any(ref not in references for ref in evidence):
+            issues.append({"kpi_id": kpi_id, "reason": f"preuve absente ou inconnue : {evidence}"})
+    stale = sorted({(r["kpi_id"], r.get("catalog_sha256"), r.get("catalog_version")) for r in rows
+                    if r.get("catalog_sha256") != catalog_sha256
+                    or r.get("catalog_version") != catalog.get("catalog_version")})
+    for kpi_id, digest, version in stale:
+        issues.append({"kpi_id": kpi_id, "reason": "kpi_values calcule avec un autre catalogue",
+                       "expected": [catalog.get("catalog_version"), catalog_sha256], "found": [version, digest]})
+    return [make_check("B8_catalog_definitions", "catalog", "fail" if issues else "pass",
+                       f"Catalogue {catalog.get('catalog_version')} : aucune definition provisoire ni code "
+                       f"non verifie, preuves presentes, hash identique a kpi_values ; {len(issues)} anomalie(s)",
+                       issues)]
+
+
+def quality_gate_check(quality: Mapping[str, Any]) -> dict[str, Any]:
+    """B9 : quality gate PASS pour ce run."""
+    passed = quality.get("passed") is True
+    return make_check("B9_quality_gate", "quality", "pass" if passed else "fail",
+                      f"Quality gate {'PASS' if passed else 'FAIL ou absent'} (score "
+                      f"{quality.get('overall_score')}, {quality.get('critical_issues')} critique(s))",
+                      [] if passed else [{"reason": "quality.passed != true"}])
+
+
+def caveat_checks(rows: list[dict[str, Any]], catalog: Mapping[str, Any], quality: Mapping[str, Any],
+                  recomputed: Mapping[tuple, Mapping[str, Any]], min_change_pp: float) -> list[dict]:
+    """C1-C4 : avertissements (jamais des echecs) : vague partielle, pairs partiels,
+    constats qualite sur une entree, variations dans le bruit d'enquete."""
+    partial_years = set((catalog.get("missing_data_policy") or {}).get("partial_wave_years") or [])
+    findex_kpis = {k for k, kpi in catalog["kpis"].items() if kpi["warehouse"]["source"] == "findex"}
+    partial_wave = [_ref(r) for r in rows if int(r["year"]) in partial_years and r["value"] is not None
+                    and r["kpi_id"] in findex_kpis]
+    partial_peers = [_ref(r, missing_peers=list(r.get("missing_peers") or []))
+                     for r in rows if r["iso3"] == PEERS_ISO3 and r.get("peer_status") == "partial"]
+
+    findings = []
+    records = [("diagnostics", i, d) for i, d in enumerate(quality.get("diagnostics") or [])]
+    for (kpi_id, iso3, year), exp in recomputed.items():
+        for item in exp["inputs"]:
+            if item["value"] is None:  # entree absente : rien a qualifier
+                continue
+            _, _, source, indicator, dimension, dimension_value = item["fact_key"]
+            for collection, index, record in records:
+                if ((record.get("source"), normalize_iso3(record.get("iso3")), record.get("year"),
+                        record.get("indicator_code")) == (source, iso3, year, indicator)
+                        and record.get("dimension", dimension) == dimension
+                        and record.get("dimension_value", dimension_value) == dimension_value):
+                    findings.append({"kpi_id": kpi_id, "iso3": iso3, "year": year,
+                                     "reference": f"quality_report.json#/{collection}/{index}",
+                                     "reason": record.get("reason")})
+
+    by_series: dict[tuple, list] = {}
+    for row in rows:
+        if row["iso3"] == PEERS_ISO3 or row["value"] is None:
+            continue
+        kpi = catalog["kpis"].get(row["kpi_id"])
+        if kpi and kpi["warehouse"]["source"] == "findex":
+            by_series.setdefault((row["kpi_id"], row["iso3"]), []).append(row)
+    noise = []
+    for (kpi_id, iso3), series in sorted(by_series.items()):
+        series.sort(key=lambda r: int(r["year"]))
+        for before, after in zip(series, series[1:]):
+            delta = after["value"] - before["value"]
+            if abs(delta) < min_change_pp:
+                noise.append({"kpi_id": kpi_id, "iso3": iso3, "year": int(after["year"]),
+                              "from_year": int(before["year"]), "change_pp": round(delta, 2)})
+
+    return [
+        make_check("C1_partial_survey_wave", "caveat", "warn" if partial_wave else "pass",
+                   f"Vague Findex partielle {sorted(partial_years)} : couverture pays incomplete ; "
+                   f"{len(partial_wave)} valeur(s) concernee(s)", partial_wave),
+        make_check("C2_partial_peer_coverage", "caveat", "warn" if partial_peers else "pass",
+                   f"Moyenne des pairs calculee sans tous les pairs ; {len(partial_peers)} ligne(s)", partial_peers),
+        make_check("C3_input_quality_findings", "caveat", "warn" if findings else "pass",
+                   "Diagnostics du rapport qualite portant exactement sur une entree d'un KPI ; "
+                   f"{len(findings)} constat(s)", findings),
+        make_check("C4_within_survey_noise", "caveat", "warn" if noise else "pass",
+                   f"Variations d'une vague a l'autre inferieures a {min_change_pp:g} pt (Findex : environ "
+                   "1 000 entretiens par pays, aucune erreur type dans le fichier) : a presenter comme "
+                   f"\"dans le bruit d'enquete\" ; {len(noise)} variation(s)", noise, affects_publication=False),
+    ]
+
+
 def verdict_of(checks: Iterable[Mapping[str, Any]]) -> str:
     results = {check["result"] for check in checks}
     return "fail" if "fail" in results else "pass_with_warnings" if "warn" in results else "pass"
@@ -323,7 +577,8 @@ def count_results(checks: Iterable[Mapping[str, Any]]) -> dict[str, int]:
 
 
 __all__ = [
-    "PEERS_ISO3", "RAW_TO_FACT", "RawSources", "count_results", "expected_value", "kpi_inputs",
-    "load_catalog_file", "make_check", "observe", "parse_formula", "raw_to_fact_check",
-    "read_kpi_rows", "recompute_checks", "row_key", "verdict_of",
+    "PEERS_ISO3", "RAW_TO_FACT", "RawSources", "caveat_checks", "catalog_checks", "content_digest",
+    "count_results", "entity_checks", "expected_value", "kpi_inputs", "load_catalog_file", "make_check",
+    "observe", "parse_formula", "provenance_checks", "quality_gate_check", "raw_to_fact_check",
+    "read_kpi_rows", "recompute_checks", "row_key", "unit_checks", "verdict_of",
 ]

@@ -16,11 +16,17 @@ from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
 from biflow.tools.audit_checks import (
     RawSources,
+    caveat_checks,
+    catalog_checks,
     count_results,
+    entity_checks,
     load_catalog_file,
+    provenance_checks,
+    quality_gate_check,
     raw_to_fact_check,
     read_kpi_rows,
     recompute_checks,
+    unit_checks,
     verdict_of,
 )
 from biflow.utils.countries import normalize_iso3
@@ -53,6 +59,9 @@ class AuditorAgent(BaseAgent):
         snapshot_id = ctx.get("snapshot_id") or lineage.get("snapshot_id")
         snapshot_root = resolve((self.cfg.get("snapshots") or {}).get("root", "data/snapshots"))
         manifest = _read_json(snapshot_root / str(snapshot_id) / "manifest.json") if snapshot_id else {}
+        index = _read_json(snapshot_root / "index.json")
+        index_entry = next((e for e in index.get("snapshots") or []
+                            if e.get("snapshot_id") == snapshot_id), None)
         if manifest.get("sources"):
             raw_paths = {name: snapshot_root / source["blob"] for name, source in manifest["sources"].items()}
         else:  # snapshots desactives : fichiers enregistres dans le lineage
@@ -70,18 +79,22 @@ class AuditorAgent(BaseAgent):
             "snapshot_id": snapshot_id,
             "snapshot_root": snapshot_root,
             "manifest": manifest,
+            "index_entry": index_entry,
             "raw_paths": raw_paths,
             "catalog_path": resolve(audit_cfg.get("catalog", DEFAULT_CATALOG_PATH)),
             "focus": focus,
             "peers": [p for p in peers if p and p != focus],
             "tolerance": float(audit_cfg.get("tolerance", 1e-9)),
+            "min_change_pp": float(audit_cfg.get("min_meaningful_change_pp", 2.0)),
+            # ETL execute dans ce run : lineage, qualite et KPI doivent porter ce run_id
+            "require_same_run": bool(ctx.get("staging_paths")),
             "sources": ctx.get("sources") or self.cfg.get("sources") or {},
             "run_id": ctx.get("run_id") or self.run_id,
         }
 
     # ------------------------------------------------------------------ audit
     def audit(self, ctx: Mapping[str, Any]) -> dict[str, Any]:
-        """Controles A (recalcul) ; renvoie aussi les donnees intermediaires."""
+        """Controles A (recalcul) et B (coherence, tracabilite, avertissements)."""
         inp = self._inputs(ctx)
         catalog, catalog_sha256 = load_catalog_file(inp["catalog_path"])
         fas_series = (inp["sources"].get("fas") or {}).get("series") or {}
@@ -89,9 +102,19 @@ class AuditorAgent(BaseAgent):
             rows = read_kpi_rows(con)
             checks, recomputed = recompute_checks(
                 con, catalog, rows, inp["focus"], inp["peers"], inp["tolerance"])
-        raw = RawSources(inp["raw_paths"], inp["sources"])
-        raw_check, raw_lookups = raw_to_fact_check(recomputed, raw, fas_series)
-        checks.append(raw_check)
+            raw = RawSources(inp["raw_paths"], inp["sources"])
+            raw_check, raw_lookups = raw_to_fact_check(recomputed, raw, fas_series)
+            checks.append(raw_check)
+            checks += unit_checks(rows, catalog)
+            checks += entity_checks(con, rows, inp["focus"], inp["peers"])
+            checks += provenance_checks(
+                con, rows, run_id=inp["run_id"], require_same_run=inp["require_same_run"],
+                snapshot_id=inp["snapshot_id"], index_entry=inp["index_entry"], manifest=inp["manifest"],
+                snapshot_root=inp["snapshot_root"] if inp["manifest"] else None,
+                lineage=inp["lineage"], quality=inp["quality"])
+        checks += catalog_checks(rows, catalog, catalog_sha256)
+        checks.append(quality_gate_check(inp["quality"]))
+        checks += caveat_checks(rows, catalog, inp["quality"], recomputed, inp["min_change_pp"])
         return {"inputs": inp, "catalog": catalog, "catalog_sha256": catalog_sha256, "rows": rows,
                 "recomputed": recomputed, "raw_lookups": raw_lookups, "checks": checks}
 
