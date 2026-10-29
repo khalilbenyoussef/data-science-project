@@ -8,8 +8,8 @@
 > so matching runs no longer get `quality_provenance_unverified`; the catalog
 > adds `formal_saving_rate`, `formal_borrowing_rate`, `gender_gap`, `income_gap`
 > and `age_gap`; `saving_rate` / `borrowing_rate` are now **verified** (glossary
-> rows 121 and 3); lineage records a digest of the `fact` and `country_year`
-> contents that KPI provenance checks; `.gitignore` now tracks `docs/` except
+> rows 121 and 3); lineage records a digest of the `fact`, `country_year` and
+> `country_dim` contents that KPI provenance checks; `.gitignore` now tracks `docs/` except
 > `docs/sources/`. See `README.md`.
 
 Review date: 2026-10-22. Catalog: `config/kpi_catalog.v1.yaml`, version 1.0.0.

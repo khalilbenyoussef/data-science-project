@@ -16,7 +16,8 @@ from biflow.utils.io import cached_sha256_file, file_stat
 
 # Empreinte du contenu (et non du fichier .duckdb) : ecrire d'autres tables,
 # comme kpi_values, ne change pas la liaison au warehouse produit par l'ETL.
-CONTENT_TABLES = ("fact", "country_year")
+# country_dim : le calculateur y lit is_country / is_aggregate pour chaque lookup.
+CONTENT_TABLES = ("fact", "country_year", "country_dim")
 CONTENT_METHOD = "sha256 over tables in order: JSON [table, columns] then one JSON row per line, ORDER BY ALL"
 _CONTENT_CACHE: dict[tuple, str] = {}
 _FAS_SERIES_CACHE: dict[tuple, dict[str, str]] = {}
@@ -170,7 +171,8 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
             issues.append("lineage_warehouse_path_invalid")
     warehouse_hash = cached_sha256_file(warehouse)
     outputs = outputs if isinstance(outputs, dict) else {}
-    # The ETL records a digest of the fact/country_year contents; a file-level
+    # The ETL records a digest of the fact/country_year/country_dim contents (tables
+    # listed in lineage, so older lineages keep their own list); a file-level
     # warehouse_sha256 (older lineage) remains supported as a fallback.
     recorded_content = _digest(outputs.get("warehouse_content_sha256"))
     recorded_hash = _digest(outputs.get("warehouse_sha256"))
