@@ -13,6 +13,7 @@ import pandas as pd
 
 from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
+from biflow.tools.kpi_provenance import CONTENT_METHOD, CONTENT_TABLES, warehouse_content_digest
 from biflow.tools.dictionary import (
     FAS_LABELS,
     GDP_LABELS,
@@ -908,6 +909,8 @@ class EtlAgent(BaseAgent):
             except Exception:
                 conn.execute("ROLLBACK")
                 raise
+            # Empreinte du contenu publie, verifiee en lecture seule par les KPI
+            content_sha256 = warehouse_content_digest(conn, CONTENT_TABLES)
         finally:
             conn.close()
 
@@ -1002,6 +1005,9 @@ class EtlAgent(BaseAgent):
                     "rows": int(len(population)),
                 },
                 "warehouse": str(warehouse_path),
+                "warehouse_content_sha256": content_sha256,
+                "warehouse_content_tables": list(CONTENT_TABLES),
+                "warehouse_content_method": CONTENT_METHOD,
             },
         }
         save_json(lineage, processed / "lineage.json")

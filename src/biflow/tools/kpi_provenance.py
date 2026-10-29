@@ -7,9 +7,42 @@ import json
 from pathlib import Path
 import re
 
+import duckdb
+
 from biflow.config import load_config, resolve
 from biflow.utils.countries import normalize_iso3
-from biflow.utils.io import cached_sha256_file
+from biflow.utils.io import cached_sha256_file, file_stat
+
+# Empreinte du contenu (et non du fichier .duckdb) : ecrire d'autres tables,
+# comme kpi_values, ne change pas la liaison au warehouse produit par l'ETL.
+CONTENT_TABLES = ("fact", "country_year")
+CONTENT_METHOD = "sha256 over tables in order: JSON [table, columns] then one JSON row per line, ORDER BY ALL"
+_CONTENT_CACHE: dict[tuple, str] = {}
+
+
+def warehouse_content_digest(con, tables=CONTENT_TABLES) -> str:
+    """SHA-256 deterministe des lignes triees des tables (export canonique)."""
+    digest = hashlib.sha256()
+    for table in tables:
+        if not re.fullmatch(r"[a-z_]+", table):
+            raise ValueError(f"invalid table name: {table!r}")
+        cursor = con.execute(f"SELECT * FROM {table} ORDER BY ALL")
+        columns = [column[0] for column in cursor.description]
+        digest.update(json.dumps([table, columns]).encode("utf-8") + b"\n")
+        while rows := cursor.fetchmany(10_000):
+            for row in rows:
+                digest.update(json.dumps(row, default=str, separators=(",", ":")).encode("utf-8") + b"\n")
+    return digest.hexdigest()
+
+
+def cached_warehouse_content_digest(path: Path, tables=CONTENT_TABLES) -> str:
+    """Empreinte du contenu, lecture seule, une fois par etat du fichier."""
+    stat = file_stat(path)
+    key = (str(Path(path).resolve()), stat["size_bytes"], stat["mtime_ns"], tuple(tables))
+    if key not in _CONTENT_CACHE:
+        with duckdb.connect(str(path), read_only=True) as con:
+            _CONTENT_CACHE[key] = warehouse_content_digest(con, tables)
+    return _CONTENT_CACHE[key]
 
 
 @dataclass(frozen=True)
@@ -41,6 +74,7 @@ class KpiProvenance:
     quality_gate_passed: bool | None
     quality_association_status: str
     issues: tuple[str, ...]
+    warehouse_content_sha256: str | None = None
 
 
 def _read_json(path, label, issues):
@@ -122,9 +156,21 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
         except (OSError, ValueError):
             issues.append("lineage_warehouse_path_invalid")
     warehouse_hash = cached_sha256_file(warehouse)
-    # Current ETL records a path, not a warehouse content digest.
-    recorded_hash = _digest(outputs.get("warehouse_sha256")) if isinstance(outputs, dict) else None
-    if recorded_hash is None:
+    outputs = outputs if isinstance(outputs, dict) else {}
+    # The ETL records a digest of the fact/country_year contents; a file-level
+    # warehouse_sha256 (older lineage) remains supported as a fallback.
+    recorded_content = _digest(outputs.get("warehouse_content_sha256"))
+    recorded_hash = _digest(outputs.get("warehouse_sha256"))
+    observed_content = None
+    if recorded_content is not None:
+        tables = outputs.get("warehouse_content_tables") or list(CONTENT_TABLES)
+        try:
+            observed_content = cached_warehouse_content_digest(warehouse, tuple(tables))
+        except (duckdb.Error, ValueError, TypeError):
+            issues.append("warehouse_content_unreadable")
+        if observed_content is not None and observed_content != recorded_content:
+            issues.append("warehouse_content_mismatch")
+    elif recorded_hash is None:
         issues.append("warehouse_content_binding_unverified")
     elif recorded_hash != warehouse_hash:
         issues.append("warehouse_hash_mismatch")
@@ -202,6 +248,6 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
         observed_raw_sha256=observed_raw_hash, warehouse_sha256=warehouse_hash,
         quality_report_path=str(quality_path), quality_report_sha256=quality_hash,
         quality_gate_passed=passed, quality_association_status=association,
-        issues=tuple(dict.fromkeys(issues)),
+        issues=tuple(dict.fromkeys(issues)), warehouse_content_sha256=observed_content,
     )
     return provenance, tuple(warnings), tuple(notices)
