@@ -83,9 +83,11 @@ En mode pipeline, l'agent calcule chaque KPI du catalogue pour `kpi.focus` et
 | `peer_status`, `peers_included`, `missing_peers`, `aggregation_method` | lignes PEERS : `complete` / `partial` / `none` |
 | `catalog_version`, `catalog_sha256`, `run_id` | traçabilité |
 
-La ligne `PEERS` est une moyenne **non pondérée** des pairs disponibles ; elle est
-toujours marquée `peer_average_unweighted` pour revue, car la politique du
-catalogue exige des poids de population validés pour un agrégat multi-pays.
+La ligne `PEERS` est une moyenne **simple, non pondérée** des pairs disponibles
+(`aggregation_method = simple_mean_4_peers` avec 4 pairs). Elle n'est marquée
+pour revue que si un pair manque (`partial_peer_coverage`, ou
+`no_peer_observation` si aucun pair n'a de valeur) ; les raisons de revue des
+pairs inclus sont héritées.
 
 KPI du catalogue 1.2.0 : `account_ownership`, `branch_density`,
 `digital_payment_rate`, `saving_rate` et `borrowing_rate` (mesures « any »,

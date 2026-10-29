@@ -2,8 +2,9 @@
 
 Lecture seule des faits via SemanticKpiTools ; aucune valeur n'est imputee :
 une observation absente reste NULL / unavailable, jamais 0. La ligne PEERS est
-une moyenne non ponderee des pairs disponibles, toujours signalee pour revue
-(le catalogue exige des poids valides pour un agregat multi-pays).
+la moyenne simple (non ponderee) des pairs disponibles, methode nommee
+simple_mean_<n>_peers ; elle n'est signalee pour revue que si un pair manque
+(ou si un pair inclus porte lui-meme une raison de revue).
 """
 from __future__ import annotations
 
@@ -17,7 +18,12 @@ from biflow.tools.semantic_kpi import CalculateKpiRequest, ListKpisRequest, Sema
 from biflow.utils.countries import normalize_iso3
 
 PEERS_ISO3 = "PEERS"
-PEER_METHOD = "unweighted_mean_of_available_peers"
+
+
+def peer_method(n_peers: int) -> str:
+    """Nom explicite de la methode, ex. simple_mean_4_peers."""
+    return f"simple_mean_{n_peers}_peers"
+
 COLUMNS = (
     "kpi_id", "iso3", "year", "value", "unit", "availability_status", "reason",
     "definition_status", "requires_review", "review_reasons", "peer_status",
@@ -88,10 +94,8 @@ def _peer_row(kpi, year: int, results: list, catalog, run_id: str) -> dict[str, 
     else:
         status, reason = "complete", None
     review = [reason for r in included for reason in r.review_reasons]
-    if included:
-        review.append("peer_average_unweighted")
-    if status == "partial":
-        review.append("partial_peer_coverage")
+    if reason:  # au moins un pair manquant
+        review.append(reason)
     review = list(dict.fromkeys(review))
     return {
         "kpi_id": kpi.kpi_id, "iso3": PEERS_ISO3, "year": year,
@@ -100,7 +104,7 @@ def _peer_row(kpi, year: int, results: list, catalog, run_id: str) -> dict[str, 
         "reason": reason, "definition_status": kpi.verification_status,
         "requires_review": bool(review), "review_reasons": review,
         "peer_status": status, "peers_included": [r.iso3 for r in included],
-        "missing_peers": missing, "aggregation_method": PEER_METHOD,
+        "missing_peers": missing, "aggregation_method": peer_method(len(results)),
         "catalog_version": catalog.catalog_version, "catalog_sha256": catalog.catalog_sha256,
         "run_id": run_id,
     }
@@ -154,5 +158,5 @@ def write_kpi_values(rows: list[dict[str, Any]], warehouse_path: str | Path,
     return len(rows)
 
 
-__all__ = ["COLUMNS", "PEERS_ISO3", "PEER_METHOD", "compute_kpi_values",
-           "peer_codes", "write_kpi_values"]
+__all__ = ["COLUMNS", "PEERS_ISO3", "compute_kpi_values", "peer_codes",
+           "peer_method", "write_kpi_values"]

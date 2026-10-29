@@ -11,7 +11,7 @@ from biflow import graph
 from biflow.agents.etl import EtlAgent
 from biflow.agents.semantic_kpi import SemanticKpiAgent
 from biflow.tools.kpi import load_catalog
-from biflow.tools.kpi_values import COLUMNS, PEER_METHOD, peer_codes
+from biflow.tools.kpi_values import COLUMNS, peer_codes, peer_method
 
 
 def _inputs(tmp_path):
@@ -129,8 +129,9 @@ def test_peer_average_partial_and_lists_missing(kpi_run):
     assert row.peer_status == "partial" and row.reason == "partial_peer_coverage"
     assert list(row.peers_included) == ["DZA", "MAR"]
     assert list(row.missing_peers) == ["EGY", "JOR"]
-    assert row.aggregation_method == PEER_METHOD
-    assert row.requires_review and "peer_average_unweighted" in list(row.review_reasons)
+    assert row.aggregation_method == peer_method(4) == "simple_mean_4_peers"
+    assert row.requires_review and "partial_peer_coverage" in list(row.review_reasons)
+    assert "peer_average_unweighted" not in list(row.review_reasons)
 
     single = _row(table, "account_ownership", "PEERS", 2021)
     assert single.value == pytest.approx(44.3) and list(single.missing_peers) == ["DZA", "EGY", "JOR"]
@@ -139,6 +140,25 @@ def test_peer_average_partial_and_lists_missing(kpi_run):
     assert math.isnan(none.value) and none.peer_status == "none"
     assert none.availability_status == "unavailable"
     assert list(none.missing_peers) == ["DZA", "EGY", "JOR", "MAR"]
+    assert none.requires_review and list(none.review_reasons) == ["no_peer_observation"]
+
+
+def test_complete_peer_row_is_not_flagged_by_the_method_itself():
+    from types import SimpleNamespace as NS
+    from biflow.tools.kpi_values import _peer_row
+    kpi = NS(kpi_id="account_ownership", unit="percent", verification_status="verified")
+    catalog = NS(catalog_version="1.2.0", catalog_sha256="a" * 64)
+    peers = [NS(iso3=c, availability_status="available", value=v, review_reasons=())
+             for c, v in (("DZA", 30.0), ("EGY", 40.0), ("JOR", 50.0), ("MAR", 60.0))]
+    row = _peer_row(kpi, 2024, peers, catalog, "r")
+    assert row["value"] == 45.0 and row["peer_status"] == "complete"
+    assert row["requires_review"] is False and row["review_reasons"] == []
+    assert row["aggregation_method"] == "simple_mean_4_peers"
+    peers[0] = NS(iso3="DZA", availability_status="available", value=30.0,
+                  review_reasons=("unresolved_input_quality_warning",))
+    row = _peer_row(kpi, 2024, peers, catalog, "r")
+    # Une raison de revue d'un pair inclus est heritee, jamais masquee
+    assert row["review_reasons"] == ["unresolved_input_quality_warning"]
 
 
 def test_kpi_step_does_not_modify_fact_tables(kpi_run):
