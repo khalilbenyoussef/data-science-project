@@ -14,7 +14,7 @@ from typing import Any, Mapping
 
 from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
-from biflow.tools.kpi import DEFAULT_CATALOG
+from biflow.tools.kpi import DEFAULT_CATALOG, shared_read_only_connection
 from biflow.tools.kpi_values import compute_kpi_values, peer_codes, write_kpi_values
 from biflow.utils.io import remember_sha256
 from biflow.tools.semantic_kpi import (
@@ -97,7 +97,9 @@ class SemanticKpiAgent(BaseAgent):
                     encoding="utf-8")).get("snapshot_id")
             except (OSError, ValueError, AttributeError):
                 snapshot_id = None
-        rows = compute_kpi_values(tools, focus, peers, self.run_id, snapshot_id)
+        # Une seule connexion lecture seule pour tous les lookups, fermee avant l'ecriture
+        with shared_read_only_connection(warehouse):
+            rows = compute_kpi_values(tools, focus, peers, self.run_id, snapshot_id)
         parquet = warehouse.with_name("kpi_values.parquet")
         write_kpi_values(rows, warehouse, parquet)
 

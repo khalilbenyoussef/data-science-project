@@ -6,6 +6,8 @@ A KPI with a provisional definition is always flagged provisional_definition.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager, nullcontext
+import copy
 from dataclasses import dataclass
 import hashlib
 import math
@@ -126,14 +128,51 @@ def _validate_catalog(catalog: Any) -> None:
         raise CatalogError("Malformed KPI catalog") from exc
 
 
+# Parsed, validated catalogs keyed by (path, size, mtime_ns): a run parses the
+# YAML once; any edit to the file changes the key and forces a new parse.
+_CATALOG_CACHE: dict[tuple[str, int, int], tuple[dict[str, Any], str]] = {}
+
+
+def _catalog_and_hash(path: str | Path) -> tuple[dict[str, Any], str]:
+    """Validated cached catalog (shared: treat as read-only) and SHA-256 of its bytes."""
+    target = resolve(path).resolve()
+    stat = target.stat()
+    key = (str(target), stat.st_size, stat.st_mtime_ns)
+    if key not in _CATALOG_CACHE:
+        content = target.read_bytes()
+        try:
+            catalog = yaml.safe_load(content)
+        except yaml.YAMLError as exc:
+            raise CatalogError("Invalid catalog YAML") from exc
+        _validate_catalog(catalog)
+        _CATALOG_CACHE[key] = (catalog, hashlib.sha256(content).hexdigest())
+    return _CATALOG_CACHE[key]
+
+
 def load_catalog(path: str | Path = DEFAULT_CATALOG) -> dict[str, Any]:
     """Load local YAML and validate its structure and executable contracts."""
+    return copy.deepcopy(_catalog_and_hash(path)[0])
+
+
+# Batch mode: one read-only connection per warehouse, reused by every lookup.
+_SHARED_CONNECTIONS: dict[str, Any] = {}
+
+
+@contextmanager
+def shared_read_only_connection(warehouse_path: str | Path):
+    """Reuse one read-only DuckDB connection for all lookups inside the block.
+
+    Close it (leave the block) before opening a write connection on the file.
+    Outside the block each lookup opens and closes its own read-only connection.
+    """
+    path = str(resolve(warehouse_path).resolve())
+    con = duckdb.connect(path, read_only=True)
+    _SHARED_CONNECTIONS[path] = con
     try:
-        catalog = yaml.safe_load(resolve(path).read_bytes())
-    except yaml.YAMLError as exc:
-        raise CatalogError("Invalid catalog YAML") from exc
-    _validate_catalog(catalog)
-    return catalog
+        yield con
+    finally:
+        _SHARED_CONNECTIONS.pop(path, None)
+        con.close()
 
 
 @dataclass(frozen=True)
@@ -196,13 +235,7 @@ class KpiCalculator:
                  catalog_path: str | Path = DEFAULT_CATALOG, *,
                  lineage_path: str | Path | None = None,
                  quality_report_path: str | Path | None = None):
-        content = resolve(catalog_path).read_bytes()
-        try:
-            self._catalog = yaml.safe_load(content)
-        except yaml.YAMLError as exc:
-            raise CatalogError("Invalid catalog YAML") from exc
-        _validate_catalog(self._catalog)
-        self._catalog_sha256 = hashlib.sha256(content).hexdigest()
+        self._catalog, self._catalog_sha256 = _catalog_and_hash(catalog_path)
         self.warehouse_path = resolve(warehouse_path).resolve()
         if not self.warehouse_path.is_file():
             raise FileNotFoundError(self.warehouse_path)
@@ -295,7 +328,9 @@ class KpiCalculator:
                 input_value=account.input_value, input_unit=account.input_unit,
                 dependency_results=(account,),
             )
-        with duckdb.connect(str(self.warehouse_path), read_only=True) as con:
+        shared = _SHARED_CONNECTIONS.get(str(self.warehouse_path))
+        with (nullcontext(shared) if shared is not None
+              else duckdb.connect(str(self.warehouse_path), read_only=True)) as con:
             entities = con.execute(
                 "SELECT is_country, is_aggregate FROM country_dim WHERE iso3 = ?", [code]
             ).fetchmany(2)

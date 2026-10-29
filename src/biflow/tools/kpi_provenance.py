@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 
@@ -18,6 +19,18 @@ from biflow.utils.io import cached_sha256_file, file_stat
 CONTENT_TABLES = ("fact", "country_year")
 CONTENT_METHOD = "sha256 over tables in order: JSON [table, columns] then one JSON row per line, ORDER BY ALL"
 _CONTENT_CACHE: dict[tuple, str] = {}
+_FAS_SERIES_CACHE: dict[tuple, dict[str, str]] = {}
+
+
+def _fas_series() -> dict[str, str]:
+    """sources.fas.series de config.yaml, relu seulement si le fichier change."""
+    path = resolve(os.getenv("BIFLOW_CONFIG", "config/config.yaml"))
+    stat = file_stat(path)
+    key = (str(path), stat["size_bytes"], stat["mtime_ns"])
+    if key not in _FAS_SERIES_CACHE:
+        series = load_config(path).get("sources", {}).get("fas", {}).get("series", {})
+        _FAS_SERIES_CACHE[key] = dict(series or {})
+    return dict(_FAS_SERIES_CACHE[key])
 
 
 def warehouse_content_digest(con, tables=CONTENT_TABLES) -> str:
@@ -193,7 +206,7 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
 
     warnings, notices = [], []
     # Resolve both canonical FAS IDs and the raw annual series identity.
-    fas_series = load_config().get("sources", {}).get("fas", {}).get("series", {})
+    fas_series = _fas_series()
     reverse = {v: k for k, v in fas_series.items()}
     for collection in ("diagnostics", "issues"):
         records = quality.get(collection)
