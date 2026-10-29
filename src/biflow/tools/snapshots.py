@@ -9,6 +9,7 @@ Aucune valeur n'est modifiee : les blobs sont des copies octet par octet.
 """
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import os
@@ -18,7 +19,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from biflow.config import resolve
-from biflow.utils.io import cached_sha256_file
+from biflow.utils.io import _detect_header_and_sep, cached_sha256_file
 
 INDEX_VERSION = 1
 CONTENT_METHOD = "sha256 of sorted per-line sha256 (BOM and line endings normalized, blank lines ignored)"
@@ -42,17 +43,16 @@ def content_sha256(path: str | Path) -> str:
 
 
 def count_rows(path: str | Path, header_marker: str | None = None) -> int:
-    """Lignes de donnees non vides apres la ligne d'en-tete (marqueur eventuel)."""
-    marker = header_marker.encode("utf-8") if header_marker else None
-    rows, header_seen = 0, False
-    with open(path, "rb") as handle:
-        for line in handle:
-            if not line.strip():
-                continue
-            if not header_seen:
-                header_seen = marker is None or marker in line
-                continue
-            rows += 1
+    """Enregistrements CSV apres l'en-tete (marqueur eventuel), enregistrements vides
+    ignores. Un champ entre guillemets sur plusieurs lignes compte pour un seul
+    enregistrement (cas du fichier FAS). Lecture latin-1 : transparente pour les
+    separateurs et guillemets ASCII, quel que soit l'encodage reel."""
+    header_index, separator = _detect_header_and_sep(Path(path), "latin-1", header_marker)
+    rows = 0
+    with open(path, encoding="latin-1", newline="") as handle:
+        for index, record in enumerate(csv.reader(handle, delimiter=separator)):
+            if index > header_index and any(field.strip() for field in record):
+                rows += 1
     return rows
 
 

@@ -35,6 +35,14 @@ def test_count_rows_uses_header_marker(tmp_path):
     assert count_rows(path, "SERIES_CODE") == 2 and count_rows(path) == 3
 
 
+def test_count_rows_counts_records_not_physical_lines(tmp_path):
+    # Champ entre guillemets sur 3 lignes (comme FULL_DESCRIPTION dans fas.csv)
+    path = tmp_path / "fas.csv"
+    path.write_text('Column1;Column2;Column3\nSERIES_CODE;NOTE;2024\n'
+                    'TUN.X.A;"ligne 1\nligne 2\nligne 3";1\n\nMAR.X.A;"court";2\n', encoding="utf-8")
+    assert count_rows(path, "SERIES_CODE") == 2
+
+
 # --------------------------------------------------------------------------- store
 @pytest.fixture
 def raw(tmp_path):
