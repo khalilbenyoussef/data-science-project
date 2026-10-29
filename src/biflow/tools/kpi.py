@@ -17,6 +17,7 @@ import duckdb
 import yaml
 
 from biflow.config import resolve
+from biflow.tools.dictionary import FINDEX_UNVERIFIED
 from biflow.utils.countries import is_country, normalize_iso3
 from biflow.tools.kpi_provenance import KpiProvenance, QualityWarning, evidence
 
@@ -73,6 +74,8 @@ def _validate_catalog(catalog: Any) -> None:
                            "traceability_policy", "publication_review_policy"):
                 if kpi[policy] != catalog[policy]["id"]:
                     raise CatalogError(f"Unknown policy: {kpi_id}/{policy}")
+            if kpi["warehouse"]["indicator_code"] in FINDEX_UNVERIFIED:
+                raise CatalogError(f"Unverified source indicator: {kpi_id}")
             if (not kpi["verification"]["evidence"] or any(
                     ref not in catalog["references"] for ref in kpi["verification"]["evidence"])
                     or any(dep not in kpis or dep == kpi_id for dep in kpi["dependencies"])):

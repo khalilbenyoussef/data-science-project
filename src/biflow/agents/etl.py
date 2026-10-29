@@ -15,8 +15,8 @@ from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
 from biflow.tools.dictionary import (
     FAS_LABELS,
-    FINDEX_LABELS,
     GDP_LABELS,
+    label_for,
     unit_for,
 )
 from biflow.utils.countries import (
@@ -341,9 +341,7 @@ def findex_long(
         }
     )
     long["source"] = "findex"
-    long["indicator_label"] = long["indicator_code"].map(FINDEX_LABELS).fillna(
-        long["indicator_code"]
-    )
+    long["indicator_label"] = long["indicator_code"].map(label_for)
     long["unit"] = long["indicator_code"].map(lambda code: unit_for(code, "fraction"))
     long["year"] = long["year"].astype(int)
     long = _resolve_duplicates(
