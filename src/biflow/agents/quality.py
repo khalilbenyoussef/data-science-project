@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+from datetime import datetime
 from typing import Any, Mapping
 
 import pandas as pd
@@ -13,7 +14,7 @@ from biflow.config import resolve
 from biflow.state import PipelineState
 from biflow.tools.dictionary import FINDEX_LABELS, GDP_LABELS
 from biflow.utils.countries import invalid_iso3, is_aggregate, normalize_iso3
-from biflow.utils.io import load_source, save_json, write_csv
+from biflow.utils.io import load_source, save_json, sha256_file, write_csv
 
 SEVERITY_WEIGHT = {"critical": 0.35, "high": 0.15, "medium": 0.06, "low": 0.02}
 MANDATORY_SOURCES = ("findex", "fas", "gdp")
@@ -411,9 +412,27 @@ def build_report(
     }
 
 
+def input_hashes(paths: dict[str, str], raw_meta: Mapping[str, Any] | None) -> dict[str, Any]:
+    """SHA-256 de chaque fichier controle : reprend le hash du collector si le
+    chemin correspond, sinon le calcule sur le fichier lu par le controle."""
+    inputs: dict[str, Any] = {}
+    for name, path in paths.items():
+        meta = (raw_meta or {}).get(name) or {}
+        recorded = meta.get("sha256")
+        same_file = bool(meta.get("path")) and resolve(meta["path"]) == resolve(path)
+        if isinstance(recorded, str) and len(recorded) == 64 and same_file:
+            inputs[name] = {"path": str(path), "sha256": recorded, "hash_origin": "collector"}
+        else:
+            inputs[name] = {"path": str(path), "sha256": sha256_file(resolve(path)),
+                            "hash_origin": "quality"}
+    return inputs
+
+
 def _markdown(report: dict) -> str:
     lines = [
         "# Data Quality Report",
+        "",
+        f"Run : `{report.get('run_id')}` - cree le {report.get('created_at')}",
         "",
         f"Score global : **{report['overall_score']:.2%}**",
         f"Quality gate : **{'PASS' if report['passed'] else 'FAIL'}**",
@@ -486,13 +505,21 @@ class QualityAgent(BaseAgent):
             raise AgentError("aucune source a controler")
 
         frames: dict[str, pd.DataFrame] = {}
+        checked_paths: dict[str, str] = {}
         for name, source_cfg in sources.items():
             source_cfg = dict(source_cfg)
             if name in raw_paths:
                 source_cfg["path"] = raw_paths[name]
             frames[name] = load_source(source_cfg)
+            checked_paths[name] = source_cfg["path"]
 
-        report = build_report(frames, self.cfg.get("quality") or {}, sources)
+        report = {
+            # Liaison au run et aux fichiers controles (verifiee par kpi_provenance)
+            "run_id": ctx.get("run_id") or self.run_id,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "inputs": input_hashes(checked_paths, ctx.get("raw_meta")),
+            **build_report(frames, self.cfg.get("quality") or {}, sources),
+        }
         report["llm_plan"] = self._plan(report)
 
         quality_dir = resolve(self.cfg["paths"].get("quality", "data/quality"))

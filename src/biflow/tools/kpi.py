@@ -157,8 +157,9 @@ class KpiCalculator:
     Sidecar evidence is read on each lookup. Metadata issues and matched quality
     warnings set the separate requires_review flag without changing availability
     or values. Defaults: adjacent lineage.json and ../quality/quality_report.json.
-    Current ETL/quality metadata cannot prove warehouse/report content binding;
-    recorded gate results must not be mistaken for publication certification.
+    Quality reports are bound to lineage by run_id and source hashes; the ETL
+    still records no warehouse content digest. Recorded gate results must not be
+    mistaken for publication certification.
     """
 
     def __init__(self, warehouse_path: str | Path,

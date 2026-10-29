@@ -80,9 +80,11 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
              dimension: str, dimension_value: str):
     """Return recorded provenance, exact input warnings and source-wide notices.
 
-    Existing Quality Agent reports lack run/hash binding. Optional run_id/inputs
-    metadata can establish agreement with lineage, but is never manufactured.
-    Matching a warning does not establish that its report belongs to this data.
+    Quality reports record run_id and inputs.<source>.sha256. When both agree
+    with lineage, association is matches_lineage and no binding review reason is
+    added; a disagreement adds quality_provenance_mismatch, and an older report
+    without that metadata adds quality_provenance_unverified. Binding is never
+    manufactured. Matching a warning does not by itself certify the data.
     """
     issues = []
     lineage, lineage_hash = _read_json(lineage_path, "lineage", issues)
