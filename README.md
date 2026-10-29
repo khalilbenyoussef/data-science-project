@@ -1,11 +1,12 @@
 # BIFlow — Automatisation d'un pipeline BI multi-agents
 
 Pipeline Business Intelligence automatique : **données brutes → profilage →
-qualité → ETL**, orchestré par un graphe LangGraph et des agents LLM
+qualité → ETL → KPI**, orchestré par un graphe LangGraph et des agents LLM
 (Gemini, Groq).
 
-Cette version couvre le **P1 — Données** : collecte, profilage, quality gate et
-construction du modèle en étoile.
+Cette version couvre le **P1 — Données** (collecte, profilage, quality gate,
+modèle en étoile) et le calcul déterministe des **KPI du catalogue** pour un pays
+focus et ses pairs.
 
 Domaine : **Économie & Finance / inclusion financière**.
 
@@ -22,11 +23,12 @@ Sources de données :
 - [x] **P0 — Socle** : configuration, package `biflow`, couche LLM multi-provider,
       vérification des clés.
 - [x] **P1 — Données** : collector, profiler, quality gate, ETL (nœuds LangGraph).
+- [x] **KPI** : étape `semantic_kpi` après l'ETL (table `kpi_values`) et route
+      sémantique à la demande (`run_semantic_request`).
 
-Cette branche est limitée au périmètre P1. Les phases KPI, analyse, dashboard et
-XAI ne sont pas incluses.
+Les phases analyse, dashboard et XAI ne sont pas incluses.
 
-## Architecture (P1)
+## Architecture
 
 ```
 main.py / scripts/check_llm.py
@@ -35,30 +37,80 @@ src/biflow/
   llm.py           providers, fallback, cache, compteur de tokens
   state.py         etat partage du pipeline
   graph.py         graphe LangGraph + repli sequentiel
-  agents/          base, collector, profiler, quality, etl
-  tools/           dictionnaire d'indicateurs (libelles, unites)
+  semantic_graph.py  route semantique a la demande (une requete KPI)
+  agents/          base, collector, profiler, quality, etl, semantic_kpi
+  tools/           dictionnaire d'indicateurs, calcul/provenance des KPI, kpi_values
   utils/           io, logger, pays (ISO3)
-config/config.yaml     chemins, LLM, sources, seuils
+config/config.yaml     chemins, LLM, orchestrateur, KPI, sources, seuils
+config/kpi_catalog.v1.yaml  definitions declaratives des KPI (version 1.1.0)
 data/                  raw, staging, processed, profiles, quality
 outputs/               reports, profiles, logs, cache LLM
 ```
 
-## Pipeline (S6 → S9)
+## Pipeline (S6 → S10)
 
 | Etape | Agent | Sorties principales |
 |---|---|---|
 | S6 | `collector` | `data/raw/*.csv` + SHA-256, telechargement WDI pagine |
 | S7 | `profiler` | `outputs/profiles/profile_*.{json,md}`, couverture indicateurs |
-| S8 | `quality` | `data/quality/quality_report.{json,md}`, gate PASS/FAIL |
+| S8 | `quality` | `data/quality/quality_report.{json,md}` (run_id + SHA-256 des sources), gate PASS/FAIL |
 | S9 | `etl` | `data/processed/*.parquet`, `warehouse.duckdb`, `lineage.json` |
+| S10 | `semantic_kpi` | table DuckDB `kpi_values` + `data/processed/kpi_values.parquet` |
 
-Chaque execution ecrit un rapport dans `outputs/reports/<run_id>/`.
+Chaque execution ecrit un rapport dans `outputs/reports/<run_id>/` ; `run.json`
+liste aussi chaque tentative d'agent (`attempts`).
+
+- **Quality gate** : un FAIL arrête le pipeline avant l'ETL (et donc les KPI).
+  C'est une décision, jamais retentée.
+- **Retry** : un agent en erreur est relancé `orchestrator.max_retries` fois
+  (1 par défaut) après `retry_backoff_s × n` secondes. Au dernier échec, le
+  pipeline s'arrête, les sorties publiées précédemment restent en place et
+  chaque tentative est tracée dans `run.json` et `errors`.
+
+### Étape KPI (`semantic_kpi`)
+
+En mode pipeline, l'agent calcule chaque KPI du catalogue pour `kpi.focus` et
+`kpi.peers`, sur chaque année valide du catalogue, via `SemanticKpiTools`
+(lecture seule des faits, aucun LLM). Table `kpi_values` :
+
+| Colonne | Contenu |
+|---|---|
+| `kpi_id`, `iso3`, `year` | clé (`iso3 = 'PEERS'` pour la moyenne des pairs) |
+| `value`, `unit` | valeur calculée ; `NULL` si indisponible (jamais 0) |
+| `availability_status`, `reason` | `available` / `unavailable` / `requires_review` |
+| `definition_status` | `verified`, `verified_metadata`, `derived_verified`, `provisional` |
+| `requires_review`, `review_reasons` | provenance, définition provisoire, alertes qualité |
+| `peer_status`, `peers_included`, `missing_peers`, `aggregation_method` | lignes PEERS : `complete` / `partial` / `none` |
+| `catalog_version`, `catalog_sha256`, `run_id` | traçabilité |
+
+La ligne `PEERS` est une moyenne **non pondérée** des pairs disponibles ; elle est
+toujours marquée `peer_average_unweighted` pour revue, car la politique du
+catalogue exige des poids de population validés pour un agrégat multi-pays.
+
+KPI du catalogue 1.1.0 : `account_ownership`, `branch_density`,
+`digital_payment_rate`, `saving_rate` et `borrowing_rate` (mesures « any »,
+provisoires), `unbanked_share`, `formal_saving_rate` (`fin17a`),
+`formal_borrowing_rate` (`fin22a`, carte de crédit incluse), `gender_gap`,
+`income_gap`, `age_gap` (points de pourcentage, mêmes pays et année).
+
+### Clés de configuration
+
+| Clé | Défaut | Rôle |
+|---|---|---|
+| `kpi.focus` | `TUN` | pays focus de l'étape KPI |
+| `kpi.peers` | `[DZA, EGY, JOR, MAR]` | groupe de pairs (ligne `PEERS`) |
+| `orchestrator.max_retries` | `1` | nouveaux essais d'un agent en erreur |
+| `orchestrator.retry_backoff_s` | `1.0` | attente avant l'essai n (`n × backoff`) |
+| `sources.gdp.indicators` | `NY.GDP.MKTP.CD`, `NY.GDP.PCAP.CD`, `NY.GDP.MKTP.KD.ZG` | indicateurs WDI collectés |
 
 ## Démarrage
 
+Windows (PowerShell) :
+
 ```powershell
 # 1. Environnement
-.\.venv-adsp\Scripts\Activate.ps1
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 
 # 2. Clés LLM (optionnelles pour l'ETL, utiles au quality gate)
@@ -68,7 +120,36 @@ Copy-Item .env.example .env
 # 3. Vérification des providers
 python scripts/check_llm.py
 
-# 4. Pipeline complet P1 (collector -> etl)
+# 4. Pipeline complet (collector -> etl -> semantic_kpi)
+python main.py run
+
+# Etapes ciblees
+python main.py steps
+python main.py run --only quality
+python main.py run --from etl
+python main.py run --to etl --no-llm      # s'arrete apres l'ETL, sans KPI
+python main.py run --only semantic_kpi    # recalcule kpi_values sur le warehouse existant
+
+# 5. Tests
+.\.venv\Scripts\python -m pytest -q
+```
+
+Linux / macOS (bash) :
+
+```bash
+# 1. Environnement
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Clés LLM (optionnelles pour l'ETL, utiles au quality gate)
+cp .env.example .env
+# renseigner GOOGLE_API_KEY, GROQ_API_KEY
+
+# 3. Vérification des providers
+python scripts/check_llm.py
+
+# 4. Pipeline complet (collector -> etl -> semantic_kpi)
 python main.py run
 
 # Etapes ciblees
@@ -76,18 +157,27 @@ python main.py steps
 python main.py run --only quality
 python main.py run --from etl
 python main.py run --to etl --no-llm
+python main.py run --only semantic_kpi
 
 # 5. Tests
-python -m pytest tests -q
+.venv/bin/python -m pytest -q
 ```
 
-## Sorties P1
+## Sorties
 
 - `data/raw/` : sources brutes et empreintes SHA-256 ;
 - `outputs/profiles/` : profils JSON/Markdown et diagnostics de couverture ;
-- `data/quality/` : rapport qualité JSON/Markdown, anomalies et gate PASS/FAIL ;
-- `data/processed/` : tables Parquet, `warehouse.duckdb` et `lineage.json` ;
-- `outputs/reports/<run_id>/` : rapport standardisé de chaque agent.
+- `data/quality/` : rapport qualité JSON/Markdown (`run_id`, `created_at`,
+  `inputs.<source>.sha256`), anomalies et gate PASS/FAIL ;
+- `data/processed/` : tables Parquet, `warehouse.duckdb` (dont `kpi_values`),
+  `kpi_values.parquet` et `lineage.json` ;
+- `outputs/reports/<run_id>/` : rapport standardisé de chaque agent et `run.json`.
+
+Le rapport qualité est lié au run : quand son `run_id` et les SHA-256 des
+sources correspondent à `lineage.json`, les KPI ne portent plus la raison de
+revue `quality_provenance_unverified` ; un désaccord donne
+`quality_provenance_mismatch` (par exemple `--from etl` avec un rapport qualité
+d'un run précédent).
 
 ## Données et périmètre
 
@@ -97,7 +187,17 @@ python -m pytest tests -q
   `FA29N_COMBANK.PTADLT_NUM`, `FA21N_COMBANK.PTADLT_NUM`,
   `LOANACCN_COMBANK.PTADLT_NUM`, `FA30N_COMBANK.PTADLT_NUM` ; 2025 exclue car
   incomplète.
-- WDI : PIB et PIB par habitant, lignes sans code ISO3 ignorées.
+- WDI : PIB, PIB par habitant (USD courants) et croissance du PIB
+  `NY.GDP.MKTP.KD.ZG` (% annuel, prix constants 2015), lignes sans code ISO3
+  ignorées. `gdp_growth_pct` reprend directement cet indicateur : il n'est plus
+  calculé depuis le PIB en USD courants (les effets de change comptaient comme
+  de la croissance). Les taux négatifs sont conservés.
+- Findex, sous-groupes : `gender` (men / women), `income` (richest 60% /
+  poorest 40%), `age_cat` (age 25+ / ages 15-24). `country_year` contient
+  `account_male/female`, `account_richest_60/poorest_40`,
+  `account_age_25_plus/15_24` et les écarts `gender_gap_pp`, `income_gap_pp`,
+  `age_gap_pp` (NULL si un sous-groupe manque). Le pivot filtre sur la dimension
+  et sa valeur pour éviter toute collision entre groupes.
 - Codes non ISO3 normalisés : `KOS -> XKX`, `WBG -> PSE` ; agrégats `EAP`,
   `WLD`, etc. conservés dans `country_dim` mais identifiés comme agrégats.
 
@@ -143,6 +243,26 @@ No remittance-specific or digital-account transaction-frequency KPI has been
 verified from these two columns. Do not infer either one or substitute one
 measure when the other is missing. This verification does not certify other
 Findex labels or every historical wave's detailed questionnaire construction.
+
+## Findex labels verified in the 2025 glossary (2026-10-29)
+
+Checked against the official Global Findex 2025 glossary (sheet `Glossary`,
+sha256 `8eb99754…f923`); row numbers are kept in
+`tools/dictionary.py:FINDEX_GLOSSARY_ROWS`.
+
+| Codes | Meaning | Rows |
+|---|---|---|
+| `fin17a` | Saved at a bank or similar financial institution (past year) | 24 |
+| `fin22a` | Borrowed from a bank or similar financial institution, credit card included (past year) | 31 |
+| `fin24aP`, `fin24aN`, `fin24aSD_ND` | Emergency funds within 30 days: possible / not possible / possible and not or somewhat difficult | 44, 45, 43 |
+| `fin24sav`, `fin24fam`, `fin24work`, `fin24bor`, `fin24sell`, `fin24other` | Main source of emergency funds: savings, family/friends, work, loan, sale of assets, other | 34-39 |
+| `fin11a`-`fin11f` | Reasons for not having an account (distance, cost, documents, insufficient funds, family member has one, trust) | 6-11 |
+
+`fin24aP`, `fin24sav` and `fin24bor` were previously labelled as digital payment,
+saving and borrowing; they measure financial resilience and feed no KPI. All
+values are fractions of all adults aged 15+. A code that cannot be verified is
+listed in `FINDEX_UNVERIFIED`, labelled `(unverified)` and rejected by the KPI
+catalog (none today).
 
 ## Source schema validation
 

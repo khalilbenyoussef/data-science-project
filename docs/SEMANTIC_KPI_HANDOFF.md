@@ -1,5 +1,15 @@
 # Semantic & KPI Agent handoff
 
+> **Update 2026-10-29 (catalog 1.1.0).** Several statements below are superseded:
+> `SemanticKpiAgent` is now also the pipeline step `semantic_kpi` after `etl`
+> (writes table `kpi_values`; the separate `run_semantic_request()` route is
+> unchanged); failed agents are retried once by the orchestrator (never a
+> quality-gate FAIL); `quality_report.json` records `run_id` and source hashes,
+> so matching runs no longer get `quality_provenance_unverified`; the catalog
+> adds `formal_saving_rate`, `formal_borrowing_rate`, `gender_gap`, `income_gap`
+> and `age_gap`; `.gitignore` now tracks `docs/` except `docs/sources/`.
+> Lineage still records no warehouse content digest. See `README.md`.
+
 Review date: 2026-10-22. Catalog: `config/kpi_catalog.v1.yaml`, version 1.0.0.
 Readiness: ready for downstream development and review-only display; publication
 approval is not implemented. No production-code defect confirmed during review.

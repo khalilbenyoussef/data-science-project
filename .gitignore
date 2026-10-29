@@ -22,8 +22,8 @@ data/quality/
 data/reports/
 outputs/
 
-
-docs
+# Documentation suivie ; seules les sources externes telechargees sont ignorees
+docs/sources/
 
 # Artefacts
 *.duckdb

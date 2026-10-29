@@ -1,5 +1,10 @@
 # Semantic & KPI interface
 
+> **Update 2026-10-29.** The agent is now also registered as the pipeline step
+> `semantic_kpi` (after `etl`): without a `semantic_kpi_request` it computes the
+> whole catalog for `kpi.focus` / `kpi.peers` into table `kpi_values`. With a
+> request it behaves exactly as described below.
+
 `SemanticKpiAgent` is a `BaseAgent` available directly or through an opt-in
 semantic orchestration route. It remains absent from the normal data-processing
 registry and does not invoke the Collector, BI Analyst, or an LLM.
