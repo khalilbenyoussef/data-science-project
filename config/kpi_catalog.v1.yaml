@@ -5,7 +5,7 @@ catalog_id: biflow_core_kpis
 created_on: "2026-10-22"
 updated_on: "2026-10-29"
 status: draft
-scope: country_year_total_population
+scope: country_year_total_population_and_subgroup_gaps
 versioning:
   definition_changes: increment catalog_version and the affected definition_version
   breaking_changes: increment catalog major version; never reuse an ID for a different measure
@@ -32,6 +32,10 @@ references:
     path: data/raw/fas.csv
     locator: SERIES_CODE ending in FA26N.PHTADLT_NUM.A; INDICATOR, TYPE_OF_TRANSFORMATION, FREQUENCY, SCALE
     evidence: commercial-bank branches, per 100000 adults, annual, units
+  findex_subgroups:
+    path: data/raw/findex.csv
+    locator: "group/group2 values: gender = men / women; income = richest 60% / poorest 40%; age_cat = age 25+ / ages 15-24"
+    evidence: official Findex subgroup breakdowns of account.t.d, observed for every survey year 2011-2024
   local_dictionary:
     path: src/biflow/tools/dictionary.py
     locator: FINDEX_LABELS and UNITS
@@ -432,6 +436,126 @@ kpis:
     valid_years: [2014, 2017, 2021, 2022, 2024]
     year_evidence: observed_availability
     not_equivalent_to: [borrow_any_t_d, borrowing_rate, fin22a.22a1.22g.d]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  gender_gap:
+    definition_version: "1.0.0"
+    name: Account ownership gender gap
+    business_objective: financial_inclusion
+    definition: Account ownership of men minus account ownership of women, same country and survey year, in percentage points.
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_book, findex_subgroups, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: gender
+      dimension_value: "men"
+      subtrahend_dimension_value: "women"
+      wide_table: country_year
+      wide_column: gender_gap_pp
+      wide_input_unit: percentage_points
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: gender, dimension_value: "men"}
+      - {source: findex, indicator_code: account_t_d, dimension: gender, dimension_value: "women"}
+    formula: {from_fact: "100 * (value[men] - value[women])", from_wide: gender_gap_pp}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    subgroup: gender_men_minus_women
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  income_gap:
+    definition_version: "1.0.0"
+    name: Account ownership income gap
+    business_objective: financial_inclusion
+    definition: Account ownership of the richest 60% minus the poorest 40% of households, same country and survey year, in percentage points.
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_book, findex_subgroups, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: income
+      dimension_value: "richest 60%"
+      subtrahend_dimension_value: "poorest 40%"
+      wide_table: country_year
+      wide_column: income_gap_pp
+      wide_input_unit: percentage_points
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: income, dimension_value: "richest 60%"}
+      - {source: findex, indicator_code: account_t_d, dimension: income, dimension_value: "poorest 40%"}
+    formula: {from_fact: "100 * (value[richest 60%] - value[poorest 40%])", from_wide: income_gap_pp}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    subgroup: income_richest_60_minus_poorest_40
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  age_gap:
+    definition_version: "1.0.0"
+    name: Account ownership age gap
+    business_objective: financial_inclusion
+    definition: Account ownership of adults aged 25+ minus adults aged 15-24, same country and survey year, in percentage points.
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_book, findex_subgroups, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: age_cat
+      dimension_value: "age 25+"
+      subtrahend_dimension_value: "ages 15-24"
+      wide_table: country_year
+      wide_column: age_gap_pp
+      wide_input_unit: percentage_points
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: age_cat, dimension_value: "age 25+"}
+      - {source: findex, indicator_code: account_t_d, dimension: age_cat, dimension_value: "ages 15-24"}
+    formula: {from_fact: "100 * (value[age 25+] - value[ages 15-24])", from_wide: age_gap_pp}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    subgroup: age_25_plus_minus_15_24
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
     aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
     missing_data_policy: preserve_missing_v1
     aggregation_policy: compatible_denominators_v1

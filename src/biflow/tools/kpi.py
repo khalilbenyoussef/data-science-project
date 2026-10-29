@@ -43,7 +43,18 @@ CONTRACTS = {
                            "total_population", "percent", "100 * value", "verified"),
     "formal_borrowing_rate": ("findex", "fin22a", "fraction", "all", "all",
                               "total_population", "percent", "100 * value", "verified"),
+    # Ecarts : dimension_value = premier terme, GAP_SUBTRAHEND = terme soustrait.
+    "gender_gap": ("findex", "account_t_d", "fraction", "gender", "men",
+                   "gender_men_minus_women", "percentage_points",
+                   "100 * (value[men] - value[women])", "derived_verified"),
+    "income_gap": ("findex", "account_t_d", "fraction", "income", "richest 60%",
+                   "income_richest_60_minus_poorest_40", "percentage_points",
+                   "100 * (value[richest 60%] - value[poorest 40%])", "derived_verified"),
+    "age_gap": ("findex", "account_t_d", "fraction", "age_cat", "age 25+",
+                "age_25_plus_minus_15_24", "percentage_points",
+                "100 * (value[age 25+] - value[ages 15-24])", "derived_verified"),
 }
+GAP_SUBTRAHEND = {"gender_gap": "women", "income_gap": "poorest 40%", "age_gap": "ages 15-24"}
 
 
 class CatalogError(ValueError):
@@ -88,10 +99,20 @@ def _validate_catalog(catalog: Any) -> None:
                       k["formula"]["from_fact"], k["verification"]["status"])
             if (actual != expected or w["fact_table"] != "fact"
                     or k["source"]["dataset"] != w["source"]
+                    or w.get("subtrahend_dimension_value") != GAP_SUBTRAHEND.get(kpi_id)
                     or k["dependencies"] != (["account_ownership"] if kpi_id == "unbanked_share" else [])
                     or k["source"]["indicator"] != (
                         "FA26N.PHTADLT_NUM" if kpi_id == "branch_density" else w["indicator_code"])):
                 raise CatalogError(f"Unsupported calculation contract: {kpi_id}")
+        # A gap depends on exactly its two same-year subgroup facts.
+        for kpi_id, subtrahend in GAP_SUBTRAHEND.items():
+            w = kpis[kpi_id]["warehouse"]
+            expected = [{"source": w["source"], "indicator_code": w["indicator_code"],
+                         "dimension": w["dimension"], "dimension_value": value}
+                        for value in (w["dimension_value"], subtrahend)]
+            if (kpis[kpi_id]["fact_dependencies"] != expected
+                    or kpis[kpi_id]["valid_years"] != kpis["account_ownership"]["valid_years"]):
+                raise CatalogError(f"Invalid gap fact dependencies: {kpi_id}")
         # A complement must describe exactly the same observation/population.
         for field in ("warehouse", "valid_years", "denominator", "subgroup"):
             if kpis["unbanked_share"][field] != kpis["account_ownership"][field]:
@@ -147,6 +168,8 @@ class KpiResult:
     source_warnings: tuple[QualityWarning, ...] = ()
     review_reasons: tuple[str, ...] = ()
     requires_review: bool = False
+    # Gap KPIs: ((fact key, input value), ...) for both same-year subgroup facts.
+    component_inputs: tuple[tuple[tuple[str | int, ...], float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -218,20 +241,26 @@ class KpiCalculator:
             raise ValueError("year must be an integer between 1 and 9999")
         k = self._catalog["kpis"][kpi_id]
         w = k["warehouse"]
+        dimension_values = [w["dimension_value"]] + (
+            [GAP_SUBTRAHEND[kpi_id]] if kpi_id in GAP_SUBTRAHEND else [])
 
         def result(status, reason=None, value=None, input_value=None, input_unit=None,
-                   dependency_results=()):
+                   dependency_results=(), component_inputs=()):
             if dependency_results:
                 dependency = dependency_results[0]
                 provenance = dependency.provenance
                 warnings, notices = dependency.quality_warnings, dependency.source_warnings
                 review = list(dependency.review_reasons)
             else:
-                provenance, warnings, notices = evidence(
-                    self.warehouse_path, self.lineage_path, self.quality_report_path,
-                    source=w["source"], iso3=code, year=year, indicator=w["indicator_code"],
-                    dimension=w["dimension"], dimension_value=w["dimension_value"],
-                )
+                warnings, notices = (), ()
+                for dimension_value in dimension_values:
+                    provenance, matched, source_notices = evidence(
+                        self.warehouse_path, self.lineage_path, self.quality_report_path,
+                        source=w["source"], iso3=code, year=year, indicator=w["indicator_code"],
+                        dimension=w["dimension"], dimension_value=dimension_value,
+                    )
+                    warnings = tuple(dict.fromkeys(warnings + matched))
+                    notices = tuple(dict.fromkeys(notices + source_notices))
                 review = list(provenance.issues)
             if k["verification"]["status"] == "provisional":
                 review.append("provisional_definition")
@@ -253,6 +282,7 @@ class KpiCalculator:
                                 w["dimension_value"]) if input_value is not None else None,
                 provenance=provenance, quality_warnings=warnings, source_warnings=notices,
                 review_reasons=tuple(dict.fromkeys(review)), requires_review=bool(review),
+                component_inputs=component_inputs,
             )
 
         if year not in k["valid_years"]:
@@ -273,22 +303,41 @@ class KpiCalculator:
                 return result("unavailable", "country_not_in_warehouse")
             if len(entities) != 1 or entities[0] != (True, False):
                 return result("requires_review", "invalid_country_dimension")
-            rows = con.execute(
-                "SELECT value, unit FROM fact WHERE iso3 = ? AND year = ? "
-                "AND source = ? AND indicator_code = ? AND dimension = ? AND dimension_value = ?",
-                [code, year, w["source"], w["indicator_code"], w["dimension"], w["dimension_value"]],
-            ).fetchmany(2)
-        if not rows:
-            return result("unavailable", "missing_observation")
-        if len(rows) != 1:
-            return result("requires_review", "duplicate_observations")
-        raw, unit = rows[0]
-        if unit != w["input_unit"]:
-            return result("requires_review", "unexpected_input_unit", input_unit=unit)
-        if raw is None or not math.isfinite(raw):
-            return result("unavailable", "missing_or_nonfinite_input", input_unit=unit)
-        raw = float(raw)
-        if raw < 0 or (unit == "fraction" and raw > 1):
-            return result("requires_review", "out_of_range_input", input_value=raw, input_unit=unit)
+            observations = [self._observe(con, code, year, w, value) for value in dimension_values]
+        if kpi_id in GAP_SUBTRAHEND:
+            # Both subgroup facts of the same year are required; never substituted.
+            for status, reason, raw, unit in observations:
+                if status != "available":
+                    return result(status, reason, input_unit=unit)
+            (_, _, first, unit), (_, _, second, _) = observations
+            keys = [(code, year, w["source"], w["indicator_code"], w["dimension"], value)
+                    for value in dimension_values]
+            return result("available", value=100 * (first - second), input_unit=unit,
+                          component_inputs=((keys[0], first), (keys[1], second)))
+        status, reason, raw, unit = observations[0]
+        if status != "available":
+            return result(status, reason, input_value=raw, input_unit=unit)
         value = raw * 100 if unit == "fraction" else raw
         return result("available", value=value, input_value=raw, input_unit=unit)
+
+    @staticmethod
+    def _observe(con, code, year, w, dimension_value):
+        """One parameterized fact lookup -> (status, reason, raw value, unit)."""
+        rows = con.execute(
+            "SELECT value, unit FROM fact WHERE iso3 = ? AND year = ? "
+            "AND source = ? AND indicator_code = ? AND dimension = ? AND dimension_value = ?",
+            [code, year, w["source"], w["indicator_code"], w["dimension"], dimension_value],
+        ).fetchmany(2)
+        if not rows:
+            return "unavailable", "missing_observation", None, None
+        if len(rows) != 1:
+            return "requires_review", "duplicate_observations", None, None
+        raw, unit = rows[0]
+        if unit != w["input_unit"]:
+            return "requires_review", "unexpected_input_unit", None, unit
+        if raw is None or not math.isfinite(raw):
+            return "unavailable", "missing_or_nonfinite_input", None, unit
+        raw = float(raw)
+        if raw < 0 or (unit == "fraction" and raw > 1):
+            return "requires_review", "out_of_range_input", raw, unit
+        return "available", None, raw, unit

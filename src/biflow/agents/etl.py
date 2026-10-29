@@ -642,8 +642,12 @@ SELECT
     min(country) AS country,
     year,
     max(CASE WHEN indicator_code = 'account_t_d' AND dimension_value = 'all' THEN value END) * 100 AS account_own,
-    max(CASE WHEN indicator_code = 'account_t_d' AND dimension_value = 'men' THEN value END) * 100 AS account_male,
-    max(CASE WHEN indicator_code = 'account_t_d' AND dimension_value = 'women' THEN value END) * 100 AS account_female,
+    max(CASE WHEN indicator_code = 'account_t_d' AND dimension = 'gender' AND dimension_value = 'men' THEN value END) * 100 AS account_male,
+    max(CASE WHEN indicator_code = 'account_t_d' AND dimension = 'gender' AND dimension_value = 'women' THEN value END) * 100 AS account_female,
+    max(CASE WHEN indicator_code = 'account_t_d' AND dimension = 'income' AND dimension_value = 'richest 60%' THEN value END) * 100 AS account_richest_60,
+    max(CASE WHEN indicator_code = 'account_t_d' AND dimension = 'income' AND dimension_value = 'poorest 40%' THEN value END) * 100 AS account_poorest_40,
+    max(CASE WHEN indicator_code = 'account_t_d' AND dimension = 'age_cat' AND dimension_value = 'age 25+' THEN value END) * 100 AS account_age_25_plus,
+    max(CASE WHEN indicator_code = 'account_t_d' AND dimension = 'age_cat' AND dimension_value = 'ages 15-24' THEN value END) * 100 AS account_age_15_24,
     max(CASE WHEN indicator_code = 'fiaccount_t_d' AND dimension_value = 'all' THEN value END) * 100 AS fi_account,
     max(CASE WHEN indicator_code = 'mobileaccount_t_d' AND dimension_value = 'all' THEN value END) * 100 AS mobile_account,
     max(CASE WHEN indicator_code = 'inactive_t_d' AND dimension_value = 'all' THEN value END) * 100 AS inactive,
@@ -682,6 +686,14 @@ SELECT
         THEN account_male - account_female
     END AS gender_gap_pp,
     CASE
+        WHEN account_richest_60 IS NOT NULL AND account_poorest_40 IS NOT NULL
+        THEN account_richest_60 - account_poorest_40
+    END AS income_gap_pp,
+    CASE
+        WHEN account_age_25_plus IS NOT NULL AND account_age_15_24 IS NOT NULL
+        THEN account_age_25_plus - account_age_15_24
+    END AS age_gap_pp,
+    CASE
         WHEN gdp_usd IS NOT NULL AND gdp_usd > 0
          AND prev_gdp_usd IS NOT NULL AND prev_gdp_usd > 0
          AND prev_year = year - 1
@@ -712,6 +724,10 @@ def _check_country_year(df: pd.DataFrame) -> None:
         "account_own",
         "account_male",
         "account_female",
+        "account_richest_60",
+        "account_poorest_40",
+        "account_age_25_plus",
+        "account_age_15_24",
         "fi_account",
         "mobile_account",
         "inactive",
@@ -731,6 +747,8 @@ def _check_country_year(df: pd.DataFrame) -> None:
         "gdp_pc",
         "gdp_usd",
         "gender_gap_pp",
+        "income_gap_pp",
+        "age_gap_pp",
         "gdp_growth_pct",
         "region",
         "income_group",
@@ -747,6 +765,10 @@ def _check_country_year(df: pd.DataFrame) -> None:
         "account_own",
         "account_male",
         "account_female",
+        "account_richest_60",
+        "account_poorest_40",
+        "account_age_25_plus",
+        "account_age_15_24",
         "fi_account",
         "mobile_account",
         "inactive",
@@ -915,6 +937,17 @@ class EtlAgent(BaseAgent):
             "men": "men" in findex_dimensions,
             "women": "women" in findex_dimensions,
         }
+        findex_groups = set(
+            map(tuple, fact.loc[fact["source"] == "findex", ["dimension", "dimension_value"]]
+                .drop_duplicates().to_numpy().tolist())
+        )
+        report["checks"]["findex_income_age"] = {
+            f"{dimension}/{value}": (dimension, value) in findex_groups
+            for dimension, value in (
+                ("income", "richest 60%"), ("income", "poorest 40%"),
+                ("age_cat", "age 25+"), ("age_cat", "ages 15-24"),
+            )
+        }
         report["checks"]["gdp_growth_rule"] = "year-1, positive values only"
         report.setdefault("output_rows", {})["fact"] = int(len(fact))
         report["output_rows"]["country_year"] = int(len(country_year))
@@ -947,6 +980,8 @@ class EtlAgent(BaseAgent):
                 "FAS: selection des series configurees, annees -> lignes",
                 "WDI: indicateurs PIB -> lignes",
                 "Pivot par pays x annee, croissance PIB sur annee-1 uniquement, jointure dimension pays",
+                "Ecarts de detention de compte (points de %) : hommes - femmes, 60 % plus riches - "
+                "40 % plus pauvres, 25+ - 15-24 ; meme annee, NULL si un sous-groupe manque",
             ],
             "checks": report["checks"],
             "rejected": report["rejected"],

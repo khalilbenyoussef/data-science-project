@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 import pytest
 import yaml
 
-from biflow.agents.etl import PIVOT_SQL
+from biflow.agents.etl import DERIVE_SQL, PIVOT_SQL
 from biflow.config import ROOT, load_config
 from biflow.tools.dictionary import INDICATOR_SOURCE, UNITS
 
@@ -22,6 +22,11 @@ EXPECTED = {
     "formal_saving_rate": ("findex", "fin17a", "formal_saving", "100 * value", "formal_saving"),
     "formal_borrowing_rate": ("findex", "fin22a", "formal_borrowing", "100 * value", "formal_borrowing"),
 }
+GAPS = {
+    "gender_gap": ("gender", "men", "women", "gender_gap_pp"),
+    "income_gap": ("income", "richest 60%", "poorest 40%", "income_gap_pp"),
+    "age_gap": ("age_cat", "age 25+", "ages 15-24", "age_gap_pp"),
+}
 
 
 @pytest.fixture(scope="module")
@@ -33,15 +38,15 @@ def test_catalog_identity_and_versions(catalog):
     assert catalog["schema_version"] == 1
     assert catalog["catalog_version"] == "1.1.0"
     assert catalog["status"] == "draft"
-    assert catalog["scope"] == "country_year_total_population"
-    assert set(catalog["kpis"]) == set(EXPECTED)
+    assert catalog["scope"] == "country_year_total_population_and_subgroup_gaps"
+    assert set(catalog["kpis"]) == set(EXPECTED) | set(GAPS)
     assert {k["business_objective"] for k in catalog["kpis"].values()} == {
         "financial_inclusion", "banking_infrastructure", "digital_finance",
         "savings_deposits", "credit", "financial_exclusion_vulnerability",
     }
 
 
-@pytest.mark.parametrize("kpi_id", EXPECTED)
+@pytest.mark.parametrize("kpi_id", list(EXPECTED) + list(GAPS))
 def test_each_definition_is_complete_and_links_to_declared_policies(catalog, kpi_id):
     kpi = catalog["kpis"][kpi_id]
     required = {
@@ -90,7 +95,7 @@ def test_source_units_formulas_and_warehouse_mappings_match_existing_etl(catalog
     assert f"max(CASE WHEN indicator_code = '{code}'{condition} THEN value END){scale} AS {wide}" in PIVOT_SQL
 
 
-@pytest.mark.parametrize("kpi_id", EXPECTED)
+@pytest.mark.parametrize("kpi_id", list(EXPECTED) + list(GAPS))
 def test_years_are_observed_periods_within_current_etl_scope(catalog, kpi_id):
     years = catalog["kpis"][kpi_id]["valid_years"]
     assert years == sorted(set(years))
@@ -98,7 +103,7 @@ def test_years_are_observed_periods_within_current_etl_scope(catalog, kpi_id):
     assert all(type(y) is int and cfg["min_year"] <= y <= cfg["max_year"] for y in years)
     if kpi_id == "branch_density":
         assert years == list(range(2011, 2025))
-    elif kpi_id in {"account_ownership", "unbanked_share", "formal_saving_rate"}:
+    elif kpi_id in {"account_ownership", "unbanked_share", "formal_saving_rate"} | set(GAPS):
         assert years == [2011, 2014, 2017, 2021, 2022, 2024]
     else:
         assert years == [2014, 2017, 2021, 2022, 2024]
@@ -141,6 +146,23 @@ def test_formal_saving_and_borrowing_are_verified_against_glossary(catalog, kpi_
     # Les mesures "any" restent distinctes et provisoires
     assert any_kpi in kpi["not_equivalent_to"]
     assert catalog["kpis"][any_kpi]["verification"]["status"] == "provisional"
+
+
+@pytest.mark.parametrize("kpi_id", GAPS)
+def test_gap_kpis_depend_on_same_year_subgroup_facts(catalog, kpi_id):
+    dimension, first, second, wide = GAPS[kpi_id]
+    kpi = catalog["kpis"][kpi_id]
+    mapping = kpi["warehouse"]
+    assert kpi["unit"] == mapping["wide_input_unit"] == "percentage_points"
+    assert (mapping["indicator_code"], mapping["dimension"]) == ("account_t_d", dimension)
+    assert (mapping["dimension_value"], mapping["subtrahend_dimension_value"]) == (first, second)
+    assert [(d["dimension"], d["dimension_value"]) for d in kpi["fact_dependencies"]] == [
+        (dimension, first), (dimension, second)]
+    assert kpi["dependencies"] == [] and "same survey year" in kpi["reference_period"]
+    assert kpi["formula"] == {"from_fact": f"100 * (value[{first}] - value[{second}])", "from_wide": wide}
+    assert f"AND dimension = '{dimension}' AND dimension_value = '{first}'" in PIVOT_SQL
+    assert f"END AS {wide}" in DERIVE_SQL
+    assert f"AND dimension = '{dimension}' AND dimension_value = '{second}'" in PIVOT_SQL
 
 
 def test_missing_data_never_becomes_a_zero_or_an_imputed_wave(catalog):
