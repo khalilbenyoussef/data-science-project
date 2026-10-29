@@ -36,7 +36,7 @@ def catalog():
 
 def test_catalog_identity_and_versions(catalog):
     assert catalog["schema_version"] == 1
-    assert catalog["catalog_version"] == "1.1.0"
+    assert catalog["catalog_version"] == "1.2.0"
     assert catalog["status"] == "draft"
     assert catalog["scope"] == "country_year_total_population_and_subgroup_gaps"
     assert set(catalog["kpis"]) == set(EXPECTED) | set(GAPS)
@@ -118,15 +118,25 @@ def test_digital_payments_cannot_be_confused_with_accounts_or_remittances(catalo
     assert "findex_2025_glossary" in kpi["verification"]["evidence"]
 
 
-def test_unverified_saving_and_borrowing_definitions_cannot_be_published(catalog):
-    for name in ("saving_rate", "borrowing_rate"):
-        kpi = catalog["kpis"][name]
-        assert kpi["verification"]["status"] == "provisional"
-        assert kpi["verification"]["uncertainties"]
-        assert kpi["source"]["official_indicator"] is None
-        assert kpi["denominator"]["basis"] == "source_verification_required"
-        assert kpi["reference_period"] == "unverified"
-        assert "pending verification" in kpi["name"]
+@pytest.mark.parametrize("name,official,row,formal", [
+    ("saving_rate", "save.any.t.d", "A121:C121", "formal_saving_rate"),
+    ("borrowing_rate", "borrow.any.t.d", "A3:C3", "formal_borrowing_rate"),
+])
+def test_any_saving_and_borrowing_are_verified_against_glossary(catalog, name, official, row, formal):
+    kpi = catalog["kpis"][name]
+    assert kpi["verification"]["status"] == "verified"
+    assert kpi["definition_version"] == "1.1.0"
+    assert kpi["verification"]["uncertainties"]
+    assert kpi["source"]["official_indicator"] == official
+    reference = catalog["references"][kpi["verification"]["evidence"][0]]
+    assert reference["locator"].startswith(f"Glossary!{row}, {official}")
+    assert kpi["denominator"]["basis"] == "survey_weighted_population_share"
+    assert kpi["reference_period"] == "past_year"
+    assert formal in kpi["not_equivalent_to"]
+    assert "pending" not in kpi["name"]
+
+
+def test_provisional_definitions_block_publication(catalog):
     assert catalog["publication_review_policy"]["provisional_definition"] == "block_publication_until_definition_verified"
     assert catalog["kpis"]["branch_density"]["verification"]["status"] == "verified_metadata"
 
@@ -143,9 +153,8 @@ def test_formal_saving_and_borrowing_are_verified_against_glossary(catalog, kpi_
     assert reference["url"] == catalog["references"]["findex_2025_glossary"]["url"]
     assert reference["locator"].startswith(f"Glossary!{row}, {code}")
     assert kpi["reference_period"] == "past_year"
-    # Les mesures "any" restent distinctes et provisoires
+    # Les mesures "any" restent distinctes
     assert any_kpi in kpi["not_equivalent_to"]
-    assert catalog["kpis"][any_kpi]["verification"]["status"] == "provisional"
 
 
 @pytest.mark.parametrize("kpi_id", GAPS)

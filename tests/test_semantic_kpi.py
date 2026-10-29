@@ -41,7 +41,7 @@ def test_catalog_discovery_needs_no_warehouse_or_duckdb(tmp_path, monkeypatch):
     tools = SemanticKpiTools(tmp_path / "absent.duckdb")
     response = tools.list_kpis(ListKpisRequest())
     catalog = load_catalog()
-    assert response.catalog_version == "1.1.0"
+    assert response.catalog_version == "1.2.0"
     assert {k.kpi_id for k in response.kpis} == set(catalog["kpis"])
     for summary in response.kpis:
         entry = catalog["kpis"][summary.kpi_id]
@@ -56,8 +56,8 @@ def test_catalog_discovery_needs_no_warehouse_or_duckdb(tmp_path, monkeypatch):
 def test_descriptions_cannot_mutate_service_catalog(agent):
     request = DescribeKpiRequest(kpi_id="saving_rate")
     description = agent.describe_kpi(request)
-    description.definition["verification"]["status"] = "verified"
-    assert agent.describe_kpi(request).definition["verification"]["status"] == "provisional"
+    description.definition["verification"]["status"] = "provisional"
+    assert agent.describe_kpi(request).definition["verification"]["status"] == "verified"
 
 
 @pytest.mark.parametrize("kpi_id", list(load_catalog()["kpis"]))
@@ -130,7 +130,7 @@ def test_structured_tools_callable_and_strict(agent, warehouse, monkeypatch):
     assert set(tools) == {"list_kpis", "describe_kpi", "calculate_kpi", "latest_available",
                           "compare_countries", "compare_years"}
     assert len(tools["list_kpis"].invoke({})["kpis"]) == len(load_catalog()["kpis"])
-    assert tools["describe_kpi"].invoke({"kpi_id": "borrowing_rate"})["definition"]["verification"]["status"] == "provisional"
+    assert tools["describe_kpi"].invoke({"kpi_id": "borrowing_rate"})["definition"]["verification"]["status"] == "verified"
     digest = hashlib.sha256(warehouse.read_bytes()).hexdigest()
     original = duckdb.connect
     calls = []
@@ -142,7 +142,7 @@ def test_structured_tools_callable_and_strict(agent, warehouse, monkeypatch):
 
     monkeypatch.setattr(duckdb, "connect", connect)
     result = tools["calculate_kpi"].invoke({"iso3": "TUN", "year": 2024, "kpi_id": "saving_rate"})["result"]
-    assert result["value"] == pytest.approx(23) and result["verification_status"] == "provisional"
+    assert result["value"] == pytest.approx(23) and result["verification_status"] == "verified"
     assert result["publication_status"] == "not_evaluated" and result["requires_review"]
     assert len(calls) == 1 and hashlib.sha256(warehouse.read_bytes()).hexdigest() == digest
     with pytest.raises(ValidationError):

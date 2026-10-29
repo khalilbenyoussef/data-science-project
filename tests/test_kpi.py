@@ -63,7 +63,7 @@ def test_verified_values_subgroups_units_and_metadata(warehouse, kpi, expected, 
     assert result.iso3 == "TUN" and result.observation_year == 2024
     assert result.availability_status == "available" and result.reason is None
     assert result.definition == load_catalog()["kpis"][kpi]["definition"]
-    assert result.catalog_version == "1.1.0" and result.definition_version == "1.0.0"
+    assert result.catalog_version == "1.2.0" and result.definition_version == "1.0.0"
     assert len(result.catalog_sha256) == 64
     assert result.publication_status == "not_evaluated"
     with pytest.raises(FrozenInstanceError):
@@ -173,7 +173,7 @@ def test_unknown_and_out_of_scope_kpis_rejected(warehouse, kpi):
     lambda c: c["kpis"]["branch_density"].update(valid_years=[True]),
     lambda c: c["missing_data_policy"].update(zero_fill=True),
     lambda c: c["kpis"]["account_ownership"].update(missing_data_policy="unknown"),
-    lambda c: c["kpis"]["saving_rate"]["verification"].update(status="verified"),
+    lambda c: c["kpis"]["saving_rate"]["verification"].update(status="provisional"),
     lambda c: c["kpis"]["borrowing_rate"]["warehouse"].update(dimension_value="female"),
     lambda c: c["kpis"]["unbanked_share"].update(dependencies=[]),
     lambda c: c["kpis"]["unbanked_share"].update(dependencies=["unbanked_share"]),
@@ -230,8 +230,8 @@ def test_database_schema_errors_are_not_disguised_as_missing_data(tmp_path):
 
 
 NEW_KPIS = [
-    ("saving_rate", "save_any_t_d", 23, "provisional"),
-    ("borrowing_rate", "borrow_any_t_d", 31, "provisional"),
+    ("saving_rate", "save_any_t_d", 23, "verified"),
+    ("borrowing_rate", "borrow_any_t_d", 31, "verified"),
     ("unbanked_share", "account_t_d", 58, "derived_verified"),
     ("formal_saving_rate", "fin17a", 21, "verified"),
     ("formal_borrowing_rate", "fin22a", 4, "verified"),

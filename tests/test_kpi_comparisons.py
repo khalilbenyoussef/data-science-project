@@ -43,8 +43,8 @@ def test_country_differences_all_six(comparison_agent, kpi_id, unit, delta):
     assert r.publication_status == r.left.publication_status == r.right.publication_status == "not_evaluated"
     assert asdict(RESPONSE_ADAPTER.validate_json(r.model_dump_json()).left) == asdict(r.left)
     if kpi_id in {"saving_rate", "borrowing_rate"}:
-        assert r.left.verification_status == r.right.verification_status == "provisional"
-        assert r.requires_review and "provisional_definition" in r.review_reasons
+        assert r.left.verification_status == r.right.verification_status == "verified"
+        assert "provisional_definition" not in r.review_reasons
 
 
 @pytest.mark.parametrize("kpi_id,delta,unit", [("account_ownership", 10, "percentage_points"),

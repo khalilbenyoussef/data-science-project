@@ -2,7 +2,7 @@
 
 Example: KpiCalculator(path).calculate("TUN", 2024, "account_ownership").
 Only the supported catalog contracts below can execute; YAML is never SQL.
-Saving and borrowing calculations retain their provisional definitions.
+A KPI with a provisional definition is always flagged provisional_definition.
 """
 from __future__ import annotations
 
@@ -34,9 +34,9 @@ CONTRACTS = {
     "digital_payment_rate": ("findex", "g20_any", "fraction", "all", "all",
                              "total_population", "percent", "100 * value", "verified"),
     "saving_rate": ("findex", "save_any_t_d", "fraction", "all", "all",
-                    "total_population", "percent", "100 * value", "provisional"),
+                    "total_population", "percent", "100 * value", "verified"),
     "borrowing_rate": ("findex", "borrow_any_t_d", "fraction", "all", "all",
-                       "total_population", "percent", "100 * value", "provisional"),
+                       "total_population", "percent", "100 * value", "verified"),
     "unbanked_share": ("findex", "account_t_d", "fraction", "all", "all",
                        "total_population", "percent", "100 * (1 - value)", "derived_verified"),
     "formal_saving_rate": ("findex", "fin17a", "fraction", "all", "all",

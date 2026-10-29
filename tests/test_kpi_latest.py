@@ -79,7 +79,7 @@ def test_wrong_unit_and_duplicate_recent_year(agent, warehouse, condition, reaso
     else:
         change(warehouse, "INSERT INTO fact SELECT * FROM fact WHERE indicator_code='save_any_t_d' AND year=2024")
     r = agent.latest_available(LatestAvailableKpiRequest(iso3="TUN", kpi_id="saving_rate"))
-    assert r.observation_year == 2021 and r.result.verification_status == "provisional"
+    assert r.observation_year == 2021 and r.result.verification_status == "verified"
     assert r.skipped_observations[0].reason == reason
 
 

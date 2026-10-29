@@ -42,7 +42,7 @@ src/biflow/
   tools/           dictionnaire d'indicateurs, calcul/provenance des KPI, kpi_values
   utils/           io, logger, pays (ISO3)
 config/config.yaml     chemins, LLM, orchestrateur, KPI, sources, seuils
-config/kpi_catalog.v1.yaml  definitions declaratives des KPI (version 1.1.0)
+config/kpi_catalog.v1.yaml  definitions declaratives des KPI (version 1.2.0)
 data/                  raw, staging, processed, profiles, quality
 outputs/               reports, profiles, logs, cache LLM
 ```
@@ -87,9 +87,9 @@ La ligne `PEERS` est une moyenne **non pondérée** des pairs disponibles ; elle
 toujours marquée `peer_average_unweighted` pour revue, car la politique du
 catalogue exige des poids de population validés pour un agrégat multi-pays.
 
-KPI du catalogue 1.1.0 : `account_ownership`, `branch_density`,
+KPI du catalogue 1.2.0 : `account_ownership`, `branch_density`,
 `digital_payment_rate`, `saving_rate` et `borrowing_rate` (mesures « any »,
-provisoires), `unbanked_share`, `formal_saving_rate` (`fin17a`),
+glossaire lignes 121 et 3), `unbanked_share`, `formal_saving_rate` (`fin17a`),
 `formal_borrowing_rate` (`fin22a`, carte de crédit incluse), `gender_gap`,
 `income_gap`, `age_gap` (points de pourcentage, mêmes pays et année).
 

@@ -116,12 +116,10 @@ def test_missing_values_stay_null_never_zero(kpi_run):
     assert not (table.value == 0).any()
 
 
-def test_provisional_kpis_keep_review_flag(kpi_run):
+def test_no_provisional_definition_remains(kpi_run):
     _, table, _ = kpi_run
-    saving = table[(table.kpi_id == "saving_rate") & (table.iso3 != "PEERS")]
-    assert (saving.definition_status == "provisional").all()
-    assert saving.review_reasons.map(lambda r: "provisional_definition" in list(r)).all()
-    assert saving.requires_review.all()
+    assert set(table.definition_status) <= {"verified", "verified_metadata", "derived_verified"}
+    assert not table.review_reasons.map(lambda r: "provisional_definition" in list(r)).any()
 
 
 def test_peer_average_partial_and_lists_missing(kpi_run):
