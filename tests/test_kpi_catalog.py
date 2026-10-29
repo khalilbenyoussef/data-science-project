@@ -36,7 +36,7 @@ def catalog():
 
 def test_catalog_identity_and_versions(catalog):
     assert catalog["schema_version"] == 1
-    assert catalog["catalog_version"] == "1.2.0"
+    assert catalog["catalog_version"] == "1.3.0"
     assert catalog["status"] == "draft"
     assert catalog["scope"] == "country_year_total_population_and_subgroup_gaps"
     assert set(catalog["kpis"]) == set(EXPECTED) | set(GAPS)
@@ -207,7 +207,8 @@ def test_traceability_and_review_cover_all_inputs_and_derived_dependencies(catal
             "quality_report_sha256", "diagnostic_references", "review_record_ids"} <= set(trace["required_result_fields"])
     assert trace["missing_provenance"] == "block_publication"
     review = catalog["publication_review_policy"]
-    assert review["implementation_status"] == "specification_only"
+    assert review["implementation_status"] == "implemented_by_auditor"
+    assert set(review["row_statuses"]) == {"approved", "approved_with_review_note", "blocked"}
     assert review["failed_structural_gate"] == "block_publication"
     assert review["affected_input"] == "pending_review_do_not_publish"
     assert review["diagnostic_match_key"] == ["source", "iso3", "year", "indicator_code"]

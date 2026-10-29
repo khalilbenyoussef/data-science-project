@@ -7,6 +7,7 @@ coherence et de tracabilite. Un verdict FAIL est une decision (jamais retente).
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -22,6 +23,7 @@ from biflow.tools.audit_checks import (
     entity_checks,
     load_catalog_file,
     provenance_checks,
+    publication_decisions,
     quality_gate_check,
     raw_to_fact_check,
     read_kpi_rows,
@@ -118,13 +120,41 @@ class AuditorAgent(BaseAgent):
         return {"inputs": inp, "catalog": catalog, "catalog_sha256": catalog_sha256, "rows": rows,
                 "recomputed": recomputed, "raw_lookups": raw_lookups, "checks": checks}
 
+    @staticmethod
+    def write_publication(warehouse: Path, decisions: Mapping[tuple, str]) -> Path:
+        """Seule ecriture de l'Auditor : kpi_values.publication_status, puis export
+        Parquet. kpi_values n'entre pas dans l'empreinte du contenu du warehouse."""
+        parquet = warehouse.with_name("kpi_values.parquet")
+        tmp = parquet.with_name(f".{parquet.name}.tmp")
+        with duckdb.connect(str(warehouse)) as con:
+            con.execute("BEGIN TRANSACTION")
+            try:
+                con.executemany(
+                    "UPDATE kpi_values SET publication_status = ? WHERE kpi_id = ? AND iso3 = ? AND year = ?",
+                    [(status, *key) for key, status in sorted(decisions.items())])
+                con.execute("COMMIT")
+            except Exception:
+                con.execute("ROLLBACK")
+                raise
+            target = str(tmp).replace("'", "''")
+            con.execute(f"COPY (SELECT * FROM kpi_values ORDER BY kpi_id, iso3, year) "
+                        f"TO '{target}' (FORMAT PARQUET)")
+        os.replace(tmp, parquet)
+        return parquet
+
     def execute(self, ctx: Mapping[str, Any]) -> dict[str, Any]:
         result = self.audit(ctx)
         checks = result["checks"]
         verdict = verdict_of(checks)
         counts = count_results(checks)
+        decisions = publication_decisions(result["rows"], checks)
+        self.write_publication(result["inputs"]["warehouse"], decisions)
+        by_status = {status: 0 for status in ("approved", "approved_with_review_note", "blocked")}
+        for status in decisions.values():
+            by_status[status] += 1
         self.log.info("[auditor] verdict %s : %d pass, %d warn, %d fail (%d lignes KPI)",
                       verdict, counts["pass"], counts["warn"], counts["fail"], len(result["rows"]))
+        self.log.info("[auditor] publication : %s", by_status)
         for check in checks:
             if check["result"] == "fail":
                 self.log.warning("[auditor] %s : %s", check["check_id"], check["detail"])
@@ -137,6 +167,7 @@ class AuditorAgent(BaseAgent):
                 "run_id": result["inputs"]["run_id"],
                 "snapshot_id": result["inputs"]["snapshot_id"],
                 "rows": len(result["rows"]),
+                "publication": by_status,
                 "checks": checks,
             },
             "llm_notes": notes,

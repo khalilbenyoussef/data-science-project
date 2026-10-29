@@ -36,6 +36,7 @@ class PipelineState(TypedDict, total=False):
     snapshot: dict[str, Any]           # statut new / no_change / published / not_published
     snapshot_id: str                   # version des sources brutes (data/snapshots/vN)
     audit: dict[str, Any]              # verdict + controles de l'Auditor
+    rebuild: bool                      # --rebuild : sources lues depuis le snapshot publie
 
     warnings: Annotated[list[str], operator.add]
     errors: Annotated[list[str], operator.add]

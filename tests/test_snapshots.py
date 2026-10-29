@@ -113,7 +113,10 @@ class _Fake:
 
     def run(self, state):
         self.log["calls"].append(self.name)
+        self.log.setdefault("raw_paths", {})[self.name] = dict(state.get("raw_paths") or {})
         outputs = {"quality": {"passed": self.log["passed"]}} if self.name == "quality" else {}
+        if self.name == "auditor":
+            outputs = {"audit": {"verdict": self.log.get("verdict", "pass")}}
         return {"status": "success", "outputs": outputs, "errors": []}
 
 
@@ -253,3 +256,76 @@ def test_api_down_without_cache_fails_and_keeps_published(pipeline, tmp_path, mo
     assert len([e for e in state["errors"] if e.startswith("[collector] tentative")]) == 2
     index = store.load_index()
     assert index["published"] == "v1" and len(index["snapshots"]) == 1
+
+
+
+# --------------------------------------------------------------------------- publication apres audit
+def test_audit_failure_keeps_previous_published_snapshot(pipeline, raw):
+    run, _, log, store = pipeline
+    run()
+    _write(Path(raw["gdp"]), ["iso3,indicator_code,year,value", "TUN,NY.GDP.MKTP.KD.ZG,2024,7.7"])
+    log["verdict"] = "fail"
+    state, calls = run()
+    assert state["status"] == "audit_failed" and calls[-1] == "auditor"
+    assert state["snapshot"]["status"] == "not_published" and state["snapshot"]["reason"] == "audit_failed"
+    index = store.load_index()
+    assert index["published"] == "v1"
+    v2 = index["snapshots"][1]
+    assert v2["audits"][0]["verdict"] == "fail" and v2["audits"][0]["run_id"] == state["run_id"]
+
+
+def test_published_snapshot_records_its_audit(pipeline):
+    run, _, _, store = pipeline
+    state, _ = run()
+    entry = store.load_index()["snapshots"][0]
+    assert entry["status"] == "published"
+    assert [(a["run_id"], a["verdict"]) for a in entry["audits"]] == [(state["run_id"], "pass")]
+    assert entry["audits"][0]["created_at"]
+
+
+def test_to_semantic_kpi_runs_no_audit_and_publishes_nothing(pipeline):
+    run, cfg, log, store = pipeline
+    state = graph.run_pipeline(cfg=cfg, run_id="no_audit", stop="semantic_kpi", use_llm=False)
+    assert "auditor" not in log["calls"] and state["status"] == "success"
+    assert state["snapshot"]["status"] == "not_published" and state["snapshot"]["reason"] == "partial_run"
+    assert store.load_index()["published"] is None
+
+
+def test_rebuild_reads_published_blobs_with_new_run_id(pipeline):
+    run, cfg, log, store = pipeline
+    first, _ = run()
+    log["calls"].clear()
+    state = graph.run_pipeline(cfg=cfg, run_id="rebuild1", use_llm=False, rebuild=True)
+    assert log["calls"][0] == "profiler" and "collector" not in log["calls"]  # snapshot est reel
+    assert state["status"] == "success" and state["snapshot_id"] == "v1"
+    blobs = {name: str(store.root / s["blob"]) for name, s in store.manifest("v1")["sources"].items()}
+    assert log["raw_paths"]["etl"] == blobs
+    entry = store.load_index()["snapshots"][0]
+    assert entry["status"] == "published"
+    assert [a["run_id"] for a in entry["audits"]] == [first["run_id"], "rebuild1"]
+
+
+def test_rebuild_audit_failure_marks_entry_and_keeps_pointer(pipeline):
+    run, cfg, log, store = pipeline
+    run()
+    log["verdict"] = "fail"
+    state = graph.run_pipeline(cfg=cfg, run_id="rebuild_fail", use_llm=False, rebuild=True)
+    assert state["status"] == "audit_failed"
+    index = store.load_index()
+    assert index["published"] == "v1" and index["snapshots"][0]["status"] == "audit_failed"
+    log["verdict"] = "pass"  # un audit suivant reussi retablit le statut publie
+    graph.run_pipeline(cfg=cfg, run_id="rebuild_ok", use_llm=False, rebuild=True)
+    assert store.load_index()["snapshots"][0]["status"] == "published"
+
+
+def test_rebuild_refuses_tampered_blob_and_missing_snapshot(pipeline):
+    run, cfg, _, store = pipeline
+    state = graph.run_pipeline(cfg=cfg, run_id="nothing", use_llm=False, rebuild=True)
+    assert state["status"] == "failed" and "aucun snapshot publie" in state["errors"][-1]
+    run()
+    blob = store.root / store.manifest("v1")["sources"]["findex"]["blob"]
+    blob.write_text(blob.read_text(encoding="utf-8") + "TUN,2021,all,all,0.3\n", encoding="utf-8")
+    state = graph.run_pipeline(cfg=cfg, run_id="tampered", use_llm=False, rebuild=True)
+    assert state["status"] == "failed" and "altere" in state["errors"][-1]
+    with pytest.raises(ValueError):
+        graph.run_pipeline(cfg=cfg, use_llm=False, rebuild=True, only="etl")

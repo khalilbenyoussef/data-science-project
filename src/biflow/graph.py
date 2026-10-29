@@ -225,6 +225,8 @@ def _summary(state: PipelineState) -> dict[str, Any]:
             "paths": state.get("quality_paths"),
         },
         "snapshot": state.get("snapshot"),
+        "audit": {key: (state.get("audit") or {}).get(key)
+                  for key in ("verdict", "counts", "publication")} if state.get("audit") else None,
         "warehouse": state.get("warehouse_path"),
         "staging_paths": state.get("staging_paths"),
         "kpi": {"summary": state.get("kpi_summary"), "paths": state.get("kpi_paths")},
@@ -242,17 +244,27 @@ def _summary(state: PipelineState) -> dict[str, Any]:
 
 
 def _finalize_snapshot(cfg: dict[str, Any], state: PipelineState, steps: list[str]) -> None:
-    """Publie le snapshot du run s'il a abouti (ETL inclus) ; sinon le marque
-    not_published et la version publiee precedente reste en place."""
+    """Apres l'Auditor : un nouveau snapshot n'est publie que si l'audit a 0 echec ;
+    sinon not_published et la version publiee precedente reste en place.
+    Chaque audit est consigne dans l'entree de l'index (audits)."""
     snapshot = state.get("snapshot") or {}
-    if snapshot.get("status") != "new":
+    if snapshot.get("status") not in ("new", "rebuild"):
         return
-    publish = state.get("status") == "success" and "etl" in steps
+    audit = state.get("audit") or {}
+    passed = audit.get("verdict") in ("pass", "pass_with_warnings")
+    publish = state.get("status") == "success" and "auditor" in steps and passed
     reason = None if publish else (
         "partial_run" if state.get("status") == "success" else state.get("status")
     )
     store = SnapshotStore((cfg.get("snapshots") or {}).get("root", "data/snapshots"))
     try:
+        if audit.get("verdict"):
+            entry = store.record_audit(snapshot["snapshot_id"], state.get("run_id"), audit["verdict"])
+        if snapshot["status"] == "rebuild":
+            if not audit.get("verdict"):
+                return
+            state["snapshot"] = {**snapshot, "status": entry["status"], "audit": audit["verdict"]}
+            return
         entry = store.finalize(snapshot["snapshot_id"], publish, reason)
     except (OSError, KeyError, ValueError) as exc:
         state["status"] = "failed"
@@ -279,6 +291,7 @@ def run_pipeline(
     use_llm: bool = True,
     *,
     semantic_kpi_request: Any = _NO_SEMANTIC_REQUEST,
+    rebuild: bool = False,
 ) -> dict[str, Any]:
     if semantic_kpi_request is not _NO_SEMANTIC_REQUEST:
         if any(selection is not None for selection in (only, start, stop)):
@@ -294,6 +307,12 @@ def run_pipeline(
     state = new_state(objective=objective, run_id=run_id)
     state["sources"] = cfg.get("sources") or {}
     attempts: list[dict[str, Any]] = []
+    if rebuild:
+        # Rejoue snapshot -> auditor sur les blobs du snapshot publie (sans collecte)
+        if only or start:
+            raise ValueError("--rebuild ne se combine pas avec --only ou --from")
+        state["rebuild"] = True
+        start = "snapshot"
 
     if only:
         if only not in AGENT_CLASSES:
@@ -328,6 +347,8 @@ def run_pipeline(
                 state["status"] = "no_change"
             elif "quality" in steps and not quality.get("passed"):
                 state["status"] = "quality_failed"
+            elif (state.get("audit") or {}).get("verdict") == "fail":
+                state["status"] = "audit_failed"  # decision de l'Auditor, jamais retentee
             else:
                 state["status"] = "success"
         except AgentError as exc:

@@ -564,6 +564,50 @@ def caveat_checks(rows: list[dict[str, Any]], catalog: Mapping[str, Any], qualit
     ]
 
 
+# --------------------------------------------------------------------------- publication
+PUBLICATION_STATUSES = ("approved", "approved_with_review_note", "blocked")
+
+
+def _touched(check: Mapping[str, Any], rows: list[dict[str, Any]]) -> set[tuple]:
+    """Lignes visees par un controle : (kpi, iso3, annee) explicites, tout un KPI
+    (kpi_id seul) ou toutes les lignes (controle de niveau run)."""
+    keys = {row_key(r) for r in rows}
+    touched: set[tuple] = set()
+    for ref in check["affected_rows"]:
+        if {"kpi_id", "iso3", "year"} <= set(ref):
+            touched.add((ref["kpi_id"], ref["iso3"], int(ref["year"])))
+        elif "kpi_id" in ref:
+            touched |= {k for k in keys if k[0] == ref["kpi_id"]}
+        else:
+            return keys
+    return touched or (keys if check["result"] == "fail" else set())
+
+
+def publication_decisions(rows: list[dict[str, Any]],
+                          checks: Iterable[Mapping[str, Any]]) -> dict[tuple, str]:
+    """approved / approved_with_review_note / blocked pour chaque ligne de kpi_values."""
+    blocked: set[tuple] = set()
+    noted: set[tuple] = set()
+    for check in checks:
+        if not check.get("affects_publication", True) or check["result"] == "pass":
+            continue
+        (blocked if check["result"] == "fail" else noted).update(_touched(check, rows))
+    by_key = {row_key(r): r for r in rows}
+    for key, row in by_key.items():  # une ligne PEERS herite du blocage d'un pair inclus
+        if row["iso3"] == PEERS_ISO3 and any(
+                (key[0], peer, key[2]) in blocked for peer in row.get("peers_included") or []):
+            blocked.add(key)
+    decisions = {}
+    for key, row in by_key.items():
+        if key in blocked:
+            decisions[key] = "blocked"
+        elif key in noted or row.get("requires_review") or row.get("review_reasons"):
+            decisions[key] = "approved_with_review_note"
+        else:
+            decisions[key] = "approved"
+    return decisions
+
+
 def verdict_of(checks: Iterable[Mapping[str, Any]]) -> str:
     results = {check["result"] for check in checks}
     return "fail" if "fail" in results else "pass_with_warnings" if "warn" in results else "pass"
@@ -577,7 +621,7 @@ def count_results(checks: Iterable[Mapping[str, Any]]) -> dict[str, int]:
 
 
 __all__ = [
-    "PEERS_ISO3", "RAW_TO_FACT", "RawSources", "caveat_checks", "catalog_checks", "content_digest",
+    "PEERS_ISO3", "PUBLICATION_STATUSES", "RAW_TO_FACT", "publication_decisions", "RawSources", "caveat_checks", "catalog_checks", "content_digest",
     "count_results", "entity_checks", "expected_value", "kpi_inputs", "load_catalog_file", "make_check",
     "observe", "parse_formula", "provenance_checks", "quality_gate_check", "raw_to_fact_check",
     "read_kpi_rows", "recompute_checks", "row_key", "unit_checks", "verdict_of",

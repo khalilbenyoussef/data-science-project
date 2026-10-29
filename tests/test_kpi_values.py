@@ -150,7 +150,7 @@ def test_complete_peer_row_is_not_flagged_by_the_method_itself():
     from types import SimpleNamespace as NS
     from biflow.tools.kpi_values import _peer_row
     kpi = NS(kpi_id="account_ownership", unit="percent", verification_status="verified")
-    catalog = NS(catalog_version="1.2.0", catalog_sha256="a" * 64)
+    catalog = NS(catalog_version="1.3.0", catalog_sha256="a" * 64)
     peers = [NS(iso3=c, availability_status="available", value=v, review_reasons=())
              for c, v in (("DZA", 30.0), ("EGY", 40.0), ("JOR", 50.0), ("MAR", 60.0))]
     row = _peer_row(kpi, 2024, peers, catalog, "r")

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from biflow.config import resolve
-from biflow.utils.io import _detect_header_and_sep, cached_sha256_file
+from biflow.utils.io import _detect_header_and_sep, cached_sha256_file, file_stat
 
 INDEX_VERSION = 1
 CONTENT_METHOD = "sha256 of sorted per-line sha256 (BOM and line endings normalized, blank lines ignored)"
@@ -169,6 +169,38 @@ class SnapshotStore:
         _write_json_atomic(index, self.index_path)
         self.gc_blobs(index)
         return entry
+
+    def record_audit(self, snapshot_id: str, run_id: str | None, verdict: str) -> dict[str, Any]:
+        """Ajoute {run_id, verdict, created_at} a l'entree ; un audit en echec marque
+        une version publiee audit_failed (le pointeur published reste en place)."""
+        index = self.load_index()
+        entry = next((e for e in index["snapshots"] if e["snapshot_id"] == snapshot_id), None)
+        if entry is None:
+            raise KeyError(f"snapshot inconnu : {snapshot_id}")
+        entry.setdefault("audits", []).append({
+            "run_id": run_id, "verdict": verdict,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+        })
+        if verdict == "fail" and entry["status"] == "published":
+            entry["status"] = "audit_failed"
+        elif verdict != "fail" and entry["status"] == "audit_failed":
+            entry["status"] = "published"
+        _write_json_atomic(index, self.index_path)
+        return entry
+
+    def published_inputs(self) -> dict[str, Any]:
+        """Sources du snapshot publie, lues depuis les blobs (pour --rebuild)."""
+        current = self.published()
+        if current is None:
+            raise KeyError("aucun snapshot publie")
+        manifest = self.manifest(current["snapshot_id"])
+        raw_paths, raw_meta = {}, {}
+        for name, source in manifest["sources"].items():
+            blob = self.root / source["blob"]
+            raw_paths[name] = str(blob)
+            raw_meta[name] = {"path": str(blob), "sha256": source["sha256"], "rows": source.get("rows"),
+                              "origin": "snapshot_blob", **file_stat(blob)}
+        return {"entry": current, "raw_paths": raw_paths, "raw_meta": raw_meta}
 
     def gc_blobs(self, index: Mapping[str, Any] | None = None) -> list[str]:
         """Supprime les blobs references par aucun snapshot de index.json."""

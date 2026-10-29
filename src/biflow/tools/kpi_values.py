@@ -26,7 +26,7 @@ def peer_method(n_peers: int) -> str:
 
 COLUMNS = (
     "kpi_id", "iso3", "year", "value", "unit", "availability_status", "reason",
-    "definition_status", "requires_review", "review_reasons", "peer_status",
+    "definition_status", "requires_review", "review_reasons", "publication_status", "peer_status",
     "peers_included", "missing_peers", "aggregation_method",
     "catalog_version", "catalog_sha256", "snapshot_id", "run_id",
 )
@@ -42,6 +42,7 @@ CREATE OR REPLACE TABLE kpi_values (
     definition_status VARCHAR NOT NULL,
     requires_review BOOLEAN NOT NULL,
     review_reasons VARCHAR[] NOT NULL,
+    publication_status VARCHAR NOT NULL,
     peer_status VARCHAR,
     peers_included VARCHAR[],
     missing_peers VARCHAR[],
@@ -79,6 +80,7 @@ def _country_row(result, run_id: str, snapshot_id: str | None) -> dict[str, Any]
         "definition_status": result.verification_status,
         "requires_review": bool(result.requires_review),
         "review_reasons": list(result.review_reasons),
+        "publication_status": "not_evaluated",  # decide par l'Auditor
         "peer_status": None, "peers_included": None, "missing_peers": None,
         "aggregation_method": None, "catalog_version": result.catalog_version,
         "catalog_sha256": result.catalog_sha256, "snapshot_id": snapshot_id, "run_id": run_id,
@@ -105,7 +107,7 @@ def _peer_row(kpi, year: int, results: list, catalog, run_id: str,
         "unit": kpi.unit, "availability_status": "available" if included else "unavailable",
         "reason": reason, "definition_status": kpi.verification_status,
         "requires_review": bool(review), "review_reasons": review,
-        "peer_status": status, "peers_included": [r.iso3 for r in included],
+        "publication_status": "not_evaluated", "peer_status": status, "peers_included": [r.iso3 for r in included],
         "missing_peers": missing, "aggregation_method": peer_method(len(results)),
         "catalog_version": catalog.catalog_version, "catalog_sha256": catalog.catalog_sha256,
         "snapshot_id": snapshot_id, "run_id": run_id,

@@ -88,7 +88,7 @@ def world(built, tmp_path):
         change(data)
         Path(path).write_text(json.dumps(data), encoding="utf-8")
 
-    return SimpleNamespace(run=run, sql=sql, blob=blob, edit_json=edit_json, ctx=ctx, tmp=tmp_path,
+    return SimpleNamespace(run=run, sql=sql, blob=blob, edit_json=edit_json, ctx=ctx, tmp=tmp_path, cfg=cfg,
                            quality_path=quality_path, lineage_path=warehouse.with_name("lineage.json"))
 
 
@@ -278,3 +278,57 @@ def test_partial_wave_caveat_only_for_survey_kpis(world):
               "AND kpi_id IN ('account_ownership', 'branch_density')")
     rows = _check(world.run(), "C1_partial_survey_wave")["affected_rows"]
     assert rows == [{"kpi_id": "account_ownership", "iso3": "MAR", "year": 2022}]
+
+
+# --------------------------------------------------------------------------- C : publication
+def _statuses(world):
+    with duckdb.connect(str(world.tmp / "processed" / "warehouse.duckdb"), read_only=True) as con:
+        return {(k, i, y): st for k, i, y, st in con.execute(
+            "SELECT kpi_id, iso3, year, publication_status FROM kpi_values").fetchall()}
+
+
+def _execute(world):
+    return AuditorAgent(cfg=world.cfg, run_id="audit_run").execute(world.ctx)["audit"]
+
+
+def test_kpi_step_writes_not_evaluated(built):
+    base, _ = built
+    with duckdb.connect(str(base / "processed" / "warehouse.duckdb"), read_only=True) as con:
+        assert con.execute("SELECT DISTINCT publication_status FROM kpi_values").fetchall() == [("not_evaluated",)]
+
+
+def test_clean_audit_approves_rows_and_notes_partial_peers(world):
+    audit = _execute(world)
+    statuses = _statuses(world)
+    assert audit["verdict"] == "pass_with_warnings" and "blocked" not in statuses.values()
+    assert statuses[("account_ownership", "TUN", 2024)] == "approved"
+    assert statuses[("account_ownership", "EGY", 2024)] == "approved"  # NULL reel : publie "indisponible"
+    assert statuses[("account_ownership", "PEERS", 2024)] == "approved_with_review_note"  # pairs partiels
+    assert audit["publication"] == {s: list(statuses.values()).count(s)
+                                    for s in ("approved", "approved_with_review_note", "blocked")}
+    import pandas as pd
+    parquet = pd.read_parquet(world.tmp / "processed" / "kpi_values.parquet")
+    assert set(parquet.publication_status) == set(statuses.values())
+
+
+def test_failing_row_is_blocked_and_peers_row_inherits(world):
+    world.sql("UPDATE kpi_values SET value = value + 1 WHERE kpi_id='account_ownership' AND iso3='MAR' AND year=2024")
+    audit = _execute(world)
+    statuses = _statuses(world)
+    assert audit["verdict"] == "fail"
+    assert statuses[("account_ownership", "MAR", 2024)] == "blocked"
+    assert statuses[("account_ownership", "PEERS", 2024)] == "blocked"  # MAR est un pair inclus
+    assert statuses[("account_ownership", "TUN", 2024)] == "approved"
+    assert statuses[("account_ownership", "MAR", 2021)] != "blocked"
+
+
+def test_run_level_failure_blocks_every_row(world):
+    world.edit_json(world.quality_path, lambda q: q.update(passed=False))
+    audit = _execute(world)
+    assert audit["verdict"] == "fail" and set(_statuses(world).values()) == {"blocked"}
+
+
+def test_survey_noise_does_not_change_publication(world):
+    _execute(world)
+    # MAR 2021 -> 2024 : +0.09 pt, dans le bruit d'enquete, mais aucune note de revue pour la valeur
+    assert _statuses(world)[("account_ownership", "MAR", 2024)] == "approved"

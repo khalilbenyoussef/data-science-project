@@ -57,6 +57,14 @@ def _print_state(state: dict) -> None:
     if state.get("warehouse_path"):
         print(f"\nWarehouse : {state['warehouse_path']}")
 
+    audit = state.get("audit") or {}
+    if audit:
+        counts = audit.get("counts") or {}
+        print(
+            f"\nAudit : verdict={audit.get('verdict')} pass={counts.get('pass')} "
+            f"warn={counts.get('warn')} fail={counts.get('fail')} publication={audit.get('publication')}"
+        )
+
     kpi = state.get("kpi_summary") or {}
     if kpi:
         print(
@@ -89,6 +97,8 @@ def main() -> int:
     run.add_argument("--objective", default=None, help="objectif metier du run")
     run.add_argument("--run-id", default=None, help="identifiant du run")
     run.add_argument("--no-llm", action="store_true", help="desactive tous les appels LLM")
+    run.add_argument("--rebuild", action="store_true",
+                     help="rejoue snapshot -> auditor sur les blobs du snapshot publie (nouveau run_id)")
 
     sub.add_parser("steps", help="liste les etapes du pipeline")
 
@@ -108,6 +118,7 @@ def main() -> int:
         stop=args.stop,
         run_id=args.run_id,
         use_llm=not args.no_llm,
+        rebuild=args.rebuild,
     )
     _print_state(state)
     return 0 if state.get("status") in ("success", "no_change") else 2

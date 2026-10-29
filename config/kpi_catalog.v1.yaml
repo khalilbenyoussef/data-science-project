@@ -1,6 +1,6 @@
 # Declarative definitions only. No calculations, publication decisions or agents execute this file.
 schema_version: 1
-catalog_version: "1.2.0"
+catalog_version: "1.3.0"
 catalog_id: biflow_core_kpis
 created_on: "2026-10-22"
 updated_on: "2026-10-29"
@@ -132,7 +132,13 @@ traceability_policy:
 
 publication_review_policy:
   id: review_flagged_dependencies_v1
-  implementation_status: specification_only
+  implementation_status: implemented_by_auditor
+  implementation: src/biflow/agents/auditor.py (pipeline step auditor, after semantic_kpi)
+  row_statuses:
+    approved: no failing check and no warning touches the row (a genuine NULL is published as unavailable)
+    approved_with_review_note: only warnings, caveats or KPI review reasons touch the row
+    blocked: a failing check touches the row, a run-level check fails, or an included peer row is blocked
+  snapshot_publication: a new snapshot is published only when the audit reports zero failures
   quality_gate_requirement: quality.passed must be true for the same run and source hashes
   failed_structural_gate: block_publication
   provisional_definition: block_publication_until_definition_verified
