@@ -35,11 +35,18 @@ llm:
   # collector, profiler et etl sont 100 % deterministes : aucun LLM
   routing:
     quality:      [groq, gemini]
+    auditor:      [groq, gemini]   # reformulation seulement, verifiee (grounding)
 
 # --------------------------------------------------------------------------- Orchestrateur
 orchestrator:
   max_retries: 1                   # nouvel essai d'un agent en erreur (jamais pour un gate FAIL)
   retry_backoff_s: 1.0             # attente avant l'essai n (n x backoff)
+
+# --------------------------------------------------------------------------- Auditor
+auditor:                           # etape S12 : verification independante des KPI
+  tolerance: 1.0e-9                # ecart absolu maximal valeur publiee / recalculee
+  min_meaningful_change_pp: 2.0    # variation d'une vague sous ce seuil : "dans le bruit d'enquete"
+  llm_examples: 3                  # explications reformulees par LLM (budget d'appels)
 
 # --------------------------------------------------------------------------- Snapshots
 snapshots:                         # versions des sources brutes (blobs dedupliques par SHA-256)

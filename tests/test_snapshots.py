@@ -124,7 +124,7 @@ def pipeline(request, tmp_path, raw, monkeypatch):
     monkeypatch.setattr(graph, "LANGGRAPH_AVAILABLE", request.param == "langgraph")
     monkeypatch.setattr(graph.time, "sleep", lambda s: None)
     log = {"calls": [], "passed": True}
-    for name in ("profiler", "quality", "etl", "semantic_kpi"):
+    for name in ("profiler", "quality", "etl", "semantic_kpi", "auditor"):
         monkeypatch.setitem(graph.AGENT_CLASSES, name, lambda name=name, **kw: _Fake(name, log))
     sources = {name: {"type": "csv", "static": True, "path": path} for name, path in raw.items()}
     cfg = {"paths": {"reports": str(tmp_path / "reports")}, "llm": {"enabled": False},
@@ -144,7 +144,7 @@ def test_pipeline_publishes_then_skips_unchanged_data(pipeline, raw):
     run, _, _, store = pipeline
     state, calls = run()
     assert state["status"] == "success" and state["snapshot_id"] == "v1"
-    assert state["snapshot"]["status"] == "published" and calls[-2:] == ["etl", "semantic_kpi"]
+    assert state["snapshot"]["status"] == "published" and calls[-3:] == ["etl", "semantic_kpi", "auditor"]
 
     state, calls = run()
     assert state["status"] == "no_change" and calls == []  # ni profil, ni qualite, ni ETL, ni KPI

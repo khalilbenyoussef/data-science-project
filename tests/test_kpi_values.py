@@ -215,9 +215,9 @@ def fakes(request, monkeypatch, tmp_path):
 
 def test_pipeline_order_ends_with_semantic_kpi_after_etl(fakes):
     calls, _, cfg = fakes
-    assert graph.STEP_ORDER[-2:] == ["etl", "semantic_kpi"]
+    assert graph.STEP_ORDER[-3:] == ["etl", "semantic_kpi", "auditor"]
     state = graph.run_pipeline(cfg=cfg, use_llm=False)
-    assert calls == ["collector", "snapshot", "profiler", "quality", "etl", "semantic_kpi"]
+    assert calls == ["collector", "snapshot", "profiler", "quality", "etl", "semantic_kpi", "auditor"]
     assert state["status"] == "success"
 
 

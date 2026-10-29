@@ -1,4 +1,4 @@
-"""Graphe LangGraph du pipeline BIFlow (S6 -> S11)."""
+"""Graphe LangGraph du pipeline BIFlow (S6 -> S12)."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ except Exception:  # noqa: BLE001
 
 from biflow.agents import (
     AgentError,
+    AuditorAgent,
     CollectorAgent,
     EtlAgent,
     ProfilerAgent,
@@ -39,6 +40,7 @@ AGENT_CLASSES = {
     "quality": QualityAgent,
     "etl": EtlAgent,
     "semantic_kpi": SemanticKpiAgent,   # mode pipeline : table kpi_values
+    "auditor": AuditorAgent,            # verification independante, verdict d'audit
 }
 STEP_ORDER = list(AGENT_CLASSES)
 

@@ -52,7 +52,7 @@ def test_transient_failure_succeeds_on_retry(pipeline):
     script["fail"]["etl"] = 1
     state, summary = run()
     assert state["status"] == "success"
-    assert script["calls"] == ["collector", "snapshot", "profiler", "quality", "etl", "etl", "semantic_kpi"]
+    assert script["calls"] == ["collector", "snapshot", "profiler", "quality", "etl", "etl", "semantic_kpi", "auditor"]
     etl = [a for a in summary["attempts"] if a["step"] == "etl"]
     assert [(a["attempt"], a["status"]) for a in etl] == [(1, "failed"), (2, "success")]
     assert "panne etl" in etl[0]["errors"][0]

@@ -1,5 +1,6 @@
 """Agents du pipeline BIFlow."""
 
+from biflow.agents.auditor import AuditorAgent
 from biflow.agents.base import AgentError, BaseAgent
 from biflow.agents.collector import CollectorAgent
 from biflow.agents.etl import EtlAgent
@@ -10,6 +11,7 @@ from biflow.agents.snapshot import SnapshotAgent
 
 __all__ = [
     "AgentError",
+    "AuditorAgent",
     "BaseAgent",
     "CollectorAgent",
     "ProfilerAgent",
