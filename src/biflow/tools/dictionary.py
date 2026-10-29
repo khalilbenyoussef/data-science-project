@@ -68,6 +68,7 @@ FAS_LABELS = {
 GDP_LABELS = {
     "NY.GDP.MKTP.CD": "PIB (USD courants)",
     "NY.GDP.PCAP.CD": "PIB par habitant (USD courants)",
+    "NY.GDP.MKTP.KD.ZG": "Croissance du PIB (% annuel, prix constants)",
 }
 
 UNITS = {
@@ -107,6 +108,7 @@ UNITS = {
     "loans_pct_gdp": "percent_of_gdp",
     "NY.GDP.MKTP.CD": "usd_current",
     "NY.GDP.PCAP.CD": "usd_current_per_capita",
+    "NY.GDP.MKTP.KD.ZG": "percent_annual_growth",
 }
 
 INDICATOR_SOURCE = {

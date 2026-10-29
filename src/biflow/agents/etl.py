@@ -51,6 +51,8 @@ FINDEX_OPTIONAL = (
 FAS_REQUIRED = ("SERIES_CODE",)
 FAS_OPTIONAL = ("COUNTRY", "INDICATOR", "UNIT")
 GDP_REQUIRED = ("iso3", "indicator_code", "year", "value")
+# Indicateurs WDI pouvant etre negatifs (taux de croissance) : pas de rejet
+GDP_SIGNED_INDICATORS = frozenset({"NY.GDP.MKTP.KD.ZG"})
 GDP_OPTIONAL = ("country", "indicator_name")
 FACT_KEY = (
     "iso3",
@@ -497,7 +499,7 @@ def gdp_long(
             report,
             f"[gdp] codes ISO3 inconnus conserves : {', '.join(unknown[:10])}",
         )
-    negative = work["value"] < 0
+    negative = (work["value"] < 0) & ~work["indicator_code"].isin(GDP_SIGNED_INDICATORS)
     _reject(report, "gdp", "negative_values", int(negative.sum()))
     if negative.any():
         _warn(report, f"[gdp] {int(negative.sum())} valeurs negatives rejetees")
@@ -665,22 +667,16 @@ SELECT
     max(CASE WHEN indicator_code = 'loan_accounts_per_1k' THEN value END) AS loan_accounts_per_1k,
     max(CASE WHEN indicator_code = 'deposit_accounts_per_1k' THEN value END) AS deposit_accounts_per_1k,
     max(CASE WHEN indicator_code = 'NY.GDP.PCAP.CD' THEN value END) AS gdp_pc,
-    max(CASE WHEN indicator_code = 'NY.GDP.MKTP.CD' THEN value END) AS gdp_usd
+    max(CASE WHEN indicator_code = 'NY.GDP.MKTP.CD' THEN value END) AS gdp_usd,
+    max(CASE WHEN indicator_code = 'NY.GDP.MKTP.KD.ZG' THEN value END) AS gdp_growth_pct
 FROM fact
 GROUP BY iso3, year
 """
 
 DERIVE_SQL = """
 CREATE OR REPLACE TABLE country_year_derived AS
-WITH base AS (
-    SELECT
-        *,
-        lag(gdp_usd) OVER (PARTITION BY iso3 ORDER BY year) AS prev_gdp_usd,
-        lag(year) OVER (PARTITION BY iso3 ORDER BY year) AS prev_year
-    FROM country_year_pivot
-)
 SELECT
-    * EXCLUDE (prev_gdp_usd, prev_year),
+    *,
     CASE
         WHEN account_male IS NOT NULL AND account_female IS NOT NULL
         THEN account_male - account_female
@@ -692,14 +688,8 @@ SELECT
     CASE
         WHEN account_age_25_plus IS NOT NULL AND account_age_15_24 IS NOT NULL
         THEN account_age_25_plus - account_age_15_24
-    END AS age_gap_pp,
-    CASE
-        WHEN gdp_usd IS NOT NULL AND gdp_usd > 0
-         AND prev_gdp_usd IS NOT NULL AND prev_gdp_usd > 0
-         AND prev_year = year - 1
-        THEN 100 * (gdp_usd / prev_gdp_usd - 1)
-    END AS gdp_growth_pct
-FROM base
+    END AS age_gap_pp
+FROM country_year_pivot
 """
 
 JOIN_SQL = """
@@ -948,7 +938,10 @@ class EtlAgent(BaseAgent):
                 ("age_cat", "age 25+"), ("age_cat", "ages 15-24"),
             )
         }
-        report["checks"]["gdp_growth_rule"] = "year-1, positive values only"
+        report["checks"]["gdp_growth_rule"] = (
+            "NY.GDP.MKTP.KD.ZG (WDI, % annuel, prix constants) repris tel quel ; "
+            "aucun calcul depuis le PIB en USD courants"
+        )
         report.setdefault("output_rows", {})["fact"] = int(len(fact))
         report["output_rows"]["country_year"] = int(len(country_year))
 
@@ -978,8 +971,9 @@ class EtlAgent(BaseAgent):
             "transforms": [
                 "Findex: annees -> lignes, echelles verifiees puis fractions converties en % au pivot",
                 "FAS: selection des series configurees, annees -> lignes",
-                "WDI: indicateurs PIB -> lignes",
-                "Pivot par pays x annee, croissance PIB sur annee-1 uniquement, jointure dimension pays",
+                "WDI: indicateurs PIB -> lignes ; croissance NY.GDP.MKTP.KD.ZG conservee meme negative",
+                "Pivot par pays x annee, croissance du PIB = NY.GDP.MKTP.KD.ZG (prix constants), "
+                "jointure dimension pays",
                 "Ecarts de detention de compte (points de %) : hommes - femmes, 60 % plus riches - "
                 "40 % plus pauvres, 25+ - 15-24 ; meme annee, NULL si un sous-groupe manque",
             ],

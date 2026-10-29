@@ -118,3 +118,4 @@ sources:
     indicators:
       - NY.GDP.MKTP.CD             # PIB (USD courants)
       - NY.GDP.PCAP.CD             # PIB par habitant (USD courants)
+      - NY.GDP.MKTP.KD.ZG          # croissance du PIB (% annuel, prix constants 2015)

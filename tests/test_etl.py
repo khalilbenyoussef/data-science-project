@@ -9,6 +9,8 @@ import pytest
 from biflow.agents.base import AgentError
 from biflow.config import load_config
 from biflow.agents.etl import (
+    DERIVE_SQL,
+    PIVOT_SQL,
     EtlAgent,
     build_country_dim,
     fas_long,
@@ -557,30 +559,53 @@ def test_same_subgroup_label_in_two_groups_is_rejected_before_pivot(tmp_path):
         _run_agent(tmp_path, paths)
 
 
-def test_gdp_growth_requires_consecutive_positive_years(tmp_path):
+def test_gdp_growth_comes_from_constant_price_wdi_indicator(tmp_path):
     paths = _write_inputs(tmp_path)
     gdp = pd.read_csv(paths["gdp"])
-    total = pd.DataFrame(
+    rows = pd.DataFrame(
         {
-            "iso3": ["MAR"] * 5,
-            "country": ["Morocco"] * 5,
-            "indicator_code": ["NY.GDP.MKTP.CD"] * 5,
-            "indicator_name": ["GDP"] * 5,
-            "year": [2019, 2021, 2022, 2023, 2024],
-            "value": [100.0, 110.0, 0.0, 120.0, 132.0],
+            "iso3": ["MAR"] * 6,
+            "country": ["Morocco"] * 6,
+            "indicator_code": ["NY.GDP.MKTP.CD"] * 3 + ["NY.GDP.MKTP.KD.ZG"] * 3,
+            "indicator_name": ["GDP"] * 3 + ["GDP growth (annual %)"] * 3,
+            # Le PIB nominal double (effet de change) : ne doit plus produire de croissance
+            "year": [2019, 2020, 2021, 2019, 2020, 2021],
+            "value": [100.0, 200.0, 210.0, 2.9, -7.2, None],
         }
     )
-    pd.concat([gdp, total], ignore_index=True).to_csv(paths["gdp"], index=False)
+    pd.concat([gdp, rows], ignore_index=True).to_csv(paths["gdp"], index=False)
 
     _, processed = _run_agent(tmp_path, paths)
     year = pd.read_parquet(processed / "country_year.parquet")
     growth = year[year["iso3"] == "MAR"].set_index("year")["gdp_growth_pct"]
 
-    assert pd.isna(growth.loc[2019])
-    assert pd.isna(growth.loc[2021])
-    assert pd.isna(growth.loc[2022])
-    assert pd.isna(growth.loc[2023])
-    assert round(float(growth.loc[2024]), 2) == 10.0
+    assert growth.loc[2019] == pytest.approx(2.9)
+    assert growth.loc[2020] == pytest.approx(-7.2)  # croissance negative conservee
+    assert pd.isna(growth.loc[2021])  # valeur absente : NULL, jamais recalculee
+    fra = year[year["iso3"] == "FRA"]
+    assert fra["gdp_growth_pct"].isna().all()
+    fact = pd.read_parquet(processed / "fact_inclusion.parquet")
+    signed = fact[fact["indicator_code"] == "NY.GDP.MKTP.KD.ZG"]
+    assert set(signed["unit"]) == {"percent_annual_growth"}
+    lineage = json.loads((processed / "lineage.json").read_text(encoding="utf-8"))
+    assert "NY.GDP.MKTP.KD.ZG" in lineage["checks"]["gdp_growth_rule"]
+    assert "negative_values" not in lineage["rejected"].get("gdp", {})
+
+
+def test_negative_gdp_levels_are_still_rejected(tmp_path):
+    paths = _write_inputs(tmp_path)
+    gdp = pd.read_csv(paths["gdp"])
+    gdp.loc[0, "value"] = -1.0
+    gdp.to_csv(paths["gdp"], index=False)
+    _, processed = _run_agent(tmp_path, paths)
+    lineage = json.loads((processed / "lineage.json").read_text(encoding="utf-8"))
+    assert lineage["rejected"]["gdp"]["negative_values"] == 1
+
+
+def test_derive_sql_no_longer_computes_growth_from_nominal_gdp():
+    assert "lag(" not in DERIVE_SQL and "gdp_usd" not in DERIVE_SQL
+    assert "'NY.GDP.MKTP.KD.ZG' THEN value END) AS gdp_growth_pct" in PIVOT_SQL
+    assert "NY.GDP.MKTP.KD.ZG" in load_config()["sources"]["gdp"]["indicators"]
 
 
 def test_star_schema_uniqueness_and_country_year_contract(tmp_path):
