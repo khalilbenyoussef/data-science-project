@@ -32,6 +32,7 @@ class PipelineState(TypedDict, total=False):
     # Etape semantic_kpi du pipeline (absente tant que l'etape n'a pas tourne)
     kpi_paths: dict[str, str]          # table kpi_values + parquet
     kpi_summary: dict[str, Any]        # comptes disponibles / a revoir
+    attempts: list[dict[str, Any]]     # tentatives par etape (retry de l'orchestrateur)
 
     warnings: Annotated[list[str], operator.add]
     errors: Annotated[list[str], operator.add]

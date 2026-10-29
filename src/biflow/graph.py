@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from copy import deepcopy
 from datetime import datetime
 from typing import Any, Callable
@@ -39,13 +40,77 @@ AGENT_CLASSES = {
 STEP_ORDER = list(AGENT_CLASSES)
 
 
-def _node(agent) -> Callable[[PipelineState], dict[str, Any]]:
-    def run(state: PipelineState) -> dict[str, Any]:
+class StepFailedError(AgentError):
+    """Echec d'une etape apres toutes ses tentatives (chaque tentative conservee)."""
+
+    def __init__(self, step: str, failures: list[str]) -> None:
+        super().__init__("; ".join(failures))
+        self.step = step
+        self.failures = failures
+
+
+def _retry_settings(cfg: dict[str, Any]) -> tuple[int, float]:
+    orchestrator = cfg.get("orchestrator") or {}
+    retries = max(0, int(orchestrator.get("max_retries", 1)))
+    backoff = max(0.0, float(orchestrator.get("retry_backoff_s", 1.0)))
+    return retries, backoff
+
+
+def _run_with_retry(
+    step: str,
+    agent,
+    state: PipelineState,
+    cfg: dict[str, Any],
+    attempts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Execute un agent ; une erreur est retentee (orchestrator.max_retries).
+
+    Un quality gate FAIL n'est pas une erreur (statut success, passed=false) :
+    il n'est jamais retente. Apres le dernier echec, StepFailedError arrete le
+    pipeline sans toucher aux sorties deja publiees.
+    """
+    max_retries, backoff = _retry_settings(cfg)
+    total = max_retries + 1
+    failures: list[str] = []
+    for attempt in range(1, total + 1):
         report = agent.run(state)
-        if report["status"] != "success":
-            detail = "; ".join(report.get("errors") or ["erreur inconnue"])
-            raise AgentError(f"[{agent.name}] {detail}")
-        return report.get("outputs") or {}
+        attempts.append({
+            "step": step,
+            "attempt": attempt,
+            "status": report.get("status"),
+            "started_at": report.get("started_at"),
+            "duration_s": report.get("duration_s"),
+            "errors": list(report.get("errors") or []),
+        })
+        if report.get("status") == "success":
+            outputs = dict(report.get("outputs") or {})
+            if failures:
+                outputs["warnings"] = list(outputs.get("warnings") or []) + [
+                    f"[{step}] reussi a la tentative {attempt}/{total} apres : {failure}"
+                    for failure in failures
+                ]
+            return outputs
+        detail = "; ".join(report.get("errors") or ["erreur inconnue"])
+        failures.append(f"[{step}] tentative {attempt}/{total} : {detail}")
+        if attempt < total:
+            delay = backoff * attempt
+            log.warning("[%s] echec tentative %d/%d, nouvel essai dans %.1f s : %s",
+                        step, attempt, total, delay, detail)
+            time.sleep(delay)
+    log.error("[%s] echec apres %d tentative(s) : arret du pipeline", step, total)
+    raise StepFailedError(step, failures)
+
+
+def _node(
+    agent,
+    cfg: dict[str, Any] | None = None,
+    attempts: list[dict[str, Any]] | None = None,
+) -> Callable[[PipelineState], dict[str, Any]]:
+    cfg = cfg or {}
+    attempts = attempts if attempts is not None else []
+
+    def run(state: PipelineState) -> dict[str, Any]:
+        return _run_with_retry(agent.name, agent, state, cfg, attempts)
 
     return run
 
@@ -59,6 +124,7 @@ def build_graph(
     cfg: dict[str, Any],
     run_id: str,
     steps: list[str] | None = None,
+    attempts: list[dict[str, Any]] | None = None,
 ):
     if not LANGGRAPH_AVAILABLE:
         raise AgentError(
@@ -68,7 +134,7 @@ def build_graph(
     steps = steps or STEP_ORDER
     graph = StateGraph(PipelineState)
     for step in steps:
-        graph.add_node(step, _node(AGENT_CLASSES[step](cfg=cfg, run_id=run_id)))
+        graph.add_node(step, _node(AGENT_CLASSES[step](cfg=cfg, run_id=run_id), cfg, attempts))
 
     graph.add_edge(START, steps[0])
     for current, following in zip(steps, steps[1:]):
@@ -97,15 +163,13 @@ def run_steps(
     cfg: dict[str, Any],
     run_id: str,
     state: PipelineState,
+    attempts: list[dict[str, Any]] | None = None,
 ) -> PipelineState:
-    """Execution sequentielle (fallback sans LangGraph)."""
+    """Execution sequentielle (fallback sans LangGraph), meme politique de retry."""
+    attempts = attempts if attempts is not None else []
     for step in steps:
         agent = AGENT_CLASSES[step](cfg=cfg, run_id=run_id)
-        report = agent.run(state)
-        if report["status"] != "success":
-            detail = "; ".join(report.get("errors") or ["erreur inconnue"])
-            raise AgentError(f"[{step}] {detail}")
-        _merge_updates(state, report.get("outputs") or {})
+        _merge_updates(state, _run_with_retry(step, agent, state, cfg, attempts))
         if step == "quality" and not (state.get("quality") or {}).get("passed"):
             state["status"] = "quality_failed"
             log.warning("quality gate FAIL : arret avant l'ETL")
@@ -143,6 +207,8 @@ def _summary(state: PipelineState) -> dict[str, Any]:
         "warnings": state.get("warnings"),
         "errors": state.get("errors"),
     }
+    if "attempts" in state:
+        summary["attempts"] = state["attempts"]
     if "semantic_kpi_request" in state:
         summary["semantic_kpi_request"] = state["semantic_kpi_request"]
         summary["semantic_kpi_response"] = state.get("semantic_kpi_response")
@@ -177,6 +243,7 @@ def run_pipeline(
     run_id = run_id or datetime.now().strftime("%Y%m%dT%H%M%S")
     state = new_state(objective=objective, run_id=run_id)
     state["sources"] = cfg.get("sources") or {}
+    attempts: list[dict[str, Any]] = []
 
     if only:
         if only not in AGENT_CLASSES:
@@ -193,22 +260,30 @@ def run_pipeline(
         if start_index > stop_index:
             raise ValueError("--from doit preceder --to")
         steps = STEP_ORDER[start_index : stop_index + 1]
+        last_good: PipelineState = state
         try:
             if LANGGRAPH_AVAILABLE:
-                state = build_graph(cfg, run_id, steps).invoke(
-                    state, config={"recursion_limit": 30}
-                )
+                # stream "values" : dernier etat complet apres chaque etape reussie
+                for snapshot in build_graph(cfg, run_id, steps, attempts).stream(
+                    state, config={"recursion_limit": 30}, stream_mode="values"
+                ):
+                    last_good = snapshot
+                state = last_good
             else:
                 log.warning("LangGraph indisponible : execution sequentielle des agents")
-                state = run_steps(steps, cfg, run_id, state)
+                state = run_steps(steps, cfg, run_id, state, attempts)
             quality = state.get("quality") or {}
             if "quality" in steps and not quality.get("passed"):
                 state["status"] = "quality_failed"
             else:
                 state["status"] = "success"
         except AgentError as exc:
+            # Sorties des etapes deja reussies conservees ; chaque tentative tracee
+            state = dict(last_good) if LANGGRAPH_AVAILABLE else state  # type: ignore[assignment]
+            failures = exc.failures if isinstance(exc, StepFailedError) else [str(exc)]
             state["status"] = "failed"
-            state["errors"] = list(state.get("errors") or []) + [str(exc)]
+            state["errors"] = list(state.get("errors") or []) + failures
+    state["attempts"] = attempts
 
     summary = _summary(state)
     summary["finished_at"] = datetime.now().isoformat(timespec="seconds")
@@ -217,4 +292,4 @@ def run_pipeline(
     return state
 
 
-__all__ = ["AGENT_CLASSES", "STEP_ORDER", "build_graph", "run_pipeline"]
+__all__ = ["AGENT_CLASSES", "STEP_ORDER", "StepFailedError", "build_graph", "run_pipeline"]

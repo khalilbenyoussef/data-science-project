@@ -36,6 +36,11 @@ llm:
   routing:
     quality:      [groq, gemini]
 
+# --------------------------------------------------------------------------- Orchestrateur
+orchestrator:
+  max_retries: 1                   # nouvel essai d'un agent en erreur (jamais pour un gate FAIL)
+  retry_backoff_s: 1.0             # attente avant l'essai n (n x backoff)
+
 # --------------------------------------------------------------------------- KPI
 kpi:                               # etape semantic_kpi du pipeline (apres l'ETL)
   focus: TUN                       # pays focus
