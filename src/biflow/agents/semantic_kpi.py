@@ -15,6 +15,7 @@ from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
 from biflow.tools.kpi import DEFAULT_CATALOG
 from biflow.tools.kpi_values import compute_kpi_values, peer_codes, write_kpi_values
+from biflow.utils.io import remember_sha256
 from biflow.tools.semantic_kpi import (
     CalculateKpiRequest, CalculateKpiResponse, DescribeKpiRequest, DescribeKpiResponse,
     ListKpisRequest, ListKpisResponse, REQUEST_ADAPTER, SemanticKpiTools,
@@ -81,6 +82,12 @@ class SemanticKpiAgent(BaseAgent):
         tools = SemanticKpiTools(warehouse, catalog_path=self.tools.catalog_path,
                                  lineage_path=warehouse.with_name("lineage.json"),
                                  quality_report_path=quality_json)
+        # Hash des sources calcules une fois par run (collector) : pas de re-hachage
+        # par lookup tant que taille et mtime du fichier sont inchanges.
+        for meta in (ctx.get("raw_meta") or {}).values():
+            if isinstance(meta, dict) and meta.get("path"):
+                remember_sha256(meta["path"], meta.get("sha256"), meta.get("size_bytes"),
+                                meta.get("mtime_ns"))
         self.log.info("[semantic_kpi] calcul des KPI : focus=%s, pairs=%s", focus, ", ".join(peers))
         rows = compute_kpi_values(tools, focus, peers, self.run_id)
         parquet = warehouse.with_name("kpi_values.parquet")

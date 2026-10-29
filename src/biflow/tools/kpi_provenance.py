@@ -9,6 +9,7 @@ import re
 
 from biflow.config import load_config, resolve
 from biflow.utils.countries import normalize_iso3
+from biflow.utils.io import cached_sha256_file
 
 
 @dataclass(frozen=True)
@@ -105,7 +106,7 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
     observed_raw_hash = None
     if raw_path:
         try:
-            observed_raw_hash = hashlib.sha256(resolve(raw_path).read_bytes()).hexdigest()
+            observed_raw_hash = cached_sha256_file(resolve(raw_path))
         except (OSError, ValueError):
             issues.append("raw_source_unavailable")
         if raw_hash and observed_raw_hash and raw_hash != observed_raw_hash:
@@ -120,7 +121,7 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
                 issues.append("lineage_warehouse_path_mismatch")
         except (OSError, ValueError):
             issues.append("lineage_warehouse_path_invalid")
-    warehouse_hash = hashlib.sha256(warehouse.read_bytes()).hexdigest()
+    warehouse_hash = cached_sha256_file(warehouse)
     # Current ETL records a path, not a warehouse content digest.
     recorded_hash = _digest(outputs.get("warehouse_sha256")) if isinstance(outputs, dict) else None
     if recorded_hash is None:

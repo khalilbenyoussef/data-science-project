@@ -13,7 +13,7 @@ import pandas as pd
 
 from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
-from biflow.utils.io import ensure_dir, read_csv_smart, sha256_file
+from biflow.utils.io import ensure_dir, file_stat, read_csv_smart, sha256_file
 
 COLUMNS = ["iso3", "country", "indicator_code", "indicator_name", "year", "value"]
 
@@ -147,6 +147,7 @@ class CollectorAgent(BaseAgent):
                     "rows": None,
                     "updated": False,
                     "sha256": sha256_file(out),
+                    **file_stat(out),
                     "diagnosis": diagnosis,
                     "warning": f"{name}: collecte echouee, cache conserve ({exc})",
                 }
@@ -161,6 +162,7 @@ class CollectorAgent(BaseAgent):
                 "rows": int(len(df)),
                 "updated": False,
                 "sha256": new_hash,
+                **file_stat(out),
             }
 
         ensure_dir(out.parent)
@@ -180,6 +182,7 @@ class CollectorAgent(BaseAgent):
             "rows": int(len(df)),
             "updated": True,
             "sha256": new_hash,
+            **file_stat(out),
             "previous_sha256": old_hash,
             "indicators": int(df["indicator_code"].nunique()),
             "year_min": int(df["year"].min()),
@@ -200,6 +203,7 @@ class CollectorAgent(BaseAgent):
             "rows": None,
             "columns": int(len(header.columns)),
             "sha256": sha256_file(out),
+            **file_stat(out),
             "size_mb": round(out.stat().st_size / 1e6, 2),
             "checked_at": datetime.now().isoformat(timespec="seconds"),
         }
