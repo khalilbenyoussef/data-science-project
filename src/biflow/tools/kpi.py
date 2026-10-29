@@ -1,7 +1,7 @@
 """Deterministic, read-only single-country KPI lookups (no publication approval).
 
 Example: KpiCalculator(path).calculate("TUN", 2024, "account_ownership").
-Only the six supported catalog contracts below can execute; YAML is never SQL.
+Only the supported catalog contracts below can execute; YAML is never SQL.
 Saving and borrowing calculations retain their provisional definitions.
 """
 from __future__ import annotations
@@ -38,6 +38,10 @@ CONTRACTS = {
                        "total_population", "percent", "100 * value", "provisional"),
     "unbanked_share": ("findex", "account_t_d", "fraction", "all", "all",
                        "total_population", "percent", "100 * (1 - value)", "derived_verified"),
+    "formal_saving_rate": ("findex", "fin17a", "fraction", "all", "all",
+                           "total_population", "percent", "100 * value", "verified"),
+    "formal_borrowing_rate": ("findex", "fin22a", "fraction", "all", "all",
+                              "total_population", "percent", "100 * value", "verified"),
 }
 
 

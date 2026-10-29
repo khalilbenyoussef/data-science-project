@@ -25,6 +25,9 @@ def warehouse(tmp_path):
             ("TUN", 2024, "findex", "dig_acc", "all", "all", .99, "fraction"),
             ("TUN", 2024, "findex", "save_any_t_d", "all", "all", .23, "fraction"),
             ("TUN", 2024, "findex", "borrow_any_t_d", "all", "all", .31, "fraction"),
+            ("TUN", 2024, "findex", "fin17a", "all", "all", .21, "fraction"),
+            ("TUN", 2024, "findex", "fin22a", "all", "all", .04, "fraction"),
+            ("TUN", 2024, "findex", "fin17a", "gender", "men", .29, "fraction"),
             ("TUN", 2024, "findex", "save_any_t_d", "gender", "female", .91, "fraction"),
             ("TUN", 2024, "findex", "borrow_any_t_d", "gender", "male", .92, "fraction"),
             ("TUN", 2024, "fas", "branch_density", "bank_type", "commercial_banks", 12.5, "per_100k_adults"),
@@ -54,7 +57,7 @@ def test_verified_values_subgroups_units_and_metadata(warehouse, kpi, expected, 
     assert result.iso3 == "TUN" and result.observation_year == 2024
     assert result.availability_status == "available" and result.reason is None
     assert result.definition == load_catalog()["kpis"][kpi]["definition"]
-    assert result.catalog_version == result.definition_version == "1.0.0"
+    assert result.catalog_version == "1.1.0" and result.definition_version == "1.0.0"
     assert len(result.catalog_sha256) == 64
     assert result.publication_status == "not_evaluated"
     with pytest.raises(FrozenInstanceError):
@@ -224,6 +227,8 @@ NEW_KPIS = [
     ("saving_rate", "save_any_t_d", 23, "provisional"),
     ("borrowing_rate", "borrow_any_t_d", 31, "provisional"),
     ("unbanked_share", "account_t_d", 58, "derived_verified"),
+    ("formal_saving_rate", "fin17a", 21, "verified"),
+    ("formal_borrowing_rate", "fin22a", 4, "verified"),
 ]
 
 

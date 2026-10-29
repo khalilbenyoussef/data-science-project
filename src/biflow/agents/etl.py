@@ -652,6 +652,8 @@ SELECT
     max(CASE WHEN indicator_code = 'dig_acc' AND dimension_value = 'all' THEN value END) * 100 AS digitally_enabled_account,
     max(CASE WHEN indicator_code = 'save_any_t_d' AND dimension_value = 'all' THEN value END) * 100 AS savings,
     max(CASE WHEN indicator_code = 'borrow_any_t_d' AND dimension_value = 'all' THEN value END) * 100 AS borrowing,
+    max(CASE WHEN indicator_code = 'fin17a' AND dimension_value = 'all' THEN value END) * 100 AS formal_saving,
+    max(CASE WHEN indicator_code = 'fin22a' AND dimension_value = 'all' THEN value END) * 100 AS formal_borrowing,
     max(CASE WHEN indicator_code = 'merchant_pay' AND dimension_value = 'all' THEN value END) * 100 AS merchant_payment,
     max(CASE WHEN indicator_code = 'g20_any' AND dimension_value = 'all' THEN value END) * 100 AS digital_payment,
     max(CASE WHEN indicator_code = 'branch_density' THEN value END) AS brch_per_100k,
@@ -719,6 +721,8 @@ def _check_country_year(df: pd.DataFrame) -> None:
         "digital_payment",
         "savings",
         "borrowing",
+        "formal_saving",
+        "formal_borrowing",
         "merchant_payment",
         "brch_per_100k",
         "atm_per_100k",
@@ -752,6 +756,8 @@ def _check_country_year(df: pd.DataFrame) -> None:
         "digital_payment",
         "savings",
         "borrowing",
+        "formal_saving",
+        "formal_borrowing",
         "merchant_payment",
     ]
     for column in rate_columns:

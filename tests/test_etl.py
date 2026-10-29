@@ -259,6 +259,25 @@ def test_findex_digital_accounts_and_payments_have_distinct_mappings(
     )
 
 
+def test_formal_saving_and_borrowing_are_pivoted_separately_from_any(tmp_path):
+    paths = _write_inputs(tmp_path)
+    raw = pd.read_csv(paths["findex"])
+    raw["save_any_t_d"] = 0.6
+    raw["fin17a"] = 0.2
+    raw["borrow_any_t_d"] = 0.5
+    raw["fin22a"] = [0.04, None, 0.05, None]
+    raw.to_csv(paths["findex"], index=False)
+    cfg = _cfg(tmp_path, paths)
+    cfg["sources"]["findex"]["indicators"] += ["save_any_t_d", "fin17a", "borrow_any_t_d", "fin22a"]
+    EtlAgent(cfg=cfg, run_id="formal").execute({"sources": cfg["sources"], "raw_paths": paths})
+    year = pd.read_parquet(tmp_path / "processed" / "country_year.parquet").set_index(["iso3", "year"])
+    assert year.loc[("MAR", 2021), "savings"] == pytest.approx(60.0)
+    assert year.loc[("MAR", 2021), "formal_saving"] == pytest.approx(20.0)
+    assert year.loc[("MAR", 2021), "borrowing"] == pytest.approx(50.0)
+    assert year.loc[("MAR", 2021), "formal_borrowing"] == pytest.approx(5.0)
+    assert pd.isna(year.loc[("FRA", 2021), "formal_borrowing"])
+
+
 def test_indicator_dim_table_is_created_and_matches_parquet(tmp_path):
     _, processed = _run_agent(tmp_path)
     con = duckdb.connect(str(processed / "warehouse.duckdb"), read_only=True)

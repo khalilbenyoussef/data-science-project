@@ -41,7 +41,7 @@ def test_catalog_discovery_needs_no_warehouse_or_duckdb(tmp_path, monkeypatch):
     tools = SemanticKpiTools(tmp_path / "absent.duckdb")
     response = tools.list_kpis(ListKpisRequest())
     catalog = load_catalog()
-    assert response.catalog_version == "1.0.0"
+    assert response.catalog_version == "1.1.0"
     assert {k.kpi_id for k in response.kpis} == set(catalog["kpis"])
     for summary in response.kpis:
         entry = catalog["kpis"][summary.kpi_id]
@@ -129,7 +129,7 @@ def test_structured_tools_callable_and_strict(agent, warehouse, monkeypatch):
     tools = {tool.name: tool for tool in agent.get_tools()}
     assert set(tools) == {"list_kpis", "describe_kpi", "calculate_kpi", "latest_available",
                           "compare_countries", "compare_years"}
-    assert len(tools["list_kpis"].invoke({})["kpis"]) == 6
+    assert len(tools["list_kpis"].invoke({})["kpis"]) == len(load_catalog()["kpis"])
     assert tools["describe_kpi"].invoke({"kpi_id": "borrowing_rate"})["definition"]["verification"]["status"] == "provisional"
     digest = hashlib.sha256(warehouse.read_bytes()).hexdigest()
     original = duckdb.connect

@@ -1,8 +1,9 @@
 # Declarative definitions only. No calculations, publication decisions or agents execute this file.
 schema_version: 1
-catalog_version: "1.0.0"
+catalog_version: "1.1.0"
 catalog_id: biflow_core_kpis
 created_on: "2026-10-22"
+updated_on: "2026-10-29"
 status: draft
 scope: country_year_total_population
 versioning:
@@ -19,6 +20,14 @@ references:
     url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
     locator: Glossary!A118:C118, g20.any
     evidence: made or received a digital payment in the past year, age 15+
+  findex_2025_glossary_fin17a:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A24:C24, fin17a (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Saved at a bank or similar financial institution (%, age 15+): saving or setting aside any money at a bank or similar financial institution in the past year"
+  findex_2025_glossary_fin22a:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A31:C31, fin22a (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Borrowed from a formal bank or similar financial institution (%, age 15+): borrowing any money from a bank or similar financial institution or using a credit card in the past year"
   fas_raw_metadata:
     path: data/raw/fas.csv
     locator: SERIES_CODE ending in FA26N.PHTADLT_NUM.A; INDICATOR, TYPE_OF_TRANSFORMATION, FREQUENCY, SCALE
@@ -355,3 +364,77 @@ kpis:
     traceability_policy: retain_input_lineage_v1
     publication_review_policy: review_flagged_dependencies_v1
     dependencies: [account_ownership]
+
+  formal_saving_rate:
+    definition_version: "1.0.0"
+    name: Saved at a financial institution
+    business_objective: savings_deposits
+    definition: Share of adults who saved or set aside any money at a bank or similar financial institution in the past year.
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin17a, etl_contract]
+      uncertainties:
+        - Detailed historical questionnaire comparability has not been independently reverified.
+        - Excludes saving with a mobile money account (fin17b) and informal saving; not the any-saving measure (saving_rate).
+    source: {dataset: findex, indicator: fin17a, official_indicator: fin17a}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin17a
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: country_year
+      wide_column: formal_saving
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: formal_saving}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    subgroup: total_population
+    reference_period: past_year
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [save_any_t_d, saving_rate, fin17a.17a1.d]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  formal_borrowing_rate:
+    definition_version: "1.0.0"
+    name: Borrowed from a financial institution
+    business_objective: credit
+    definition: Share of adults who borrowed any money from a bank or similar financial institution, or using a credit card, in the past year.
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin22a, etl_contract]
+      uncertainties:
+        - Detailed historical questionnaire comparability has not been independently reverified.
+        - The official definition includes borrowing using a credit card; it excludes mobile-money borrowing (fin22a.22a1.22g.d) and informal lenders.
+    source: {dataset: findex, indicator: fin22a, official_indicator: fin22a}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin22a
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: country_year
+      wide_column: formal_borrowing
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: formal_borrowing}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    subgroup: total_population
+    reference_period: past_year
+    valid_years: [2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [borrow_any_t_d, borrowing_rate, fin22a.22a1.22g.d]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []

@@ -19,6 +19,8 @@ EXPECTED = {
     "saving_rate": ("findex", "save_any_t_d", "savings", "100 * value", "savings"),
     "borrowing_rate": ("findex", "borrow_any_t_d", "borrowing", "100 * value", "borrowing"),
     "unbanked_share": ("findex", "account_t_d", "account_own", "100 * (1 - value)", "100 - account_own"),
+    "formal_saving_rate": ("findex", "fin17a", "formal_saving", "100 * value", "formal_saving"),
+    "formal_borrowing_rate": ("findex", "fin22a", "formal_borrowing", "100 * value", "formal_borrowing"),
 }
 
 
@@ -29,7 +31,7 @@ def catalog():
 
 def test_catalog_identity_and_versions(catalog):
     assert catalog["schema_version"] == 1
-    assert catalog["catalog_version"] == "1.0.0"
+    assert catalog["catalog_version"] == "1.1.0"
     assert catalog["status"] == "draft"
     assert catalog["scope"] == "country_year_total_population"
     assert set(catalog["kpis"]) == set(EXPECTED)
@@ -96,7 +98,7 @@ def test_years_are_observed_periods_within_current_etl_scope(catalog, kpi_id):
     assert all(type(y) is int and cfg["min_year"] <= y <= cfg["max_year"] for y in years)
     if kpi_id == "branch_density":
         assert years == list(range(2011, 2025))
-    elif kpi_id in {"account_ownership", "unbanked_share"}:
+    elif kpi_id in {"account_ownership", "unbanked_share", "formal_saving_rate"}:
         assert years == [2011, 2014, 2017, 2021, 2022, 2024]
     else:
         assert years == [2014, 2017, 2021, 2022, 2024]
@@ -122,6 +124,23 @@ def test_unverified_saving_and_borrowing_definitions_cannot_be_published(catalog
         assert "pending verification" in kpi["name"]
     assert catalog["publication_review_policy"]["provisional_definition"] == "block_publication_until_definition_verified"
     assert catalog["kpis"]["branch_density"]["verification"]["status"] == "verified_metadata"
+
+
+@pytest.mark.parametrize("kpi_id,code,row,any_kpi", [
+    ("formal_saving_rate", "fin17a", "A24:C24", "saving_rate"),
+    ("formal_borrowing_rate", "fin22a", "A31:C31", "borrowing_rate"),
+])
+def test_formal_saving_and_borrowing_are_verified_against_glossary(catalog, kpi_id, code, row, any_kpi):
+    kpi = catalog["kpis"][kpi_id]
+    assert kpi["verification"]["status"] == "verified"
+    assert kpi["source"] == {"dataset": "findex", "indicator": code, "official_indicator": code}
+    reference = catalog["references"][kpi["verification"]["evidence"][0]]
+    assert reference["url"] == catalog["references"]["findex_2025_glossary"]["url"]
+    assert reference["locator"].startswith(f"Glossary!{row}, {code}")
+    assert kpi["reference_period"] == "past_year"
+    # Les mesures "any" restent distinctes et provisoires
+    assert any_kpi in kpi["not_equivalent_to"]
+    assert catalog["kpis"][any_kpi]["verification"]["status"] == "provisional"
 
 
 def test_missing_data_never_becomes_a_zero_or_an_imputed_wave(catalog):
