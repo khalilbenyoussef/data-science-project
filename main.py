@@ -33,6 +33,10 @@ def _print_state(state: dict) -> None:
                 f"lignes={meta.get('rows')}"
             )
 
+    snapshot = state.get("snapshot") or {}
+    if snapshot:
+        print(f"\nSnapshot : {snapshot.get('snapshot_id')} ({snapshot.get('status')})")
+
     profiles = state.get("profiles") or {}
     if profiles:
         print("\nProfils")
@@ -106,7 +110,7 @@ def main() -> int:
         use_llm=not args.no_llm,
     )
     _print_state(state)
-    return 0 if state.get("status") == "success" else 2
+    return 0 if state.get("status") in ("success", "no_change") else 2
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Graphe LangGraph du pipeline BIFlow (S6 -> S10)."""
+"""Graphe LangGraph du pipeline BIFlow (S6 -> S11)."""
 
 from __future__ import annotations
 
@@ -22,9 +22,11 @@ from biflow.agents import (
     ProfilerAgent,
     QualityAgent,
     SemanticKpiAgent,
+    SnapshotAgent,
 )
 from biflow.config import load_config
 from biflow.state import PipelineState, new_state
+from biflow.tools.snapshots import SnapshotStore
 from biflow.utils.io import save_json
 from biflow.utils.logger import get_logger
 
@@ -32,6 +34,7 @@ log = get_logger("biflow.graph")
 
 AGENT_CLASSES = {
     "collector": CollectorAgent,
+    "snapshot": SnapshotAgent,          # versionne data/raw ; "no_change" -> fin du run
     "profiler": ProfilerAgent,
     "quality": QualityAgent,
     "etl": EtlAgent,
@@ -120,6 +123,18 @@ def _gate(state: PipelineState) -> str:
     return "etl" if quality.get("passed") else END
 
 
+def _no_change(state: PipelineState) -> bool:
+    return (state.get("snapshot") or {}).get("status") == "no_change"
+
+
+def _snapshot_gate(following: str) -> Callable[[PipelineState], str]:
+    """Aucune donnee nouvelle : les etapes suivantes (ETL, KPI) sont ignorees."""
+    def route(state: PipelineState) -> str:
+        return END if _no_change(state) else following
+
+    return route
+
+
 def build_graph(
     cfg: dict[str, Any],
     run_id: str,
@@ -140,6 +155,10 @@ def build_graph(
     for current, following in zip(steps, steps[1:]):
         if current == "quality" and following == "etl":
             graph.add_conditional_edges(current, _gate, {"etl": "etl", END: END})
+        elif current == "snapshot":
+            graph.add_conditional_edges(
+                current, _snapshot_gate(following), {following: following, END: END}
+            )
         else:
             graph.add_edge(current, following)
     graph.add_edge(steps[-1], END)
@@ -170,6 +189,9 @@ def run_steps(
     for step in steps:
         agent = AGENT_CLASSES[step](cfg=cfg, run_id=run_id)
         _merge_updates(state, _run_with_retry(step, agent, state, cfg, attempts))
+        if step == "snapshot" and _no_change(state):
+            log.info("aucune donnee nouvelle : arret apres le snapshot")
+            return state
         if step == "quality" and not (state.get("quality") or {}).get("passed"):
             state["status"] = "quality_failed"
             log.warning("quality gate FAIL : arret avant l'ETL")
@@ -200,6 +222,7 @@ def _summary(state: PipelineState) -> dict[str, Any]:
             "critical_issues": quality.get("critical_issues"),
             "paths": state.get("quality_paths"),
         },
+        "snapshot": state.get("snapshot"),
         "warehouse": state.get("warehouse_path"),
         "staging_paths": state.get("staging_paths"),
         "kpi": {"summary": state.get("kpi_summary"), "paths": state.get("kpi_paths")},
@@ -214,6 +237,31 @@ def _summary(state: PipelineState) -> dict[str, Any]:
         summary["semantic_kpi_response"] = state.get("semantic_kpi_response")
         summary["lineage_path"] = state.get("lineage_path")
     return summary
+
+
+def _finalize_snapshot(cfg: dict[str, Any], state: PipelineState, steps: list[str]) -> None:
+    """Publie le snapshot du run s'il a abouti (ETL inclus) ; sinon le marque
+    not_published et la version publiee precedente reste en place."""
+    snapshot = state.get("snapshot") or {}
+    if snapshot.get("status") != "new":
+        return
+    publish = state.get("status") == "success" and "etl" in steps
+    reason = None if publish else (
+        "partial_run" if state.get("status") == "success" else state.get("status")
+    )
+    store = SnapshotStore((cfg.get("snapshots") or {}).get("root", "data/snapshots"))
+    try:
+        entry = store.finalize(snapshot["snapshot_id"], publish, reason)
+    except (OSError, KeyError, ValueError) as exc:
+        state["status"] = "failed"
+        state["errors"] = list(state.get("errors") or []) + [f"[snapshot] finalisation : {exc}"]
+        return
+    state["snapshot"] = {**snapshot, "status": entry["status"], "reason": entry.get("reason")}
+    if publish:
+        log.info("snapshot %s publie", snapshot["snapshot_id"])
+    else:
+        log.warning("snapshot %s non publie (%s) : version precedente conservee",
+                    snapshot["snapshot_id"], reason)
 
 
 _NO_SEMANTIC_REQUEST = object()
@@ -248,6 +296,7 @@ def run_pipeline(
     if only:
         if only not in AGENT_CLASSES:
             raise ValueError(f"agent inconnu : {only} (choix : {', '.join(STEP_ORDER)})")
+        steps = [only]
         agent = AGENT_CLASSES[only](cfg=cfg, run_id=run_id)
         report = agent.run(state)
         _merge_updates(state, report.get("outputs") or {})
@@ -273,7 +322,9 @@ def run_pipeline(
                 log.warning("LangGraph indisponible : execution sequentielle des agents")
                 state = run_steps(steps, cfg, run_id, state, attempts)
             quality = state.get("quality") or {}
-            if "quality" in steps and not quality.get("passed"):
+            if _no_change(state):
+                state["status"] = "no_change"
+            elif "quality" in steps and not quality.get("passed"):
                 state["status"] = "quality_failed"
             else:
                 state["status"] = "success"
@@ -284,6 +335,7 @@ def run_pipeline(
             state["status"] = "failed"
             state["errors"] = list(state.get("errors") or []) + failures
     state["attempts"] = attempts
+    _finalize_snapshot(cfg, state, steps)
 
     summary = _summary(state)
     summary["finished_at"] = datetime.now().isoformat(timespec="seconds")

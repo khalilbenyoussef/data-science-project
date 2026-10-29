@@ -52,7 +52,7 @@ def test_transient_failure_succeeds_on_retry(pipeline):
     script["fail"]["etl"] = 1
     state, summary = run()
     assert state["status"] == "success"
-    assert script["calls"] == ["collector", "profiler", "quality", "etl", "etl", "semantic_kpi"]
+    assert script["calls"] == ["collector", "snapshot", "profiler", "quality", "etl", "etl", "semantic_kpi"]
     etl = [a for a in summary["attempts"] if a["step"] == "etl"]
     assert [(a["attempt"], a["status"]) for a in etl] == [(1, "failed"), (2, "success")]
     assert "panne etl" in etl[0]["errors"][0]
@@ -67,7 +67,7 @@ def test_persistent_failure_stops_with_both_attempts_logged(pipeline):
     script["fail"]["etl"] = 2
     state, summary = run()
     assert state["status"] == "failed"
-    assert script["calls"] == ["collector", "profiler", "quality", "etl", "etl"]  # pas de KPI
+    assert script["calls"] == ["collector", "snapshot", "profiler", "quality", "etl", "etl"]  # pas de KPI
     assert state["errors"] == ["[etl] tentative 1/2 : RuntimeError: panne etl",
                                "[etl] tentative 2/2 : RuntimeError: panne etl"]
     assert summary["errors"] == state["errors"] and summary["status"] == "failed"
@@ -84,8 +84,8 @@ def test_quality_gate_fail_is_a_decision_never_retried(pipeline):
     script["passed"] = False
     state, summary = run()
     assert state["status"] == "quality_failed"
-    assert script["calls"] == ["collector", "profiler", "quality"]
-    assert [a["step"] for a in summary["attempts"]] == ["collector", "profiler", "quality"]
+    assert script["calls"] == ["collector", "snapshot", "profiler", "quality"]
+    assert [a["step"] for a in summary["attempts"]] == ["collector", "snapshot", "profiler", "quality"]
     assert sleeps == [] and not state["errors"]
 
 

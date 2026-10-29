@@ -38,24 +38,25 @@ src/biflow/
   state.py         etat partage du pipeline
   graph.py         graphe LangGraph + repli sequentiel
   semantic_graph.py  route semantique a la demande (une requete KPI)
-  agents/          base, collector, profiler, quality, etl, semantic_kpi
-  tools/           dictionnaire d'indicateurs, calcul/provenance des KPI, kpi_values
+  agents/          base, collector, snapshot, profiler, quality, etl, semantic_kpi
+  tools/           dictionnaire d'indicateurs, calcul/provenance des KPI, kpi_values, snapshots
   utils/           io, logger, pays (ISO3)
 config/config.yaml     chemins, LLM, orchestrateur, KPI, sources, seuils
 config/kpi_catalog.v1.yaml  definitions declaratives des KPI (version 1.2.0)
-data/                  raw, staging, processed, profiles, quality
+data/                  raw, snapshots, staging, processed, profiles, quality
 outputs/               reports, profiles, logs, cache LLM
 ```
 
-## Pipeline (S6 → S10)
+## Pipeline (S06 → S11)
 
 | Etape | Agent | Sorties principales |
 |---|---|---|
-| S6 | `collector` | `data/raw/*.csv` + SHA-256, telechargement WDI pagine |
-| S7 | `profiler` | `outputs/profiles/profile_*.{json,md}`, couverture indicateurs |
-| S8 | `quality` | `data/quality/quality_report.{json,md}` (run_id + SHA-256 des sources), gate PASS/FAIL |
-| S9 | `etl` | `data/processed/*.parquet`, `warehouse.duckdb`, `lineage.json` |
-| S10 | `semantic_kpi` | table DuckDB `kpi_values` + `data/processed/kpi_values.parquet` |
+| S06 | `collector` | `data/raw/*.csv` + SHA-256, telechargement WDI pagine (FAS via API en option) |
+| S07 | `snapshot` | `data/snapshots/` : nouvelle version `vN` si le contenu change, sinon `no_change` |
+| S08 | `profiler` | `outputs/profiles/profile_*.{json,md}`, couverture indicateurs |
+| S09 | `quality` | `data/quality/quality_report.{json,md}` (run_id, snapshot_id, SHA-256 des sources), gate PASS/FAIL |
+| S10 | `etl` | `data/processed/*.parquet`, `warehouse.duckdb`, `lineage.json` |
+| S11 | `semantic_kpi` | table DuckDB `kpi_values` + `data/processed/kpi_values.parquet` |
 
 Chaque execution ecrit un rapport dans `outputs/reports/<run_id>/` ; `run.json`
 liste aussi chaque tentative d'agent (`attempts`).
@@ -66,6 +67,49 @@ liste aussi chaque tentative d'agent (`attempts`).
   (1 par défaut) après `retry_backoff_s × n` secondes. Au dernier échec, le
   pipeline s'arrête, les sorties publiées précédemment restent en place et
   chaque tentative est tracée dans `run.json` et `errors`.
+
+### Snapshots des sources brutes (`snapshot`)
+
+Le collector réécrit `data/raw/*.csv` et l'ETL remplace ses tables : l'historique
+est conservé dans `data/snapshots/` :
+
+```
+data/snapshots/
+  index.json              versions, statut, version publiée
+  blobs/<sha256>.csv      chaque fichier brut stocké une seule fois (copie exacte)
+  vN/manifest.json        created_at, run_id, content_key ; par source : blob,
+                          sha256, content_sha256, rows, size_bytes, original_path
+```
+
+- L'empreinte de contenu ignore l'ordre des lignes (BOM et fins de ligne
+  normalisés). Si elle est identique à la version publiée, le run se termine en
+  `no_change` après le snapshot : profil, qualité, ETL et KPI ne sont pas relancés
+  et aucun artefact publié n'est réécrit.
+- Sinon une version `vN` est créée (`pending`) puis publiée seulement si le run
+  aboutit (ETL inclus). En cas d'échec, de quality gate FAIL ou de run partiel
+  (`--to quality`), elle passe `not_published` et la version publiée reste en place.
+- Les blobs référencés par une version de `index.json` sont conservés, les autres
+  supprimés. `snapshot_id` est enregistré dans l'état, `run.json`, `lineage.json`,
+  `quality_report.json` et `kpi_values`.
+
+### FAS via IMF Data API (optionnel)
+
+`sources.fas.api.enabled: false` par défaut : `fas.csv` statique reste la source.
+Activé, le collector interroge l'API SDMX 3.0
+(`https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/FAS/~/{pays}.{clé}`,
+`Accept: text/csv`) pour chaque série de `sources.fas.api.series`, convertit la
+réponse (une ligne par observation) au format large de `fas.csv` sans toucher aux
+valeurs, et écrit `data/raw/fas_api.csv`, qui remplace alors `fas.csv` pour ce run.
+Une échelle autre que `0` (unités) ou une fréquence non annuelle est refusée.
+Si l'API est injoignable, le fichier déjà collecté est conservé (le snapshot
+publié reste donc valide).
+
+L'API sert FAS 8.0.0 : les codes diffèrent de l'export local FAS 5.0.0. Seules
+deux séries sont mappées, vérifiées le 2026-10-29 (valeurs TUN 2019-2023
+identiques à `fas.csv`) : `FA26N.PHTADLT_NUM` → `FA26._Z._Z._T.PHTADLT_NUM.A` et
+`FA18N.PHTADLT_NUM` → `FA18._Z._Z._T.PHTADLT_NUM.A`. Les autres séries (déposants,
+emprunteurs, comptes, % du PIB) ont plusieurs ventilations possibles en 8.0.0 et
+restent non mappées : avec l'API activée, elles manquent et le collector le signale.
 
 ### Étape KPI (`semantic_kpi`)
 
@@ -103,6 +147,11 @@ glossaire lignes 121 et 3), `unbanked_share`, `formal_saving_rate` (`fin17a`),
 | `kpi.peers` | `[DZA, EGY, JOR, MAR]` | groupe de pairs (ligne `PEERS`) |
 | `orchestrator.max_retries` | `1` | nouveaux essais d'un agent en erreur |
 | `orchestrator.retry_backoff_s` | `1.0` | attente avant l'essai n (`n × backoff`) |
+| `snapshots.enabled` | `true` | versionnement des sources brutes |
+| `snapshots.root` | `data/snapshots` | `index.json`, `blobs/`, `vN/manifest.json` |
+| `sources.fas.api.enabled` | `false` | collecte FAS via l'API IMF au lieu de `fas.csv` |
+| `sources.fas.api.series` | 2 séries vérifiées | série locale → clé SDMX (sans le pays) |
+| `sources.fas.api.path` | `data/raw/fas_api.csv` | sortie de la collecte API |
 | `sources.gdp.indicators` | `NY.GDP.MKTP.CD`, `NY.GDP.PCAP.CD`, `NY.GDP.MKTP.KD.ZG` | indicateurs WDI collectés |
 
 ## Démarrage
@@ -168,12 +217,15 @@ python main.py run --only semantic_kpi
 ## Sorties
 
 - `data/raw/` : sources brutes et empreintes SHA-256 ;
+- `data/snapshots/` : versions des sources brutes (index, blobs, manifestes) ;
 - `outputs/profiles/` : profils JSON/Markdown et diagnostics de couverture ;
 - `data/quality/` : rapport qualité JSON/Markdown (`run_id`, `created_at`,
   `inputs.<source>.sha256`), anomalies et gate PASS/FAIL ;
 - `data/processed/` : tables Parquet, `warehouse.duckdb` (dont `kpi_values`),
   `kpi_values.parquet` et `lineage.json` ;
 - `outputs/reports/<run_id>/` : rapport standardisé de chaque agent et `run.json`.
+
+`main.py run` renvoie le code 0 pour `success` et `no_change`.
 
 Le rapport qualité est lié au run : quand son `run_id` et les SHA-256 des
 sources correspondent à `lineage.json`, les KPI ne portent plus la raison de

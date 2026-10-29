@@ -32,7 +32,7 @@ def sources(tmp_path):
 def _run_quality(tmp_path, sources, run_id, raw_meta=None):
     cfg = {"paths": {"reports": str(tmp_path / "reports"), "quality": str(tmp_path / "quality")},
            "llm": {"enabled": False}, "quality": {"min_rows": 10, "score_threshold": 0.9}}
-    ctx = {"run_id": run_id, "sources": sources,
+    ctx = {"run_id": run_id, "snapshot_id": "v3", "sources": sources,
            "raw_paths": {name: s["path"] for name, s in sources.items()}}
     if raw_meta is not None:
         ctx["raw_meta"] = raw_meta
@@ -45,6 +45,7 @@ def test_report_records_run_created_at_and_collector_hashes(tmp_path, sources):
     raw_meta = {name: {"path": s["path"], "sha256": "a" * 64} for name, s in sources.items()}
     _, report = _run_quality(tmp_path, sources, "run_q", raw_meta)
     assert report["run_id"] == "run_q" and report["created_at"]
+    assert report["snapshot_id"] == "v3"
     assert set(report["inputs"]) == {"findex", "fas", "gdp"}
     for name, meta in report["inputs"].items():
         # Hash du collector reutilise tel quel (pas de recalcul)

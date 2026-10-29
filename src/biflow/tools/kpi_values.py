@@ -28,7 +28,7 @@ COLUMNS = (
     "kpi_id", "iso3", "year", "value", "unit", "availability_status", "reason",
     "definition_status", "requires_review", "review_reasons", "peer_status",
     "peers_included", "missing_peers", "aggregation_method",
-    "catalog_version", "catalog_sha256", "run_id",
+    "catalog_version", "catalog_sha256", "snapshot_id", "run_id",
 )
 KPI_VALUES_DDL = """
 CREATE OR REPLACE TABLE kpi_values (
@@ -48,6 +48,7 @@ CREATE OR REPLACE TABLE kpi_values (
     aggregation_method VARCHAR,
     catalog_version VARCHAR NOT NULL,
     catalog_sha256 VARCHAR NOT NULL,
+    snapshot_id VARCHAR,
     run_id VARCHAR NOT NULL,
     PRIMARY KEY (kpi_id, iso3, year)
 )
@@ -69,7 +70,7 @@ def peer_codes(focus: Any, peers: Iterable[Any] | None) -> tuple[str, list[str]]
     return code, normalized
 
 
-def _country_row(result, run_id: str) -> dict[str, Any]:
+def _country_row(result, run_id: str, snapshot_id: str | None) -> dict[str, Any]:
     available = result.availability_status == "available" and result.value is not None
     return {
         "kpi_id": result.kpi_id, "iso3": result.iso3, "year": result.observation_year,
@@ -80,11 +81,12 @@ def _country_row(result, run_id: str) -> dict[str, Any]:
         "review_reasons": list(result.review_reasons),
         "peer_status": None, "peers_included": None, "missing_peers": None,
         "aggregation_method": None, "catalog_version": result.catalog_version,
-        "catalog_sha256": result.catalog_sha256, "run_id": run_id,
+        "catalog_sha256": result.catalog_sha256, "snapshot_id": snapshot_id, "run_id": run_id,
     }
 
 
-def _peer_row(kpi, year: int, results: list, catalog, run_id: str) -> dict[str, Any]:
+def _peer_row(kpi, year: int, results: list, catalog, run_id: str,
+              snapshot_id: str | None = None) -> dict[str, Any]:
     included = [r for r in results if r.availability_status == "available" and r.value is not None]
     missing = [r.iso3 for r in results if r not in included]
     if not included:
@@ -106,12 +108,12 @@ def _peer_row(kpi, year: int, results: list, catalog, run_id: str) -> dict[str, 
         "peer_status": status, "peers_included": [r.iso3 for r in included],
         "missing_peers": missing, "aggregation_method": peer_method(len(results)),
         "catalog_version": catalog.catalog_version, "catalog_sha256": catalog.catalog_sha256,
-        "run_id": run_id,
+        "snapshot_id": snapshot_id, "run_id": run_id,
     }
 
 
 def compute_kpi_values(tools: SemanticKpiTools, focus: str, peers: list[str],
-                       run_id: str) -> list[dict[str, Any]]:
+                       run_id: str, snapshot_id: str | None = None) -> list[dict[str, Any]]:
     """Chaque KPI x pays (focus + pairs) x annee valide du catalogue, plus PEERS."""
     catalog = tools.list_kpis(ListKpisRequest())
     rows: list[dict[str, Any]] = []
@@ -121,11 +123,11 @@ def compute_kpi_values(tools: SemanticKpiTools, focus: str, peers: list[str],
             for iso3 in [focus, *peers]:
                 result = tools.calculate_kpi(CalculateKpiRequest(
                     kpi_id=kpi.kpi_id, iso3=iso3, year=year)).result
-                rows.append(_country_row(result, run_id))
+                rows.append(_country_row(result, run_id, snapshot_id))
                 if iso3 != focus:
                     peer_results.append(result)
             if peers:
-                rows.append(_peer_row(kpi, year, peer_results, catalog, run_id))
+                rows.append(_peer_row(kpi, year, peer_results, catalog, run_id, snapshot_id))
     return rows
 
 

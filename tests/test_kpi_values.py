@@ -61,7 +61,7 @@ def kpi_run(tmp_path_factory):
             "gdp": {"path": paths["gdp"], "type": "csv"},
         },
     }
-    state = {"run_id": "kpi_test", "sources": cfg["sources"], "raw_paths": paths}
+    state = {"run_id": "kpi_test", "sources": cfg["sources"], "raw_paths": paths, "snapshot_id": "v7"}
     state.update(EtlAgent(cfg=cfg, run_id="kpi_test").execute(state))
     report = SemanticKpiAgent(cfg=cfg, run_id="kpi_test").run(state)
     assert report["status"] == "success", report["errors"]
@@ -88,6 +88,9 @@ def test_kpi_values_table_and_parquet_are_created(kpi_run):
     assert not table.duplicated(["kpi_id", "iso3", "year"]).any()
     assert set(table.kpi_id) == set(catalog["kpis"])
     assert set(table.run_id) == {"kpi_test"}
+    assert set(table.snapshot_id) == {"v7"} and report["outputs"]["kpi_summary"]["snapshot_id"] == "v7"
+    import json
+    assert json.loads((processed / "lineage.json").read_text(encoding="utf-8"))["snapshot_id"] == "v7"
     assert set(table.catalog_version) == {catalog["catalog_version"]}
     assert table.catalog_sha256.str.fullmatch(r"[0-9a-f]{64}").all()
     assert report["outputs"]["kpi_paths"]["table"] == "kpi_values"
@@ -214,14 +217,14 @@ def test_pipeline_order_ends_with_semantic_kpi_after_etl(fakes):
     calls, _, cfg = fakes
     assert graph.STEP_ORDER[-2:] == ["etl", "semantic_kpi"]
     state = graph.run_pipeline(cfg=cfg, use_llm=False)
-    assert calls == ["collector", "profiler", "quality", "etl", "semantic_kpi"]
+    assert calls == ["collector", "snapshot", "profiler", "quality", "etl", "semantic_kpi"]
     assert state["status"] == "success"
 
 
 def test_to_etl_still_stops_before_kpi(fakes):
     calls, _, cfg = fakes
     state = graph.run_pipeline(cfg=cfg, stop="etl", use_llm=False)
-    assert calls == ["collector", "profiler", "quality", "etl"]
+    assert calls == ["collector", "snapshot", "profiler", "quality", "etl"]
     assert state["status"] == "success"
 
 
@@ -229,7 +232,7 @@ def test_quality_fail_stops_before_etl_and_kpi(fakes):
     calls, settings, cfg = fakes
     settings["passed"] = False
     state = graph.run_pipeline(cfg=cfg, use_llm=False)
-    assert calls == ["collector", "profiler", "quality"]
+    assert calls == ["collector", "snapshot", "profiler", "quality"]
     assert state["status"] == "quality_failed"
 
 

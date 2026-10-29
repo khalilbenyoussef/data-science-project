@@ -8,6 +8,7 @@ kpi_values.parquet. Facts are only read; run() writes its usual agent report.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -89,13 +90,20 @@ class SemanticKpiAgent(BaseAgent):
                 remember_sha256(meta["path"], meta.get("sha256"), meta.get("size_bytes"),
                                 meta.get("mtime_ns"))
         self.log.info("[semantic_kpi] calcul des KPI : focus=%s, pairs=%s", focus, ", ".join(peers))
-        rows = compute_kpi_values(tools, focus, peers, self.run_id)
+        snapshot_id = ctx.get("snapshot_id")
+        if snapshot_id is None:  # ex. --only semantic_kpi : version enregistree par l'ETL
+            try:
+                snapshot_id = json.loads(warehouse.with_name("lineage.json").read_text(
+                    encoding="utf-8")).get("snapshot_id")
+            except (OSError, ValueError, AttributeError):
+                snapshot_id = None
+        rows = compute_kpi_values(tools, focus, peers, self.run_id, snapshot_id)
         parquet = warehouse.with_name("kpi_values.parquet")
         write_kpi_values(rows, warehouse, parquet)
 
         focus_rows = [row for row in rows if row["iso3"] == focus]
         summary = {
-            "focus": focus, "peers": peers, "rows": len(rows),
+            "focus": focus, "peers": peers, "rows": len(rows), "snapshot_id": snapshot_id,
             "kpis": len({row["kpi_id"] for row in rows}),
             "available": sum(row["availability_status"] == "available" for row in rows),
             "unavailable": sum(row["availability_status"] == "unavailable" for row in rows),

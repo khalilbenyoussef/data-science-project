@@ -432,7 +432,8 @@ def _markdown(report: dict) -> str:
     lines = [
         "# Data Quality Report",
         "",
-        f"Run : `{report.get('run_id')}` - cree le {report.get('created_at')}",
+        f"Run : `{report.get('run_id')}` - snapshot `{report.get('snapshot_id')}` - "
+        f"cree le {report.get('created_at')}",
         "",
         f"Score global : **{report['overall_score']:.2%}**",
         f"Quality gate : **{'PASS' if report['passed'] else 'FAIL'}**",
@@ -516,6 +517,7 @@ class QualityAgent(BaseAgent):
         report = {
             # Liaison au run et aux fichiers controles (verifiee par kpi_provenance)
             "run_id": ctx.get("run_id") or self.run_id,
+            "snapshot_id": ctx.get("snapshot_id"),
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "inputs": input_hashes(checked_paths, ctx.get("raw_meta")),
             **build_report(frames, self.cfg.get("quality") or {}, sources),

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import time
 import urllib.error
@@ -16,10 +17,55 @@ from biflow.config import resolve
 from biflow.utils.io import ensure_dir, file_stat, read_csv_smart, sha256_file
 
 COLUMNS = ["iso3", "country", "indicator_code", "indicator_name", "year", "value"]
+SDMX_REQUIRED = ("COUNTRY", "FREQUENCY", "TIME_PERIOD", "OBS_VALUE", "SCALE")
 
 
 class CollectorAPIError(RuntimeError):
-    """Erreur de communication avec l'API World Bank."""
+    """Erreur de communication avec une API (World Bank, IMF)."""
+
+
+class SdmxFormatError(ValueError):
+    """Reponse SDMX hors contrat (colonnes, echelle, frequence) : jamais de repli cache."""
+
+
+# --------------------------------------------------------------------------- IMF SDMX
+def sdmx_to_fas_wide(responses: Mapping[str, str]) -> pd.DataFrame:
+    """CSV SDMX 3.0 (une ligne par observation) -> format large de fas.csv.
+
+    responses : serie locale (ex. FA26N.PHTADLT_NUM) -> texte CSV de l'API.
+    Les valeurs sont conservees telles que recues (texte) : aucune conversion
+    ni mise a l'echelle ; une echelle autre que 0 (unites) est refusee.
+    """
+    frames = []
+    for local_series, text in responses.items():
+        df = pd.read_csv(io.StringIO(text), dtype=str, keep_default_na=False)
+        missing = [column for column in SDMX_REQUIRED if column not in df.columns]
+        if missing:
+            raise SdmxFormatError(f"[fas api] colonnes SDMX absentes ({local_series}) : {missing}")
+        df = df[(df["TIME_PERIOD"].str.strip() != "") & (df["OBS_VALUE"].str.strip() != "")]
+        scales = sorted(set(df["SCALE"]) - {"0"})
+        if scales:
+            raise SdmxFormatError(f"[fas api] echelle non verifiee pour {local_series} : {scales}")
+        frequencies = sorted(set(df["FREQUENCY"]) - {"A"})
+        if frequencies:
+            raise SdmxFormatError(f"[fas api] frequence non annuelle pour {local_series} : {frequencies}")
+        if not df["TIME_PERIOD"].str.fullmatch(r"\d{4}").all():
+            raise SdmxFormatError(f"[fas api] periode non annuelle pour {local_series}")
+        frames.append(pd.DataFrame({
+            "SERIES_CODE": df["COUNTRY"].str.strip() + "." + local_series + ".A",
+            "COUNTRY": df["COUNTRY"].str.strip(),
+            "year": df["TIME_PERIOD"],
+            "value": df["OBS_VALUE"],
+        }))
+    long = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    if long.empty:
+        raise SdmxFormatError("[fas api] aucune observation recue")
+    if long.duplicated(["SERIES_CODE", "year"]).any():
+        raise SdmxFormatError("[fas api] observations en double (serie, annee)")
+    wide = long.pivot(index=["SERIES_CODE", "COUNTRY"], columns="year", values="value").reset_index()
+    wide.columns.name = None
+    years = sorted(column for column in wide.columns if column not in ("SERIES_CODE", "COUNTRY"))
+    return wide[["SERIES_CODE", "COUNTRY", *years]].sort_values("SERIES_CODE", kind="mergesort")
 
 
 # --------------------------------------------------------------------------- payload
@@ -80,6 +126,70 @@ class CollectorAgent(BaseAgent):
                 if attempt < retries:
                     time.sleep(2 ** attempt)
         raise CollectorAPIError(f"API World Bank injoignable : {last}")
+
+    def _get_text(self, url: str, accept: str) -> str:
+        """GET avec en-tete Accept (ex. text/csv) et memes nouveaux essais que _get."""
+        cfg = self.cfg.get("collector", {})
+        timeout = cfg.get("timeout", 60)
+        retries = max(1, int(cfg.get("retries", 3)))
+        last: Exception | None = None
+        for attempt in range(1, retries + 1):
+            try:
+                request = urllib.request.Request(url, headers={"Accept": accept})
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    return response.read().decode("utf-8")
+            except (urllib.error.URLError, TimeoutError, OSError, UnicodeError) as exc:
+                last = exc
+                self.log.warning("requete %d/%d echouee : %s", attempt, retries, exc)
+                if attempt < retries:
+                    time.sleep(2 ** attempt)
+        raise CollectorAPIError(f"API IMF injoignable : {last}")
+
+    def _fas_api(self, name: str, source_cfg: dict) -> dict[str, Any]:
+        """FAS via IMF Data API (SDMX 3.0) -> fichier large ; cache conserve si l'API echoue."""
+        api = source_cfg.get("api") or {}
+        out = resolve(api.get("path", "data/raw/fas_api.csv"))
+        series = api.get("series") or {}
+        if not series:
+            raise AgentError(f"[{name}] api.series vide : aucune cle SDMX verifiee configuree")
+        base = api.get("base_url", "https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/FAS/~/")
+        countries = api.get("countries", "*")
+        unmapped = sorted(set((source_cfg.get("series") or {}).values()) - set(series))
+        try:
+            responses = {
+                local: self._get_text(f"{base}{countries}.{key}", api.get("accept", "text/csv"))
+                for local, key in series.items()
+            }
+        except CollectorAPIError as exc:
+            if out.exists():
+                self.log.warning("[%s] %s - donnees API existantes conservees", name, exc)
+                return {
+                    "path": str(out), "source": "imf_sdmx_api_cache", "rows": None,
+                    "updated": False, "sha256": sha256_file(out), **file_stat(out),
+                    "diagnosis": self._diagnose(exc),
+                    "warning": f"{name}: API IMF injoignable, cache conserve ({exc})",
+                }
+            raise
+        wide = sdmx_to_fas_wide(responses)
+        payload = wide.to_csv(index=False).encode("utf-8")
+        new_hash = hashlib.sha256(payload).hexdigest()
+        updated = not out.exists() or sha256_file(out) != new_hash
+        if updated:
+            ensure_dir(out.parent)
+            tmp = out.with_suffix(out.suffix + ".tmp")
+            tmp.write_bytes(payload)
+            tmp.replace(out)
+        self.log.info("[%s] API IMF : %d series x pays, %d serie(s) -> %s",
+                      name, len(wide), len(series), out.name)
+        meta = {
+            "path": str(out), "source": "imf_sdmx_api", "rows": int(len(wide)),
+            "updated": updated, "sha256": new_hash, **file_stat(out),
+            "series": sorted(series), "unmapped_series": unmapped,
+        }
+        if unmapped:
+            meta["warning"] = (f"{name}: series non couvertes par l'API (non verifiees) : "
+                               f"{', '.join(unmapped)}")
+        return meta
 
     def _fetch_indicator(self, code: str, cfg: dict, date_range: str) -> list[dict]:
         base = cfg.get("api_base", "https://api.worldbank.org/v2")
@@ -230,7 +340,12 @@ class CollectorAgent(BaseAgent):
         for name, source_cfg in sources.items():
             out = resolve(source_cfg["path"])
             try:
-                if source_cfg.get("static"):
+                if (source_cfg.get("api") or {}).get("enabled"):
+                    meta = self._fas_api(name, source_cfg)
+                    out = resolve(meta["path"])
+                    if meta.get("warning"):
+                        warnings.append(meta["warning"])
+                elif source_cfg.get("static"):
                     meta = self._static(name, source_cfg, out)
                 else:
                     meta = self._refresh(name, source_cfg, self.cfg.get("collector", {}), out)

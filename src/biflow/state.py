@@ -33,6 +33,8 @@ class PipelineState(TypedDict, total=False):
     kpi_paths: dict[str, str]          # table kpi_values + parquet
     kpi_summary: dict[str, Any]        # comptes disponibles / a revoir
     attempts: list[dict[str, Any]]     # tentatives par etape (retry de l'orchestrateur)
+    snapshot: dict[str, Any]           # statut new / no_change / published / not_published
+    snapshot_id: str                   # version des sources brutes (data/snapshots/vN)
 
     warnings: Annotated[list[str], operator.add]
     errors: Annotated[list[str], operator.add]

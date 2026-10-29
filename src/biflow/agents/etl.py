@@ -961,6 +961,7 @@ class EtlAgent(BaseAgent):
         lineage = {
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "run_id": ctx.get("run_id"),
+            "snapshot_id": ctx.get("snapshot_id"),
             "period": {"min_year": min_year, "max_year": max_year},
             "inputs": {
                 name: {

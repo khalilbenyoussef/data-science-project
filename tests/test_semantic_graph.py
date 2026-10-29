@@ -179,7 +179,7 @@ def test_normal_pipeline_still_runs_original_order(tmp_path, monkeypatch, backen
     for name in graph.STEP_ORDER:
         monkeypatch.setitem(graph.AGENT_CLASSES,name,lambda name=name, **kwargs:FakeAgent(name))
     state = graph.run_pipeline(cfg={"paths":{"reports":str(tmp_path)}}, use_llm=False)
-    assert calls == graph.STEP_ORDER == ["collector","profiler","quality","etl","semantic_kpi"]
+    assert calls == graph.STEP_ORDER == ["collector","snapshot","profiler","quality","etl","semantic_kpi"]
     assert state["status"] == "success" and "semantic_kpi_request" not in state
     assert "semantic_kpi_response" not in graph._summary(state)
     assert graph._gate({"quality":{"passed":True}}) == "etl"

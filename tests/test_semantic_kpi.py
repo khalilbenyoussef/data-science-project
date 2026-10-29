@@ -174,6 +174,6 @@ def test_request_union_schema_and_pipeline_registration_after_etl():
     schema = REQUEST_ADAPTER.json_schema()
     assert schema["discriminator"]["propertyName"] == "action"
     from biflow.graph import AGENT_CLASSES, STEP_ORDER
-    assert set(AGENT_CLASSES) == {"collector", "profiler", "quality", "etl", "semantic_kpi"}
+    assert set(AGENT_CLASSES) == {"collector", "snapshot", "profiler", "quality", "etl", "semantic_kpi"}
     assert AGENT_CLASSES["semantic_kpi"] is SemanticKpiAgent
     assert STEP_ORDER.index("semantic_kpi") == STEP_ORDER.index("etl") + 1

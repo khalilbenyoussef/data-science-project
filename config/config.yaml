@@ -41,6 +41,11 @@ orchestrator:
   max_retries: 1                   # nouvel essai d'un agent en erreur (jamais pour un gate FAIL)
   retry_backoff_s: 1.0             # attente avant l'essai n (n x backoff)
 
+# --------------------------------------------------------------------------- Snapshots
+snapshots:                         # versions des sources brutes (blobs dedupliques par SHA-256)
+  enabled: true
+  root: data/snapshots             # index.json, blobs/<sha256>.<ext>, vN/manifest.json
+
 # --------------------------------------------------------------------------- KPI
 kpi:                               # etape semantic_kpi du pipeline (apres l'ETL)
   focus: TUN                       # pays focus
@@ -106,6 +111,18 @@ sources:
     path: data/raw/fas.csv
     date_range: "2004:2024"
     header_marker: SERIES_CODE     # le fichier FAS a deux lignes d'en-tête
+    api:                           # collecte optionnelle IMF Data API (SDMX 3.0), desactivee par defaut
+      enabled: false               # true : remplace fas.csv par api.path (series ci-dessous uniquement)
+      base_url: "https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/FAS/~/"
+      accept: text/csv
+      countries: "*"               # premiere dimension de la cle (pays)
+      path: data/raw/fas_api.csv   # sortie au format large de fas.csv (SERIES_CODE + annees)
+      # serie locale (FAS 5.0.0) -> reste de la cle SDMX (FAS 8.0.0). Verifiees le
+      # 2026-10-29 : valeurs TUN 2019-2023 identiques a fas.csv. Les autres series
+      # (depots, prets, emprunteurs, % PIB) ne sont pas mappees tant que non verifiees.
+      series:
+        FA26N.PHTADLT_NUM: FA26._Z._Z._T.PHTADLT_NUM.A
+        FA18N.PHTADLT_NUM: FA18._Z._Z._T.PHTADLT_NUM.A
     # suffixe de SERIES_CODE (apres ISO3.) -> indicateur canonique
     series:
       branch_density: FA26N.PHTADLT_NUM          # agences / 100 000 adultes
