@@ -177,7 +177,7 @@ def _validate_role(df: pd.DataFrame, role: str, column: str, decimal: str, resol
 def propose_mapping(name: str, file: str, df: pd.DataFrame, detection: Mapping[str, Any],
                     resolver: CountryResolver | None = None,
                     llm_suggest: Callable[[dict[str, Any]], Mapping[str, str] | None] | None = None,
-                    ) -> dict[str, Any]:
+                    forced_roles: Mapping[str, str] | None = None) -> dict[str, Any]:
     """{mapping (dict, peut etre incomplet), questions, origins} ; rien n'est confirme ici."""
     resolver = resolver or CountryResolver()
     cand = detection["candidates"]
@@ -186,7 +186,15 @@ def propose_mapping(name: str, file: str, df: pd.DataFrame, detection: Mapping[s
     layout = detection["layout"]
     origins: dict[str, str] = {}
     roles: dict[str, str | None] = {}
+    for role, column in (forced_roles or {}).items():  # choix explicite de l'utilisateur, re-valide
+        problem = _validate_role(df, role, column, decimal, resolver)
+        if problem:
+            raise UserSourceError(f"Role {role} -> {problem}")
+        roles[role] = column
+        origins[role] = "choix de l'utilisateur"
     for role in ("country", "year", "indicator", "value"):
+        if role in roles:
+            continue
         by_name = [c for c in _role_by_name(columns, role) if c not in roles.values()]
         evidence = [c["column"] for c in cand.get(role, []) if c["column"] not in roles.values()]
         chosen = next((c for c in by_name if c in evidence or role == "indicator"), None)

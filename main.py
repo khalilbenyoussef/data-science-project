@@ -86,6 +86,28 @@ def _print_state(state: dict) -> None:
             print(f"  - {error}")
 
 
+def source_command(args) -> int:
+    """add-source / remove-source ; erreurs affichees en francais, code 1."""
+    from biflow.agents.mapper import MapperAgent
+    from biflow.config import load_config
+    from biflow.tools.user_sources import UserSourceError
+    from biflow.tools.user_sources.cli import add_source, remove_source
+
+    cfg = load_config()
+    if args.command == "remove-source":
+        return 0 if remove_source(args.name, cfg) else 1
+    llm_suggest = None
+    if not args.no_llm and (cfg.get("llm") or {}).get("enabled", True):
+        llm_suggest = MapperAgent(cfg=cfg).suggester()
+    try:
+        result = add_source(args.file, args.name, mapping_file=args.mapping, dry_run=args.dry_run,
+                            assume_yes=args.yes, cfg=cfg, llm_suggest=llm_suggest, draft_path=args.draft)
+    except UserSourceError as exc:
+        print(f"Erreur : {exc}")
+        return 1
+    return 0 if result["registered"] or args.dry_run else 1
+
+
 def explain_command(args) -> int:
     """Affiche l'explication stockee par l'Auditor (table kpi_explanations).
 
@@ -146,6 +168,17 @@ def main() -> int:
 
     sub.add_parser("steps", help="liste les etapes du pipeline")
 
+    add = sub.add_parser("add-source", help="ajoute un CSV utilisateur (detection, mapping, dry-run)")
+    add.add_argument("--file", required=True, help="fichier CSV a ajouter")
+    add.add_argument("--name", required=True, help="nom de la source (minuscules, chiffres, _)")
+    add.add_argument("--mapping", default=None, help="mapping YAML : mode non interactif")
+    add.add_argument("--dry-run", action="store_true", help="rapport seulement, rien n'est enregistre")
+    add.add_argument("--yes", action="store_true", help="aucune question (echoue si une reponse manque)")
+    add.add_argument("--draft", default=None, help="ecrit le brouillon de mapping a completer")
+    add.add_argument("--no-llm", action="store_true", help="aucune suggestion LLM des roles de colonnes")
+    remove = sub.add_parser("remove-source", help="retire une source utilisateur")
+    remove.add_argument("--name", required=True)
+
     explain = sub.add_parser("explain", help="explique une valeur KPI (lecture seule, sans reseau)")
     explain.add_argument("--kpi", required=True, help="identifiant du KPI (ex. account_ownership)")
     explain.add_argument("--iso3", required=True, help="pays ISO3 ou PEERS")
@@ -162,6 +195,8 @@ def main() -> int:
         return 0
     if args.command == "explain":
         return explain_command(args)
+    if args.command in ("add-source", "remove-source"):
+        return source_command(args)
     if args.command != "run":
         parser.print_help()
         return 1

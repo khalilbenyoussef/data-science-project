@@ -50,6 +50,15 @@ auditor:                           # etape S12 : verification independante des K
   min_meaningful_change_pp: 2.0    # variation d'une vague sous ce seuil : "dans le bruit d'enquete"
   llm_examples: 3                  # explications reformulees par LLM (budget d'appels)
 
+# --------------------------------------------------------------------------- Sources utilisateur
+uploads:                           # python main.py add-source --file X.csv --name N
+  dir: data/uploads                # copies des fichiers (jamais une source officielle)
+  mappings_dir: config/sources     # mappings confirmes, charges automatiquement
+  max_file_mb: 200                 # taille maximale d'un fichier ajoute
+
+countries:
+  name_to_iso3: {}                 # alias de noms de pays confirmes (ex. "Tunisie (centre)": TUN)
+
 # --------------------------------------------------------------------------- Snapshots
 snapshots:                         # versions des sources brutes (blobs dedupliques par SHA-256)
   enabled: true

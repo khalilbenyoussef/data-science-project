@@ -22,6 +22,10 @@ data/profiles/
 data/quality/
 data/reports/
 data/audit/
+data/uploads/
+
+# Mappings des sources utilisateur (exemple suivi : docs/examples/)
+config/sources/
 outputs/
 
 # Documentation suivie ; seules les sources externes telechargees sont ignorees
