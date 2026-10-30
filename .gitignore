@@ -21,6 +21,7 @@ data/processed/
 data/profiles/
 data/quality/
 data/reports/
+data/audit/
 outputs/
 
 # Documentation suivie ; seules les sources externes telechargees sont ignorees
