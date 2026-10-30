@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from biflow.tools.user_sources import UserSourceError
 from biflow.tools.user_sources.countries import CountryResolver, normalize_name
 from biflow.tools.user_sources.detect import YEAR_NAME, parse_number
+from biflow.utils.countries import is_aggregate
 
 OFFICIAL_SOURCES = {"findex", "fas", "gdp"}
 TRANSFORMS = {"none": None, "percent_to_fraction": ("percent", "fraction"),
@@ -157,7 +158,7 @@ def _validate_role(df: pd.DataFrame, role: str, column: str, decimal: str, resol
     if not values:
         return f"colonne {column!r} vide"
     if role == "country":
-        ok = sum(resolver.resolve(v)[0] is not None for v in set(values)) / len(set(values))
+        ok = sum(resolver.resolve(v)[0] is not None or is_aggregate(v) for v in set(values)) / len(set(values))
         return None if ok >= 0.5 else f"{column!r} : seulement {ok:.0%} de pays reconnus"
     if role == "year":
         ok = sum(bool(YEAR_NAME.match(v)) for v in values) / len(values)

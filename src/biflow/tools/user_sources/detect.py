@@ -20,6 +20,7 @@ import pandas as pd
 
 from biflow.tools.user_sources import UserSourceError
 from biflow.tools.user_sources.countries import CountryResolver
+from biflow.utils.countries import is_aggregate
 
 ENCODINGS = ("utf-8-sig", "cp1252", "latin-1")
 SEPARATORS = (";", ",", "\t", "|")
@@ -208,7 +209,9 @@ def detect_structure(df: pd.DataFrame, decimal: str = ".", resolver: CountryReso
     for column in other:
         values = [str(v) for v in df[column].tolist()][:2000]
         distinct = list(dict.fromkeys(v.strip() for v in values if v.strip()))
-        iso_share = _share(distinct, lambda v: resolver.resolve(v, "iso3")[0] is not None)
+        # Un agregat (WLD...) est un code valide : il compte pour reconnaitre la colonne,
+        # mais reste exclu des donnees (liste des pays non reconnus).
+        iso_share = _share(distinct, lambda v: resolver.resolve(v, "iso3")[0] is not None or is_aggregate(v))
         name_share = _share(distinct, lambda v: resolver.resolve(v, "name")[0] is not None)
         year_share = _share(values, lambda v: bool(YEAR_NAME.match(v)))
         num_share = _share(values, lambda v: _numeric(v, decimal))
