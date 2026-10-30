@@ -26,6 +26,7 @@ data/uploads/
 
 # Mappings des sources utilisateur (exemple suivi : docs/examples/)
 config/sources/
+config/kpi_catalog.user.yaml
 outputs/
 
 # Documentation suivie ; seules les sources externes telechargees sont ignorees

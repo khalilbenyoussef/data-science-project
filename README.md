@@ -209,6 +209,143 @@ raison.
 | `auditor.llm_examples` | `3` | exemples du rapport reformulables par LLM |
 | `llm.routing.auditor` | `[groq, gemini]` | reformulation seulement, vérifiée |
 | `paths.audit` | `data/audit` | rapport d'audit, explications, évaluation |
+| `uploads.dir` | `data/uploads` | copies des fichiers utilisateur |
+| `uploads.mappings_dir` | `config/sources` | mappings confirmés, chargés automatiquement |
+| `uploads.max_file_mb` | `200` | taille maximale d'un fichier ajouté |
+| `countries.name_to_iso3` | `{}` | alias de noms de pays (correspondance exacte) |
+| `llm.routing.mapper` | `[groq, gemini]` | suggestion des rôles de colonnes, revalidée |
+
+## Ajouter vos propres données
+
+Vous pouvez ajouter vos propres fichiers **CSV**, même si leur structure diffère
+de Findex, FAS ou WDI. Les sources officielles ne sont jamais modifiées : le
+fichier est copié dans `data/uploads/<nom>.csv` et son mapping confirmé est
+enregistré dans `config/sources/<nom>.yaml` (deux dossiers ignorés par git).
+Au `python main.py run` suivant, la source est versionnée (nouveau snapshot),
+profilée, contrôlée par son **propre** quality gate, chargée par l'ETL
+(`source = user:<nom>`, codes `<nom>.<indicateur>`) et vérifiée par l'Auditor.
+Si elle échoue au contrôle qualité, elle est **exclue** avec un avertissement
+(source, raison, score dans `run.json`, le rapport qualité et le journal du
+rapport d'audit) et le pipeline officiel continue et publie.
+
+```bash
+python main.py add-source --file mon_fichier.csv --name ma_source --dry-run   # rapport seul
+python main.py add-source --file mon_fichier.csv --name ma_source             # interactif
+python main.py add-source --file mon_fichier.csv --name ma_source --mapping mapping.yaml  # non interactif
+python main.py add-source --file mon_fichier.csv --name ma_source --yes --draft brouillon.yaml
+python main.py remove-source --name ma_source    # retire le mapping (la copie est conservée)
+```
+
+**Détection** (déterministe) : encodage vérifié sur tout le fichier, séparateur
+(`;` `,` tabulation `|`), ligne d'en-tête (un titre au-dessus est ignoré),
+virgule décimale, milliers en groupes de 3 (`1 234,5`), et disposition :
+
+| Disposition | Exemple d'en-tête |
+|---|---|
+| `long` (une ligne par observation) | `Pays;Année;Indicateur;Valeur` |
+| `wide_by_year` (colonnes années) | `iso3,indicator,2021,2022,2023` |
+| `wide_by_indicator` (une colonne par indicateur) | `country,year,bank_agents,atm_count` |
+
+**Mapping proposé** : règles d'abord (synonymes FR/EN/arabe : pays, country,
+codewb, balad ; année, year, sana ; valeur, value, qima...), puis, si un rôle
+reste indéterminé, suggestion LLM optionnelle (`llm.routing.mapper`) limitée aux
+rôles de colonnes et toujours revalidée. **L'unité n'est jamais devinée** : elle
+est demandée pour chaque indicateur. Pays : codes ISO3 ou noms (anglais,
+français, arabe, alias `countries.name_to_iso3` ou confirmés dans le mapping),
+correspondance exacte seulement ; un nom inconnu ou un agrégat est listé et
+exclu, jamais deviné.
+
+**Dry-run** : % de cellules retenues, pays non reconnus, années, valeurs non
+numériques, doublons, aperçu de 10 observations canoniques et résultat du
+contrôle qualité de la source. Un mapping confirmé est réutilisé sans question
+pour un fichier aux mêmes colonnes (empreinte des en-têtes, ordre et casse
+ignorés) ; des colonnes différentes déclenchent une nouvelle confirmation.
+
+**Valeurs** : conservées telles qu'écrites. Seule une conversion déclarée dans
+le mapping est appliquée (`transform: percent_to_fraction` ou
+`fraction_to_percent`). Limites : `uploads.max_file_mb` (200 Mo), fichiers CSV
+texte uniquement, refus d'un fichier sans colonne pays ou année, messages en
+français.
+
+### Exemple 1 : format long, point-virgule et virgule décimale
+
+```
+Pays;Année;Indicateur;Valeur
+Tunisie;2024;Clients microfinance (milliers);1 230,75
+Maroc;2024;Clients microfinance (milliers);2 104,0
+```
+
+`python main.py add-source --file clients.csv --name microfinance` détecte
+`long`, `;`, décimale `,`, reconnaît Tunisie → TUN et Maroc → MAR, puis demande
+l'unité (ex. `milliers_clients`). Mapping non interactif équivalent :
+[`docs/examples/microfinance_mapping.yaml`](docs/examples/microfinance_mapping.yaml).
+
+### Exemple 2 : colonnes années et codes ISO3
+
+```
+iso3,indicator,2021,2022,2023
+TUN,mobile_money_users_pct,12.5,14.0,15.2
+MAR,mobile_money_users_pct,9.1,,10.3
+```
+
+Disposition `wide_by_year` ; la cellule vide reste absente (jamais 0). Si
+l'unité déclarée est `percent`, les valeurs restent en pourcentage ; pour les
+stocker en fraction, déclarer `transform: percent_to_fraction`.
+
+### Exemple 3 : une colonne par indicateur, noms de pays
+
+```
+country,year,bank_agents,atm_count
+Tunisia,2023,1200,2100
+Atlantis,2023,1,2
+```
+
+Disposition `wide_by_indicator` : deux indicateurs (`network.bank_agents`,
+`network.atm_count`), une unité demandée pour chacun ; « Atlantis » est listé
+comme pays inconnu et exclu.
+
+### Faire d'un indicateur utilisateur un KPI
+
+Un indicateur utilisateur n'est pas un KPI tant qu'une entrée n'est pas ajoutée
+au catalogue utilisateur `config/kpi_catalog.user.yaml` (chemin modifiable par la
+variable d'environnement `BIFLOW_USER_CATALOG` ; fusionné au chargement ; version et hash du catalogue officiel inchangés, `kpi_values`
+enregistre `catalog_sha256` et `user_catalog_sha256`). Contrat : statut
+`user_declared`, source `user:<nom>`, formule `value` (aucune mise à l'échelle),
+unité = unité déclarée. Ces lignes sont publiées au mieux
+`approved_with_review_note` avec la raison `user_provided_source`.
+
+```yaml
+catalog_id: biflow_user_kpis
+references:
+  user_upload_agents: {path: data/uploads/agents.csv, locator: "config/sources/agents.yaml, colonne agents",
+                       evidence: "fichier depose, unite declaree count"}
+kpis:
+  agents_count:
+    definition_version: "1.0.0"
+    name: Agents bancaires (source utilisateur)
+    business_objective: financial_inclusion
+    definition: Nombre d'agents bancaires declare par l'utilisateur.
+    verification: {status: user_declared, evidence: [user_upload_agents], uncertainties: [Source non verifiee par BIFlow.]}
+    source: {dataset: "user:agents", indicator: agents.agents, official_indicator: null}
+    warehouse: {fact_table: fact, indicator_code: agents.agents, source: "user:agents", input_unit: count,
+                dimension: all, dimension_value: all}
+    formula: {from_fact: value}
+    unit: count
+    denominator: {population: non applicable, basis: user_declared}
+    subgroup: total_population
+    reference_period: annee declaree
+    valid_years: [2023, 2024]
+    year_evidence: user_upload_agents
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+```
+
+L'Auditor relit chaque cellule source dans le snapshot selon le mapping (A5) et
+compare tous les faits utilisateur aux observations du mapping (A6).
 
 ## Démarrage
 

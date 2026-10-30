@@ -1,0 +1,37 @@
+# Exemple de mapping de source utilisateur (BIFlow).
+# Genere a partir de tests/fixtures/user/long_fr_semicolon.csv puis complete (unite).
+# Usage : python main.py add-source --file mon_fichier.csv --name microfinance \
+#           --mapping docs/examples/microfinance_mapping.yaml
+# fingerprint : SHA-256 des noms de colonnes normalises et tries ; un fichier avec
+# d'autres colonnes est refuse avec ce mapping (nouvelle confirmation requise).
+# unit : unite des valeurs telles qu'ecrites ; jamais devinee. transform : none,
+# percent_to_fraction ou fraction_to_percent (conversion uniquement si declaree).
+schema_version: 1
+name: microfinance
+fingerprint: d22afd047ae8636389d926d3b94a90e6851b40d8f529142e039be17f58080e73
+file: data/uploads/microfinance.csv
+read:
+  encoding: utf-8-sig
+  separator: ;
+  decimal: ','
+  header_row: 0
+layout: long
+columns:
+  country:
+    column: Pays
+    kind: name
+  year: Année
+  indicator: Indicateur
+  value: Valeur
+  year_columns: []
+  indicator_columns: {}
+  dimension: null
+indicators:
+  clients_microfinance_milliers:
+    label: Clients microfinance (milliers)
+    unit: milliers_clients
+    transform: none
+indicator_values:
+  Clients microfinance (milliers): clients_microfinance_milliers
+country_names: {}
+confirmed_at: null

@@ -146,9 +146,8 @@ class AuditorAgent(BaseAgent):
             "index_entry": index_entry,
             "raw_paths": raw_paths,
             "catalog_path": resolve(audit_cfg.get("catalog", DEFAULT_CATALOG_PATH)),
-            "user_catalog_path": resolve(os.getenv("BIFLOW_USER_CATALOG")
-                                         or (self.cfg.get("kpi") or {}).get("user_catalog",
-                                                                            "config/kpi_catalog.user.yaml")),
+            # Meme regle que le calcul KPI : variable d'environnement ou chemin par defaut
+            "user_catalog_path": resolve(os.getenv("BIFLOW_USER_CATALOG") or "config/kpi_catalog.user.yaml"),
             "aliases": ((self.cfg.get("countries") or {}).get("name_to_iso3")) or {},
             "audit_dir": resolve(paths.get("audit", "data/audit")),
             "source_meta": {
