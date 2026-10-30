@@ -209,6 +209,16 @@ def decision_log(*, snapshot: Mapping[str, Any] | None, lineage: Mapping[str, An
                             for source, reasons in sorted(rejected.items()) for reason, count in sorted(reasons.items())]
                 + [f"{len(aggregates)} agregat(s) regionaux/mondiaux conserves dans country_dim mais exclus "
                    "des KPI (is_aggregate = true)"]})
+    user_inputs = {name: meta for name, meta in inputs.items() if isinstance(meta, dict) and meta.get("user")}
+    excluded = list(lineage.get("excluded_sources") or [])
+    if user_inputs or excluded:
+        log.append({"step": "user_sources",
+                    "decision": f"{len([m for m in user_inputs.values() if not m.get('excluded')])} source(s) "
+                                f"utilisateur incluse(s), {len(excluded)} exclue(s)",
+                    "reasons": [f"{e['source']} exclue a l'etape {e['step']} (score qualite "
+                                f"{e.get('quality_score')}) : {e['reason']}" for e in excluded]
+                    + [f"{name} incluse : {meta.get('rows')} observation(s)" for name, meta in user_inputs.items()
+                       if not meta.get("excluded")]})
     available = sum(r["value"] is not None for r in kpi_rows)
     log.append({"step": "semantic_kpi", "decision": f"{len(kpi_rows)} valeurs KPI, {available} disponibles",
                 "reasons": ["valeurs absentes conservees en NULL (jamais 0, ni interpolees)"]})

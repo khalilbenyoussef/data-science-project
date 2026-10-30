@@ -8,6 +8,7 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Mapping
 
 import pandas as pd
@@ -299,6 +300,25 @@ class CollectorAgent(BaseAgent):
             "year_max": int(df["year"].max()),
         }
 
+    def _user(self, name: str, source_cfg: dict) -> dict[str, Any]:
+        """Source utilisateur : mapping valide et copie presente ; hash comme une source statique."""
+        from biflow.tools.user_sources.loader import user_mapping
+
+        mapping = user_mapping(source_cfg)
+        out = resolve(source_cfg.get("path") or mapping.file)
+        if not out.is_file():
+            raise FileNotFoundError(f"[{name}] copie de la source utilisateur introuvable : {out}")
+        meta = {
+            "path": str(out), "type": "user", "user": True, "rows": None,
+            "mapping": str(source_cfg.get("mapping")), "fingerprint": mapping.fingerprint,
+            "sha256": sha256_file(out), **file_stat(out),
+            "size_mb": round(out.stat().st_size / 1e6, 2),
+            "checked_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        self.log.info("[%s] source utilisateur OK : %s (%.1f Mo, mapping %s)", name, out.name,
+                      meta["size_mb"], Path(meta["mapping"]).name)
+        return meta
+
     def _static(self, name: str, source_cfg: dict, out) -> dict[str, Any]:
         if not out.exists():
             raise FileNotFoundError(f"[{name}] source statique introuvable : {out}")
@@ -336,8 +356,19 @@ class CollectorAgent(BaseAgent):
         raw_meta: dict[str, Any] = dict(ctx.get("raw_meta") or {})
         warnings: list[str] = []
         failed: list[str] = []
+        excluded: list[dict[str, Any]] = list(ctx.get("excluded_sources") or [])
 
         for name, source_cfg in sources.items():
+            if source_cfg.get("type") == "user":  # un depot utilisateur ne bloque jamais le pipeline officiel
+                try:
+                    meta = self._user(name, source_cfg)
+                    raw_paths[name], raw_meta[name] = meta["path"], meta
+                except Exception as exc:  # noqa: BLE001
+                    reason = f"{type(exc).__name__}: {exc}"
+                    excluded.append({"source": name, "step": "collector", "reason": reason, "quality_score": None})
+                    warnings.append(f"[{name}] source utilisateur exclue : {reason}")
+                    self.log.warning("[%s] source utilisateur exclue : %s", name, reason)
+                continue
             out = resolve(source_cfg["path"])
             try:
                 if (source_cfg.get("api") or {}).get("enabled"):
@@ -363,6 +394,7 @@ class CollectorAgent(BaseAgent):
         return {
             "raw_paths": raw_paths,
             "raw_meta": raw_meta,
+            "excluded_sources": excluded,
             "warnings": warnings,
             "llm_notes": {
                 "collector": f"{len(raw_paths)} source(s) verifiee(s), hash SHA-256 calcule"

@@ -139,7 +139,9 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
     lineage, lineage_hash = _read_json(lineage_path, "lineage", issues)
     quality, quality_hash = _read_json(quality_path, "quality_report", issues)
     inputs = lineage.get("inputs")
-    meta = inputs.get(source) if isinstance(inputs, dict) else None
+    # Source utilisateur : faits "user:<nom>", entrees du lineage et du rapport qualite sous "<nom>"
+    input_key = source.split(":", 1)[1] if source.startswith("user:") else source
+    meta = inputs.get(input_key) if isinstance(inputs, dict) else None
     if not isinstance(meta, dict):
         meta = {}
         issues.append("source_metadata_missing")
@@ -190,7 +192,7 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
     elif recorded_hash != warehouse_hash:
         issues.append("warehouse_hash_mismatch")
     qinputs = quality.get("inputs")
-    qmeta = qinputs.get(source) if isinstance(qinputs, dict) else None
+    qmeta = qinputs.get(input_key) if isinstance(qinputs, dict) else None
     qhash = _digest(qmeta.get("sha256")) if isinstance(qmeta, dict) else None
     qrun = _text(quality.get("run_id"))
     association = "unverified"

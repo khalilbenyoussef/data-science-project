@@ -225,6 +225,7 @@ def _summary(state: PipelineState) -> dict[str, Any]:
             "paths": state.get("quality_paths"),
         },
         "snapshot": state.get("snapshot"),
+        "excluded_sources": state.get("excluded_sources") or [],
         "audit": {key: (state.get("audit") or {}).get(key)
                   for key in ("verdict", "counts", "publication")} if state.get("audit") else None,
         "warehouse": state.get("warehouse_path"),

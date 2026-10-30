@@ -27,6 +27,7 @@ from biflow.utils.countries import (
     is_country,
     normalize_iso3,
 )
+from biflow.tools.user_sources.loader import load_user_canonical
 from biflow.utils.io import load_source, save_json, write_csv
 
 YEAR_RE = re.compile(r"^(19|20)\d{2}$")
@@ -534,6 +535,41 @@ def gdp_long(
     return work
 
 
+def user_long(
+    frame: pd.DataFrame,
+    name: str,
+    min_year: int,
+    max_year: int,
+    report: dict[str, Any] | None = None,
+) -> pd.DataFrame:
+    """Observations canoniques d'une source utilisateur -> lignes de fait.
+
+    source = "user:<nom>", code indicateur prefixe, unite declaree dans le mapping,
+    dimension all/all sauf colonne mappee. Valeurs inchangees (aucune conversion ici :
+    seule une conversion percent/fraction declaree a deja ete appliquee par le mapping).
+    """
+    source = f"user:{name}"
+    _add_input(report, source, len(frame))
+    in_range = frame["year"].between(min_year, max_year)
+    _reject(report, source, "year_out_of_range", int((~in_range).sum()))
+    if (~in_range).any():
+        _warn(report, f"[{source}] {int((~in_range).sum())} observation(s) hors periode {min_year}-{max_year}")
+    work = frame.loc[in_range].copy()
+    work["source"] = source
+    work["country"] = pd.NA
+    work["year"] = work["year"].astype(int)
+    work = _resolve_duplicates(
+        work[FACT_COLUMNS],
+        ("iso3", "year", "indicator_code", "dimension", "dimension_value"),
+        source,
+        report,
+        f"fait {source}",
+    )
+    if report is not None:
+        report.setdefault("output_rows", {})[source] = int(len(work))
+    return work
+
+
 def _country_label(name: Any, code: str) -> str:
     if isinstance(name, str) and name.strip():
         return name.strip()
@@ -819,7 +855,18 @@ class EtlAgent(BaseAgent):
         country_dim = build_country_dim(
             findex_raw, fas_raw, gdp_raw, report=report
         )
-        fact = pd.concat([findex, fas, gdp], ignore_index=True)
+        user_facts, user_included = [], []
+        excluded = list(ctx.get("excluded_sources") or [])
+        excluded_names = {e["source"] for e in excluded}
+        aliases = ((self.cfg.get("countries") or {}).get("name_to_iso3")) or {}
+        for name, source_cfg in sources.items():
+            if source_cfg.get("type") != "user" or name not in raw_paths or name in excluded_names:
+                continue
+            frame, _, _ = load_user_canonical(source_cfg, raw_paths[name], aliases)
+            user_facts.append(user_long(frame, name, min_year, max_year, report=report))
+            user_included.append(name)
+            self.log.info("[etl] source utilisateur %s : %d observation(s)", name, len(user_facts[-1]))
+        fact = pd.concat([findex, fas, gdp, *user_facts], ignore_index=True)
         if fact.empty:
             raise AgentError("[etl] aucun fait produit par les trois sources")
         name_map = country_dim.set_index("iso3")["country"]
@@ -964,18 +1011,36 @@ class EtlAgent(BaseAgent):
             "snapshot_id": ctx.get("snapshot_id"),
             "period": {"min_year": min_year, "max_year": max_year},
             "inputs": {
-                name: {
-                    **(ctx.get("raw_meta") or {}).get(name, {}),
-                    "path": path_of_source(name),
-                    "rows": report["input_rows"].get(name),
-                    "rejected": report["rejected"].get(name, {}),
-                }
-                for name in ("findex", "fas", "gdp")
+                **{
+                    name: {
+                        **(ctx.get("raw_meta") or {}).get(name, {}),
+                        "path": path_of_source(name),
+                        "rows": report["input_rows"].get(name),
+                        "rejected": report["rejected"].get(name, {}),
+                    }
+                    for name in ("findex", "fas", "gdp")
+                },
+                # Sources utilisateur versionnees : incluses, ou exclues avec leur raison
+                **{
+                    name: {
+                        **(ctx.get("raw_meta") or {}).get(name, {}),
+                        "path": raw_paths[name],
+                        "user": True,
+                        "rows": report["input_rows"].get(f"user:{name}"),
+                        "rejected": report["rejected"].get(f"user:{name}", {}),
+                        "excluded": next((e["reason"] for e in excluded if e["source"] == name), None),
+                    }
+                    for name, source_cfg in sources.items()
+                    if source_cfg.get("type") == "user" and name in raw_paths
+                },
             },
+            "excluded_sources": excluded,
             "transforms": [
                 "Findex: annees -> lignes, echelles verifiees puis fractions converties en % au pivot",
                 "FAS: selection des series configurees, annees -> lignes",
                 "WDI: indicateurs PIB -> lignes ; croissance NY.GDP.MKTP.KD.ZG conservee meme negative",
+                "Sources utilisateur : mapping confirme -> observations canoniques, source user:<nom>, "
+                "code prefixe, unite declaree, valeurs inchangees",
                 "Pivot par pays x annee, croissance du PIB = NY.GDP.MKTP.KD.ZG (prix constants), "
                 "jointure dimension pays",
                 "Ecarts de detention de compte (points de %) : hommes - femmes, 60 % plus riches - "

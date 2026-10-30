@@ -11,6 +11,7 @@ import copy
 from dataclasses import dataclass
 import hashlib
 import math
+import os
 from pathlib import Path
 import re
 from typing import Any
@@ -25,6 +26,11 @@ from biflow.tools.kpi_provenance import KpiProvenance, QualityWarning, evidence
 
 
 DEFAULT_CATALOG = "config/kpi_catalog.v1.yaml"
+# Catalogue des KPI declares par l'utilisateur (sources user:*), fusionne au chargement ;
+# le catalogue officiel (version, hash) n'est jamais modifie.
+DEFAULT_USER_CATALOG = "config/kpi_catalog.user.yaml"
+USER_STATUS = "user_declared"
+USER_REVIEW_REASON = "user_provided_source"
 # source, fact indicator, input unit, dimension, dimension value, subgroup,
 # output unit, formula, verification status
 CONTRACTS = {
@@ -106,6 +112,15 @@ def _validate_catalog(catalog: Any) -> None:
                     or k["source"]["indicator"] != (
                         "FA26N.PHTADLT_NUM" if kpi_id == "branch_density" else w["indicator_code"])):
                 raise CatalogError(f"Unsupported calculation contract: {kpi_id}")
+        for kpi_id, kpi in kpis.items():  # KPI utilisateur : contrat generique et restreint
+            if kpi_id in CONTRACTS:
+                continue
+            w = kpi["warehouse"]
+            if (kpi["verification"]["status"] != USER_STATUS or not str(w["source"]).startswith("user:")
+                    or w["fact_table"] != "fact" or kpi["formula"]["from_fact"] != "value"
+                    or kpi["unit"] != w["input_unit"] or kpi["dependencies"] != []
+                    or not isinstance(w.get("dimension"), str) or not isinstance(w.get("dimension_value"), str)):
+                raise CatalogError(f"Unsupported calculation contract: {kpi_id}")
         # A gap depends on exactly its two same-year subgroup facts.
         for kpi_id, subtrahend in GAP_SUBTRAHEND.items():
             w = kpis[kpi_id]["warehouse"]
@@ -130,20 +145,52 @@ def _validate_catalog(catalog: Any) -> None:
 
 # Parsed, validated catalogs keyed by (path, size, mtime_ns): a run parses the
 # YAML once; any edit to the file changes the key and forces a new parse.
-_CATALOG_CACHE: dict[tuple[str, int, int], tuple[dict[str, Any], str]] = {}
+_CATALOG_CACHE: dict[tuple, tuple[dict[str, Any], str]] = {}
+
+
+def user_catalog_path() -> Path:
+    return resolve(os.getenv("BIFLOW_USER_CATALOG") or DEFAULT_USER_CATALOG)
+
+
+def user_catalog_sha256() -> str | None:
+    path = user_catalog_path()
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+
+
+def _merge_user_catalog(catalog: dict[str, Any], content: bytes) -> dict[str, Any]:
+    """Ajoute les KPI et references utilisateur ; aucun identifiant officiel remplace."""
+    try:
+        user = yaml.safe_load(content) or {}
+    except yaml.YAMLError as exc:
+        raise CatalogError("Invalid user catalog YAML") from exc
+    if not isinstance(user, dict) or not isinstance(user.get("kpis", {}), dict):
+        raise CatalogError("Malformed user KPI catalog")
+    merged = dict(catalog)
+    clash = set(user.get("kpis") or {}) & set(catalog["kpis"]) | set(user.get("references") or {}) & set(catalog["references"])
+    if clash:
+        raise CatalogError(f"User catalog redefines official identifiers: {sorted(clash)}")
+    merged["kpis"] = {**catalog["kpis"], **(user.get("kpis") or {})}
+    merged["references"] = {**catalog["references"], **(user.get("references") or {})}
+    return merged
 
 
 def _catalog_and_hash(path: str | Path) -> tuple[dict[str, Any], str]:
-    """Validated cached catalog (shared: treat as read-only) and SHA-256 of its bytes."""
+    """Validated cached catalog (shared: treat as read-only) and SHA-256 of the
+    official file. A user catalog, if present, is merged (its hash: user_catalog_sha256)."""
     target = resolve(path).resolve()
     stat = target.stat()
-    key = (str(target), stat.st_size, stat.st_mtime_ns)
+    user = user_catalog_path()
+    user_stat = user.stat() if user.is_file() else None
+    key = (str(target), stat.st_size, stat.st_mtime_ns,
+           (str(user), user_stat.st_size, user_stat.st_mtime_ns) if user_stat else None)
     if key not in _CATALOG_CACHE:
         content = target.read_bytes()
         try:
             catalog = yaml.safe_load(content)
         except yaml.YAMLError as exc:
             raise CatalogError("Invalid catalog YAML") from exc
+        if user_stat is not None and isinstance(catalog, dict) and isinstance(catalog.get("kpis"), dict):
+            catalog = _merge_user_catalog(catalog, user.read_bytes())
         _validate_catalog(catalog)
         _CATALOG_CACHE[key] = (catalog, hashlib.sha256(content).hexdigest())
     return _CATALOG_CACHE[key]
@@ -252,8 +299,8 @@ class KpiCalculator:
         waived. Derived inputs are evaluated together by calculate() in one year.
         No result means no valid observation; no artificial year is assigned.
         """
-        if not isinstance(kpi_id, str) or kpi_id not in CONTRACTS:
-            raise ValueError("Unknown or unsupported KPI; supported: " + ", ".join(CONTRACTS))
+        if not isinstance(kpi_id, str) or kpi_id not in self._catalog["kpis"]:
+            raise ValueError("Unknown or unsupported KPI; supported: " + ", ".join(self._catalog["kpis"]))
         skipped = []
         for year in reversed(self._catalog["kpis"][kpi_id]["valid_years"]):
             result = self.calculate(iso3, year, kpi_id)
@@ -265,8 +312,8 @@ class KpiCalculator:
         return LatestKpiResult(result=None, skipped_observations=tuple(skipped))
 
     def calculate(self, iso3: str, year: int, kpi_id: str) -> KpiResult:
-        if not isinstance(kpi_id, str) or kpi_id not in CONTRACTS:
-            raise ValueError("Unknown or unsupported KPI; supported: " + ", ".join(CONTRACTS))
+        if not isinstance(kpi_id, str) or kpi_id not in self._catalog["kpis"]:
+            raise ValueError("Unknown or unsupported KPI; supported: " + ", ".join(self._catalog["kpis"]))
         code = normalize_iso3(iso3)
         if not code or not re.fullmatch(r"[A-Z]{3}", code) or not is_country(code):
             raise ValueError("iso3 must identify a country (aggregates are excluded)")
@@ -274,6 +321,7 @@ class KpiCalculator:
             raise ValueError("year must be an integer between 1 and 9999")
         k = self._catalog["kpis"][kpi_id]
         w = k["warehouse"]
+        user_kpi = k["verification"]["status"] == USER_STATUS
         dimension_values = [w["dimension_value"]] + (
             [GAP_SUBTRAHEND[kpi_id]] if kpi_id in GAP_SUBTRAHEND else [])
 
@@ -297,6 +345,8 @@ class KpiCalculator:
                 review = list(provenance.issues)
             if k["verification"]["status"] == "provisional":
                 review.append("provisional_definition")
+            if user_kpi:  # source fournie par l'utilisateur : toujours une note de revue
+                review.append(USER_REVIEW_REASON)
             if warnings:
                 review.append("unresolved_input_quality_warning")
             if status == "requires_review":
@@ -338,7 +388,8 @@ class KpiCalculator:
                 return result("unavailable", "country_not_in_warehouse")
             if len(entities) != 1 or entities[0] != (True, False):
                 return result("requires_review", "invalid_country_dimension")
-            observations = [self._observe(con, code, year, w, value) for value in dimension_values]
+            observations = [self._observe(con, code, year, w, value, allow_negative=user_kpi)
+                            for value in dimension_values]
         if kpi_id in GAP_SUBTRAHEND:
             # Both subgroup facts of the same year are required; never substituted.
             for status, reason, raw, unit in observations:
@@ -352,11 +403,12 @@ class KpiCalculator:
         status, reason, raw, unit = observations[0]
         if status != "available":
             return result(status, reason, input_value=raw, input_unit=unit)
-        value = raw * 100 if unit == "fraction" else raw
+        # KPI utilisateur : formule "value", aucune mise a l'echelle implicite
+        value = raw if user_kpi else (raw * 100 if unit == "fraction" else raw)
         return result("available", value=value, input_value=raw, input_unit=unit)
 
     @staticmethod
-    def _observe(con, code, year, w, dimension_value):
+    def _observe(con, code, year, w, dimension_value, allow_negative=False):
         """One parameterized fact lookup -> (status, reason, raw value, unit)."""
         rows = con.execute(
             "SELECT value, unit FROM fact WHERE iso3 = ? AND year = ? "
@@ -373,6 +425,6 @@ class KpiCalculator:
         if raw is None or not math.isfinite(raw):
             return "unavailable", "missing_or_nonfinite_input", None, unit
         raw = float(raw)
-        if raw < 0 or (unit == "fraction" and raw > 1):
+        if (raw < 0 and not allow_negative) or (unit == "fraction" and not 0 <= raw <= 1):
             return "requires_review", "out_of_range_input", raw, unit
         return "available", None, raw, unit

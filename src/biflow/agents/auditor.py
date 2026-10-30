@@ -26,7 +26,8 @@ from biflow.tools.audit_checks import (
     catalog_checks,
     count_results,
     entity_checks,
-    load_catalog_file,
+    load_catalogs,
+    user_fact_check,
     make_check,
     provenance_checks,
     publication_decisions,
@@ -145,6 +146,10 @@ class AuditorAgent(BaseAgent):
             "index_entry": index_entry,
             "raw_paths": raw_paths,
             "catalog_path": resolve(audit_cfg.get("catalog", DEFAULT_CATALOG_PATH)),
+            "user_catalog_path": resolve(os.getenv("BIFLOW_USER_CATALOG")
+                                         or (self.cfg.get("kpi") or {}).get("user_catalog",
+                                                                            "config/kpi_catalog.user.yaml")),
+            "aliases": ((self.cfg.get("countries") or {}).get("name_to_iso3")) or {},
             "audit_dir": resolve(paths.get("audit", "data/audit")),
             "source_meta": {
                 name: {"file": str(raw_paths[name]) if name in raw_paths else None,
@@ -166,16 +171,17 @@ class AuditorAgent(BaseAgent):
     def audit(self, ctx: Mapping[str, Any]) -> dict[str, Any]:
         """Controles A (recalcul) et B (coherence, tracabilite, avertissements)."""
         inp = self._inputs(ctx)
-        catalog, catalog_sha256 = load_catalog_file(inp["catalog_path"])
+        catalog, catalog_sha256, user_catalog_sha256 = load_catalogs(inp["catalog_path"], inp["user_catalog_path"])
         fas_series = (inp["sources"].get("fas") or {}).get("series") or {}
         with duckdb.connect(str(inp["warehouse"]), read_only=True) as con:
             rows = read_kpi_rows(con)
             dim = con.execute("SELECT iso3, country, is_aggregate FROM country_dim").fetchall()
             checks, recomputed = recompute_checks(
                 con, catalog, rows, inp["focus"], inp["peers"], inp["tolerance"])
-            raw = RawSources(inp["raw_paths"], inp["sources"])
+            raw = RawSources(inp["raw_paths"], inp["sources"], inp["aliases"])
             raw_check, raw_lookups = raw_to_fact_check(recomputed, raw, fas_series)
             checks.append(raw_check)
+            checks.append(user_fact_check(con, raw, inp["lineage"]))
             checks += unit_checks(rows, catalog)
             checks += entity_checks(con, rows, inp["focus"], inp["peers"])
             checks += provenance_checks(
@@ -183,7 +189,7 @@ class AuditorAgent(BaseAgent):
                 snapshot_id=inp["snapshot_id"], index_entry=inp["index_entry"], manifest=inp["manifest"],
                 snapshot_root=inp["snapshot_root"] if inp["manifest"] else None,
                 lineage=inp["lineage"], quality=inp["quality"])
-        checks += catalog_checks(rows, catalog, catalog_sha256)
+        checks += catalog_checks(rows, catalog, catalog_sha256, user_catalog_sha256)
         checks.append(quality_gate_check(inp["quality"]))
         checks += caveat_checks(rows, catalog, inp["quality"], recomputed, inp["min_change_pp"])
         return {"inputs": inp, "catalog": catalog, "catalog_sha256": catalog_sha256, "rows": rows,

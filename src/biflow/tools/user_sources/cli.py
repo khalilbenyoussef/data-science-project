@@ -146,6 +146,15 @@ def add_source(file: str | Path, name: str, *, mapping_file: str | Path | None =
     frame, report = canonical(mapping, df, CountryResolver({**_aliases(cfg), **mapping.country_names}))
     report["units_missing"] = missing_units
     out(format_report(report))
+    # Meme gate que l'etape quality : un echec exclura la source de l'ETL (jamais en silence)
+    from biflow.agents.quality import check_user_source
+
+    check = check_user_source(name, frame, report, dict(cfg.get("quality") or {}))
+    report["quality"] = {"gate": check["gate"], "score": check["score"],
+                         "issues": [f"{i['code']} ({i['severity']})" for i in check["issues"]]}
+    out(f"Controle qualite de la source : {'PASS' if check['gate'] else 'FAIL'} (score {check['score']:.2f})"
+        + ("" if check["gate"] else " -> la source serait EXCLUE de l'ETL ; le pipeline officiel continue")
+        + (f" ; constats : {', '.join(report['quality']['issues'])}" if check["issues"] else ""))
     result = {"status": status, "report": report, "mapping": mapping.model_dump(mode="json"), "registered": False}
     if dry_run:
         out("Dry-run : rien n'est enregistre.")

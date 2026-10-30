@@ -112,7 +112,7 @@ def test_clean_build_passes_every_recomputation_check(world):
     result = world.run()
     results = {c["check_id"]: c["result"] for c in result["checks"]}
     assert {k: v for k, v in results.items() if k[0] in "AB"} == {k: "pass" for k in results if k[0] in "AB"}
-    assert len([k for k in results if k[0] in "AB"]) == 14
+    assert len([k for k in results if k[0] in "AB"]) == 15  # A1-A6, B1-B9
     assert result["recomputed"][("account_ownership", "TUN", 2024)]["value"] == pytest.approx(37.844486)
 
 

@@ -37,6 +37,7 @@ class PipelineState(TypedDict, total=False):
     snapshot_id: str                   # version des sources brutes (data/snapshots/vN)
     audit: dict[str, Any]              # verdict + controles de l'Auditor
     insights: list[dict[str, Any]]     # insights de l'agent Analyst (a venir), audites par l'Auditor
+    excluded_sources: list[dict[str, Any]]  # sources utilisateur exclues (etape, raison, score qualite)
     rebuild: bool                      # --rebuild : sources lues depuis le snapshot publie
 
     warnings: Annotated[list[str], operator.add]

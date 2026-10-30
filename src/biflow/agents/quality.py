@@ -14,6 +14,7 @@ from biflow.config import resolve
 from biflow.state import PipelineState
 from biflow.tools.dictionary import FINDEX_LABELS, GDP_LABELS
 from biflow.utils.countries import invalid_iso3, is_aggregate, normalize_iso3
+from biflow.tools.user_sources.loader import load_user_canonical
 from biflow.utils.io import load_source, save_json, sha256_file, write_csv
 
 SEVERITY_WEIGHT = {"critical": 0.35, "high": 0.15, "medium": 0.06, "low": 0.02}
@@ -379,6 +380,40 @@ def check_frame(
     }
 
 
+USER_COLUMNS = ["iso3", "year", "indicator_code", "dimension", "dimension_value", "value", "unit"]
+
+
+def check_user_source(name: str, frame: pd.DataFrame, dry: Mapping[str, Any], cfg: dict | None = None) -> dict[str, Any]:
+    """Gate propre a une source utilisateur, sur ses observations canoniques.
+
+    Echec -> la source est exclue de l'ETL ; le gate officiel n'est pas modifie.
+    """
+    cfg = cfg or {}
+    base = check_frame(name, frame[USER_COLUMNS] if len(frame) else pd.DataFrame(), cfg)
+    issues = list(base["issues"])
+    unmapped = dry.get("unmapped_countries") or {}
+    if unmapped:
+        issues.append(_issue("unmapped_countries", "medium",
+                             f"[{name}] pays non reconnus exclus : {', '.join(list(unmapped)[:10])}",
+                             count=sum(v["rows"] for v in unmapped.values())))
+    for key, code in (("non_numeric", "non_numeric_values"), ("invalid_years", "invalid_years")):
+        count = (dry.get(key) or {}).get("count") or 0
+        if count:
+            issues.append(_issue(code, "medium", f"[{name}] {count} cellule(s) exclue(s) ({code})", count=count))
+    conflicts = (dry.get("duplicates") or {}).get("conflicting_keys") or 0
+    if conflicts:
+        issues.append(_issue("duplicate_key", "critical",
+                             f"[{name}] {conflicts} cle(s) pays/annee/indicateur avec valeurs differentes",
+                             count=conflicts))
+    counts: dict[str, int] = {}
+    for issue in issues:
+        counts[issue["severity"]] = counts.get(issue["severity"], 0) + 1
+    score = max(0.0, min(1.0, 1.0 - sum(SEVERITY_WEIGHT.get(i["severity"], 0.0) for i in issues)))
+    return {**base, "issues": issues, "issue_counts": counts, "score": round(score, 4),
+            "gate": score >= float(cfg.get("score_threshold", 0.7)) and counts.get("critical", 0) == 0,
+            "mapped_pct": dry.get("mapped_pct"), "mapped": dry.get("mapped")}
+
+
 def build_report(
     frames: dict[str, pd.DataFrame], cfg: dict, sources: dict | None = None,
 ) -> dict[str, Any]:
@@ -463,6 +498,14 @@ def _markdown(report: dict) -> str:
         for diagnostic in report["diagnostics"]:
             fields = [diagnostic[k] for k in ("country", "iso3", "year", "series_code", "original_value", "reason")]
             lines.append("| " + " | ".join(str(v).replace("|", "/") for v in fields) + " |")
+    if report.get("user_sources") or report.get("excluded_sources"):
+        lines += ["", "## Sources utilisateur (gate propre, sans effet sur le gate officiel)", "",
+                  "| Source | Observations | Score | Gate |", "|---|---|---|---|"]
+        for name, check in (report.get("user_sources") or {}).items():
+            lines.append(f"| {name} | {check.get('mapped')} | {check['score']:.2%} | "
+                         f"{'PASS' if check['gate'] else 'FAIL (exclue)'} |")
+        for item in report.get("excluded_sources") or []:
+            lines.append(f"- Exclue : **{item['source']}** ({item['step']}) : {item['reason']}")
     if report.get("llm_plan"):
         lines += ["", "## Plan de remediation (LLM)", ""]
         lines += [f"{index}. {step}" for index, step in enumerate(report["llm_plan"], 1)]
@@ -507,10 +550,35 @@ class QualityAgent(BaseAgent):
 
         frames: dict[str, pd.DataFrame] = {}
         checked_paths: dict[str, str] = {}
+        official: dict[str, Any] = {}
+        user_checks: dict[str, Any] = {}
+        excluded: list[dict[str, Any]] = list(ctx.get("excluded_sources") or [])
+        excluded_names = {e["source"] for e in excluded}
+        aliases = ((self.cfg.get("countries") or {}).get("name_to_iso3")) or {}
         for name, source_cfg in sources.items():
             source_cfg = dict(source_cfg)
             if name in raw_paths:
                 source_cfg["path"] = raw_paths[name]
+            if source_cfg.get("type") == "user":
+                if name in excluded_names or name not in raw_paths:
+                    continue
+                checked_paths[name] = source_cfg["path"]
+                try:
+                    frame, dry, _ = load_user_canonical(source_cfg, source_cfg["path"], aliases)
+                    check = check_user_source(name, frame, dry, self.cfg.get("quality") or {})
+                    reason = "; ".join(i["message"] for i in check["issues"]
+                                       if i["severity"] in ("critical", "high")) or "score sous le seuil"
+                except ValueError as exc:  # UserSourceError inclus
+                    check = {"source": name, "score": 0.0, "gate": False, "issues": [], "mapped": 0}
+                    reason = str(exc)
+                user_checks[name] = check
+                if not check["gate"]:
+                    excluded.append({"source": name, "step": "quality", "reason": reason,
+                                     "quality_score": check["score"]})
+                    self.log.warning("[%s] source utilisateur exclue de l'ETL (score %.2f) : %s",
+                                     name, check["score"], reason)
+                continue
+            official[name] = sources[name]
             frames[name] = load_source(source_cfg)
             checked_paths[name] = source_cfg["path"]
 
@@ -520,7 +588,9 @@ class QualityAgent(BaseAgent):
             "snapshot_id": ctx.get("snapshot_id"),
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "inputs": input_hashes(checked_paths, ctx.get("raw_meta")),
-            **build_report(frames, self.cfg.get("quality") or {}, sources),
+            **build_report(frames, self.cfg.get("quality") or {}, official),
+            "user_sources": user_checks,
+            "excluded_sources": excluded,
         }
         report["llm_plan"] = self._plan(report)
 
@@ -554,6 +624,7 @@ class QualityAgent(BaseAgent):
             "PASS" if report["passed"] else "FAIL"
         )
         return {
+            "excluded_sources": excluded,
             "quality": report,
             "quality_paths": {
                 "json": str(report_path),
