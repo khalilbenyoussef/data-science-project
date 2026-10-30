@@ -17,6 +17,7 @@ from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
 from biflow.tools.audit_explain import build_explanations, decision_log, explain_change
 from biflow.tools.audit_text import change_text, rephrase, template_text
+from biflow.tools.insights import audit_insights
 from biflow.tools.audit_checks import (
     RawSources,
     caveat_checks,
@@ -24,6 +25,7 @@ from biflow.tools.audit_checks import (
     count_results,
     entity_checks,
     load_catalog_file,
+    make_check,
     provenance_checks,
     publication_decisions,
     quality_gate_check,
@@ -227,9 +229,21 @@ class AuditorAgent(BaseAgent):
     def execute(self, ctx: Mapping[str, Any]) -> dict[str, Any]:
         result = self.audit(ctx)
         checks = result["checks"]
+        decisions = publication_decisions(result["rows"], checks)
+        insight_audit = None
+        if ctx.get("insights") is not None:  # contrat de l'agent Analyst (a venir)
+            insight_audit = audit_insights(ctx["insights"], result["rows"], decisions)
+            rejected = [i for i in insight_audit if not i["accepted"]]
+            checks.append(make_check(
+                "F1_insights_grounded", "insight", "warn" if rejected else "pass",
+                f"{len(insight_audit)} insight(s) audite(s), {len(rejected)} rejete(s) : claims conformes a "
+                "kpi_values (valeur, unite, annee, ligne approuvee) et nombres du texte justifies",
+                [{"insight_id": i["insight_id"], "reasons": i["reasons"]} for i in rejected],
+                affects_publication=False))
+            for item in rejected:
+                self.log.warning("[auditor] insight %s rejete : %s", item["insight_id"], "; ".join(item["reasons"]))
         verdict = verdict_of(checks)
         counts = count_results(checks)
-        decisions = publication_decisions(result["rows"], checks)
         inp = result["inputs"]
         explanations = build_explanations(
             result["rows"], result["recomputed"], result["raw_lookups"], result["catalog"],
@@ -269,6 +283,7 @@ class AuditorAgent(BaseAgent):
                     kpi_rows=result["rows"], audit_counts=counts, verdict=verdict),
                 "explanations_path": str(inp["audit_dir"] / "explanations.jsonl"),
                 "examples": examples,
+                "insight_audit": insight_audit,
             },
             "llm_notes": notes,
         }

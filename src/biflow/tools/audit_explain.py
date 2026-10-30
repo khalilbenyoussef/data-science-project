@@ -51,7 +51,7 @@ def build_explanations(
     checks = list(checks)
     touching: dict[tuple, list[dict]] = {}
     for check in checks:
-        if check["result"] == "pass":
+        if check["result"] == "pass" or check.get("category") == "insight":
             continue
         for key in touched_rows(check, rows):  # meme regle que la publication
             touching.setdefault(key, []).append(

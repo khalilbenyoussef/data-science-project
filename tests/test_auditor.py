@@ -513,3 +513,17 @@ def test_explain_cli_reads_stored_explanations_only(world, monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["main.py", "explain", "--kpi", "account_ownership", "--iso3", "TUN",
                                       "--year", "1999", "--warehouse", warehouse])
     assert cli.main() == 1
+
+
+# --------------------------------------------------------------------------- F : insights
+def test_insights_in_state_are_audited_without_affecting_publication(world):
+    good = {"insight_id": "good", "text": "En 2024, 37,8 % des adultes tunisiens avaient un compte.",
+            "claims": [{"kpi_id": "account_ownership", "iso3": "TUN", "year": 2024, "value": 37.8,
+                        "unit": "percent"}], "recommendation": "-", "confidence": "high"}
+    bad = {**good, "insight_id": "bad", "text": "En 2024, 41 % des adultes tunisiens avaient un compte."}
+    before = _execute(world)
+    audit = AuditorAgent(cfg=world.cfg, run_id="audit_run").execute({**world.ctx, "insights": [good, bad]})["audit"]
+    assert [(i["insight_id"], i["accepted"]) for i in audit["insight_audit"]] == [("good", True), ("bad", False)]
+    f1 = next(c for c in audit["checks"] if c["check_id"] == "F1_insights_grounded")
+    assert f1["result"] == "warn" and f1["affected_rows"][0]["insight_id"] == "bad"
+    assert audit["publication"] == before["publication"]
