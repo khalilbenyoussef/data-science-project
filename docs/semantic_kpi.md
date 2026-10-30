@@ -1,5 +1,9 @@
 # Semantic & KPI interface
 
+> **Update 2026-10-30.** `publication_status` below is `not_evaluated` for
+> on-demand requests only; the pipeline's `auditor` step evaluates every
+> `kpi_values` row (`approved`, `approved_with_review_note`, `blocked`).
+>
 > **Update 2026-10-29.** The agent is now also registered as the pipeline step
 > `semantic_kpi` (after `etl`): without a `semantic_kpi_request` it computes the
 > whole catalog for `kpi.focus` / `kpi.peers` into table `kpi_values`. With a

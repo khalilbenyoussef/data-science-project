@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -16,6 +17,7 @@ import duckdb
 from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
 from biflow.tools.audit_explain import build_explanations, decision_log, explain_change
+from biflow.tools.audit_report import build_report, write_report
 from biflow.tools.audit_text import change_text, rephrase, template_text
 from biflow.tools.insights import audit_insights
 from biflow.tools.audit_checks import (
@@ -227,6 +229,7 @@ class AuditorAgent(BaseAgent):
         return parquet
 
     def execute(self, ctx: Mapping[str, Any]) -> dict[str, Any]:
+        started = time.perf_counter()
         result = self.audit(ctx)
         checks = result["checks"]
         decisions = publication_decisions(result["rows"], checks)
@@ -267,23 +270,25 @@ class AuditorAgent(BaseAgent):
                 self.log.warning("[auditor] %s : %s", check["check_id"], check["detail"])
         notes = dict(ctx.get("llm_notes") or {})
         notes["auditor"] = f"verdict {verdict} ({counts['fail']} echec(s), {counts['warn']} alerte(s))"
-        return {
-            "audit": {
-                "verdict": verdict,
-                "counts": counts,
-                "run_id": result["inputs"]["run_id"],
-                "snapshot_id": result["inputs"]["snapshot_id"],
-                "rows": len(result["rows"]),
-                "publication": by_status,
-                "checks": checks,
-                "decision_log": decision_log(
-                    snapshot=ctx.get("snapshot") or {"snapshot_id": inp["snapshot_id"],
-                                                     "status": (inp["index_entry"] or {}).get("status")},
-                    lineage=inp["lineage"], quality=inp["quality"], aggregates=result["aggregates"],
-                    kpi_rows=result["rows"], audit_counts=counts, verdict=verdict),
-                "explanations_path": str(inp["audit_dir"] / "explanations.jsonl"),
-                "examples": examples,
-                "insight_audit": insight_audit,
-            },
-            "llm_notes": notes,
+        audit = {
+            "verdict": verdict,
+            "counts": counts,
+            "run_id": result["inputs"]["run_id"],
+            "snapshot_id": result["inputs"]["snapshot_id"],
+            "rows": len(result["rows"]),
+            "publication": by_status,
+            "checks": checks,
+            "decision_log": decision_log(
+                snapshot=ctx.get("snapshot") or {"snapshot_id": inp["snapshot_id"],
+                                                 "status": (inp["index_entry"] or {}).get("status")},
+                lineage=inp["lineage"], quality=inp["quality"], aggregates=result["aggregates"],
+                kpi_rows=result["rows"], audit_counts=counts, verdict=verdict),
+            "explanations_path": str(inp["audit_dir"] / "explanations.jsonl"),
+            "examples": examples,
+            "insight_audit": insight_audit,
         }
+        elapsed = time.perf_counter() - started
+        audit["timing_s"] = round(elapsed, 3)
+        audit["report_paths"] = write_report(build_report(audit, decisions, elapsed), inp["audit_dir"])
+        self.log.info("[auditor] rapport : %s (%.1f s)", audit["report_paths"]["markdown"], elapsed)
+        return {"audit": audit, "llm_notes": notes}

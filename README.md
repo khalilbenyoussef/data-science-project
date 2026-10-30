@@ -1,7 +1,7 @@
 # BIFlow — Automatisation d'un pipeline BI multi-agents
 
 Pipeline Business Intelligence automatique : **données brutes → profilage →
-qualité → ETL → KPI**, orchestré par un graphe LangGraph et des agents LLM
+qualité → ETL → KPI → audit**, orchestré par un graphe LangGraph et des agents LLM
 (Gemini, Groq).
 
 Cette version couvre le **P1 — Données** (collecte, profilage, quality gate,
@@ -26,28 +26,33 @@ Sources de données :
 - [x] **KPI** : étape `semantic_kpi` après l'ETL (table `kpi_values`) et route
       sémantique à la demande (`run_semantic_request`).
 
-Les phases analyse, dashboard et XAI ne sont pas incluses.
+- [x] **Audit / XAI** : étape `auditor` (vérification indépendante, publication,
+      explications, rapport d'audit, contrat d'audit des insights).
+
+Les phases analyse (agent Analyst) et dashboard ne sont pas incluses ; l'Auditor
+définit déjà le contrat que les insights de l'Analyst devront respecter.
 
 ## Architecture
 
 ```
-main.py / scripts/check_llm.py
+main.py / scripts/check_llm.py / scripts/evaluate_auditor.py
 src/biflow/
   config.py        configuration YAML + chemins
   llm.py           providers, fallback, cache, compteur de tokens
   state.py         etat partage du pipeline
   graph.py         graphe LangGraph + repli sequentiel
   semantic_graph.py  route semantique a la demande (une requete KPI)
-  agents/          base, collector, snapshot, profiler, quality, etl, semantic_kpi
-  tools/           dictionnaire d'indicateurs, calcul/provenance des KPI, kpi_values, snapshots
+  agents/          base, collector, snapshot, profiler, quality, etl, semantic_kpi, auditor
+  tools/           dictionnaire d'indicateurs, calcul/provenance des KPI, kpi_values, snapshots,
+                   audit_checks, audit_explain, audit_text, audit_report, insights
   utils/           io, logger, pays (ISO3)
 config/config.yaml     chemins, LLM, orchestrateur, KPI, sources, seuils
-config/kpi_catalog.v1.yaml  definitions declaratives des KPI (version 1.2.0)
-data/                  raw, snapshots, staging, processed, profiles, quality
+config/kpi_catalog.v1.yaml  definitions declaratives des KPI (version 1.3.0)
+data/                  raw, snapshots, staging, processed, profiles, quality, audit
 outputs/               reports, profiles, logs, cache LLM
 ```
 
-## Pipeline (S06 → S11)
+## Pipeline (S06 → S12)
 
 | Etape | Agent | Sorties principales |
 |---|---|---|
@@ -57,6 +62,7 @@ outputs/               reports, profiles, logs, cache LLM
 | S09 | `quality` | `data/quality/quality_report.{json,md}` (run_id, snapshot_id, SHA-256 des sources), gate PASS/FAIL |
 | S10 | `etl` | `data/processed/*.parquet`, `warehouse.duckdb`, `lineage.json` |
 | S11 | `semantic_kpi` | table DuckDB `kpi_values` + `data/processed/kpi_values.parquet` |
+| S12 | `auditor` | verdict d'audit, `kpi_values.publication_status`, `kpi_explanations`, `data/audit/` |
 
 Chaque execution ecrit un rapport dans `outputs/reports/<run_id>/` ; `run.json`
 liste aussi chaque tentative d'agent (`attempts`).
@@ -85,9 +91,14 @@ data/snapshots/
   normalisés). Si elle est identique à la version publiée, le run se termine en
   `no_change` après le snapshot : profil, qualité, ETL et KPI ne sont pas relancés
   et aucun artefact publié n'est réécrit.
-- Sinon une version `vN` est créée (`pending`) puis publiée seulement si le run
-  aboutit (ETL inclus). En cas d'échec, de quality gate FAIL ou de run partiel
-  (`--to quality`), elle passe `not_published` et la version publiée reste en place.
+- Sinon une version `vN` est créée (`pending`) puis publiée seulement après
+  l'Auditor et si l'audit n'a aucun échec. En cas d'échec d'un agent, de quality
+  gate FAIL, d'audit en échec (`audit_failed`) ou de run partiel (`--to
+  semantic_kpi`), elle passe `not_published` et la version publiée reste en place.
+- `--rebuild` rejoue `snapshot → auditor` sur les blobs de la version publiée
+  (nouveau `run_id`, pas de collecte) ; chaque audit est consigné dans
+  `index.json` (`audits` : `run_id`, `verdict`, `created_at`). Un audit en échec
+  marque l'entrée `audit_failed` sans déplacer le pointeur `published`.
 - Les blobs référencés par une version de `index.json` sont conservés, les autres
   supprimés. `snapshot_id` est enregistré dans l'état, `run.json`, `lineage.json`,
   `quality_report.json` et `kpi_values`.
@@ -139,6 +150,46 @@ glossaire lignes 121 et 3), `unbanked_share`, `formal_saving_rate` (`fin17a`),
 `formal_borrowing_rate` (`fin22a`, carte de crédit incluse), `gender_gap`,
 `income_gap`, `age_gap` (points de pourcentage, mêmes pays et année).
 
+### BI Auditor / XAI (`auditor`)
+
+Agent déterministe exécuté après `semantic_kpi`. Il n'utilise pas le code de
+calcul des KPI (test d'imports) : il relit le catalogue, interprète les formules
+par liste blanche et interroge `fact` en lecture seule.
+
+| Contrôles | Contenu | Effet |
+|---|---|---|
+| A1-A5 recalcul | chaque valeur recalculée depuis `fact` (tolérance `1e-9`), NULL réels (pas de zéro caché), moyennes PEERS, complétude, fait = fichier brut du snapshot selon la transformation déclarée | échec |
+| B1-B2 unités | une unité par KPI ; percent [0,100], points [-100,100], densités >= 0 | échec |
+| B3-B4 entités | aucun agrégat ni code non-pays hors PEERS ; PEERS = pairs configurés | échec |
+| B5-B7 traçabilité | même `snapshot_id` / `run_id` dans l'index, le lineage, le rapport qualité et `kpi_values` ; SHA-256 des sources = noms et contenu des blobs ; empreinte du contenu du warehouse recalculée | échec |
+| B8-B9 catalogue, qualité | aucune définition provisoire ni code non vérifié, preuves présentes, catalogue identique ; quality gate PASS | échec |
+| C1-C4 avertissements | vague 2022 partielle, pairs partiels, diagnostic qualité sur une entrée, variation d'une vague sous `auditor.min_meaningful_change_pp` (« dans le bruit d'enquête » : ~1 000 entretiens par pays, aucune erreur type dans le fichier) | avertissement |
+| F1 insights | claims et nombres des insights de l'Analyst | avertissement |
+
+Publication par ligne (`kpi_values.publication_status`) : `blocked` si un échec
+touche la ligne (ou tout le run, ou un pair inclus d'une ligne PEERS),
+`approved_with_review_note` si seulement des avertissements ou des raisons de
+revue, `approved` sinon (un NULL réel est publié comme « indisponible »).
+C4 est informatif et ne change pas le statut.
+
+Explications : une par ligne (table `kpi_explanations`,
+`data/audit/explanations.jsonl`) avec fichier et SHA-256 de la source, clé et
+valeur brute, transformation, formule et version du catalogue, dépendances
+(sous-groupes d'un écart, détention de compte pour `unbanked_share`, chaque pair
+pour PEERS), constats qualité, raisons de revue, statut, et phrases FR/EN issues
+de gabarits. Seuls les 3 exemples du rapport peuvent être reformulés par LLM
+(`llm.routing.auditor`) : chaque nombre de la réponse doit figurer avec le même
+arrondi dans le gabarit, sinon le gabarit est conservé. Avec `--no-llm`, seuls
+les gabarits sont utilisés.
+
+Insights (contrat de l'agent Analyst, `biflow.tools.insights.Insight`) :
+`{insight_id, text, claims: [{kpi_id, iso3, year, value, unit}], recommendation,
+confidence}`. Chaque claim doit correspondre à une ligne approuvée de
+`kpi_values` (même arrondi, unité, année) ; chaque nombre du texte doit être la
+valeur ou l'année d'un claim, ou l'écart entre deux claims du même KPI (deux
+années d'un pays ou deux pays d'une année). Sinon l'insight est rejeté avec sa
+raison.
+
 ### Clés de configuration
 
 | Clé | Défaut | Rôle |
@@ -153,6 +204,11 @@ glossaire lignes 121 et 3), `unbanked_share`, `formal_saving_rate` (`fin17a`),
 | `sources.fas.api.series` | 2 séries vérifiées | série locale → clé SDMX (sans le pays) |
 | `sources.fas.api.path` | `data/raw/fas_api.csv` | sortie de la collecte API |
 | `sources.gdp.indicators` | `NY.GDP.MKTP.CD`, `NY.GDP.PCAP.CD`, `NY.GDP.MKTP.KD.ZG` | indicateurs WDI collectés |
+| `auditor.tolerance` | `1.0e-9` | écart maximal valeur publiée / recalculée |
+| `auditor.min_meaningful_change_pp` | `2.0` | seuil « dans le bruit d'enquête » (points) |
+| `auditor.llm_examples` | `3` | exemples du rapport reformulables par LLM |
+| `llm.routing.auditor` | `[groq, gemini]` | reformulation seulement, vérifiée |
+| `paths.audit` | `data/audit` | rapport d'audit, explications, évaluation |
 
 ## Démarrage
 
@@ -179,7 +235,12 @@ python main.py steps
 python main.py run --only quality
 python main.py run --from etl
 python main.py run --to etl --no-llm      # s'arrete apres l'ETL, sans KPI
-python main.py run --only semantic_kpi    # recalcule kpi_values sur le warehouse existant
+python main.py run --only semantic_kpi    # recalcule kpi_values (sans audit)
+python main.py run --rebuild              # rejoue snapshot -> auditor sur la version publiee
+python main.py explain --kpi account_ownership --iso3 TUN --year 2024
+python main.py explain --kpi gender_gap --iso3 TUN --year 2024 --compare-year 2021 --lang en
+python main.py explain --kpi branch_density --iso3 TUN --year 2024 --compare-iso3 PEERS
+python scripts/evaluate_auditor.py        # injection de fautes -> data/audit/evaluation.md
 
 # 5. Tests
 .\.venv\Scripts\python -m pytest -q
@@ -209,6 +270,10 @@ python main.py run --only quality
 python main.py run --from etl
 python main.py run --to etl --no-llm
 python main.py run --only semantic_kpi
+python main.py run --rebuild
+python main.py explain --kpi account_ownership --iso3 TUN --year 2024
+python main.py explain --kpi gender_gap --iso3 TUN --year 2024 --compare-year 2021 --lang en
+python scripts/evaluate_auditor.py
 
 # 5. Tests
 .venv/bin/python -m pytest -q
@@ -223,9 +288,14 @@ python main.py run --only semantic_kpi
   `inputs.<source>.sha256`), anomalies et gate PASS/FAIL ;
 - `data/processed/` : tables Parquet, `warehouse.duckdb` (dont `kpi_values`),
   `kpi_values.parquet` et `lineage.json` ;
+- `data/audit/` : `audit_report.json` / `audit_report.md` (verdict, contrôles,
+  avertissements, décisions de publication, journal des décisions, 3 exemples),
+  `explanations.jsonl`, `evaluation.md` / `evaluation.json` (injection de fautes) ;
 - `outputs/reports/<run_id>/` : rapport standardisé de chaque agent et `run.json`.
 
-`main.py run` renvoie le code 0 pour `success` et `no_change`.
+`main.py run` renvoie le code 0 pour `success` et `no_change`, 2 sinon
+(`failed`, `quality_failed`, `audit_failed`). `main.py explain` lit uniquement la
+table `kpi_explanations` (aucun recalcul, aucun réseau).
 
 Le rapport qualité est lié au run : quand son `run_id` et les SHA-256 des
 sources correspondent à `lineage.json`, les KPI ne portent plus la raison de
