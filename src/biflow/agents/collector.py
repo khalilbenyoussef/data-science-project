@@ -302,12 +302,14 @@ class CollectorAgent(BaseAgent):
 
     def _user(self, name: str, source_cfg: dict) -> dict[str, Any]:
         """Source utilisateur : mapping valide et copie presente ; hash comme une source statique."""
+        from biflow.tools.user_sources.detect import check_file
         from biflow.tools.user_sources.loader import user_mapping
 
         mapping = user_mapping(source_cfg)
         out = resolve(source_cfg.get("path") or mapping.file)
         if not out.is_file():
             raise FileNotFoundError(f"[{name}] copie de la source utilisateur introuvable : {out}")
+        check_file(out, (self.cfg.get("uploads") or {}).get("max_file_mb"))  # le fichier a pu changer
         meta = {
             "path": str(out), "type": "user", "user": True, "rows": None,
             "mapping": str(source_cfg.get("mapping")), "fingerprint": mapping.fingerprint,

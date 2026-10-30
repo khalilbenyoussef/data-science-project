@@ -272,12 +272,37 @@ def propose_mapping(name: str, file: str, df: pd.DataFrame, detection: Mapping[s
             "unresolved_countries": unresolved}
 
 
+# Messages pydantic -> francais (les messages metier des validateurs sont deja en francais)
+PYDANTIC_FR = {
+    "missing": "champ obligatoire absent",
+    "extra_forbidden": "champ inconnu (non autorise)",
+    "literal_error": "valeur non autorisee",
+    "string_too_short": "valeur vide",
+    "string_type": "texte attendu",
+    "int_type": "entier attendu",
+    "int_parsing": "entier attendu",
+    "dict_type": "dictionnaire attendu",
+    "list_type": "liste attendue",
+    "model_type": "objet attendu",
+    "string_pattern_mismatch": "format invalide",
+    "too_short": "au moins un element requis",
+    "greater_than_equal": "valeur trop petite",
+}
+
+
+def _french(error: Mapping[str, Any]) -> str:
+    if error["type"] == "value_error":
+        return str(error["msg"]).removeprefix("Value error, ")
+    return PYDANTIC_FR.get(error["type"], error["msg"])
+
+
 def validate_mapping(data: Mapping[str, Any], df: pd.DataFrame | None = None) -> SourceMapping:
     """Validation deterministe complete ; UserSourceError avec messages en francais."""
     try:
         mapping = SourceMapping.model_validate(data)
     except ValidationError as exc:
-        details = "; ".join(f"{'.'.join(str(p) for p in e['loc'])} : {e['msg']}" for e in exc.errors())
+        details = "; ".join(f"{'.'.join(str(p) for p in e['loc']) or 'mapping'} : {_french(e)}"
+                            for e in exc.errors())
         raise UserSourceError(f"Mapping invalide : {details}") from exc
     if df is not None:
         c = mapping.columns

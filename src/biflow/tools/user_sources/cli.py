@@ -15,7 +15,7 @@ from biflow.config import load_config
 from biflow.tools.user_sources import UserSourceError
 from biflow.tools.user_sources.canonical import canonical, format_report
 from biflow.tools.user_sources.countries import CountryResolver, normalize_name
-from biflow.tools.user_sources.detect import detect_read_params, detect_structure, read_user_csv
+from biflow.tools.user_sources.detect import check_file, detect_read_params, detect_structure, read_user_csv
 from biflow.tools.user_sources.mapping import fingerprint, propose_mapping, validate_mapping
 from biflow.tools.user_sources.registry import find_reusable, register, unregister
 from biflow.utils.countries import is_country, normalize_iso3
@@ -92,9 +92,7 @@ def add_source(file: str | Path, name: str, *, mapping_file: str | Path | None =
                ask: Callable[[str], str] = input, out: Callable[[str], None] = print,
                llm_suggest=None, draft_path: str | Path | None = None) -> dict[str, Any]:
     cfg = cfg if cfg is not None else load_config()
-    path = Path(file)
-    if not path.is_file():
-        raise UserSourceError(f"Fichier introuvable : {path}")
+    path = check_file(file, (cfg.get("uploads") or {}).get("max_file_mb"))
     resolver = CountryResolver(_aliases(cfg))
     read = detect_read_params(path)
     df = read_user_csv(path, read)

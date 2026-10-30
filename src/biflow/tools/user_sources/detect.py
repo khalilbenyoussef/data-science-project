@@ -29,6 +29,26 @@ COMMA_NUMBER = re.compile(r"^[+-]?(\d+(,\d*)?|,\d+)([eE][+-]?\d+)?$")
 # Separateur de milliers : espace (ou espace insecable) entre groupes stricts de 3 chiffres
 THOUSANDS = re.compile(r"^([+-]?\d{1,3})((?:[   ]\d{3})+)([.,]\d+)?$")
 SAMPLE_LINES = 200
+DEFAULT_MAX_FILE_MB = 200
+ALLOWED_SUFFIXES = (".csv", ".txt")
+
+
+def check_file(path: str | Path, max_file_mb: float | None = None) -> Path:
+    """Garde-fous avant lecture : existence, extension CSV, taille maximale, contenu texte."""
+    path = Path(path)
+    if not path.is_file():
+        raise UserSourceError(f"Fichier introuvable : {path}")
+    if path.suffix.lower() not in ALLOWED_SUFFIXES:
+        raise UserSourceError(f"Format refuse ({path.suffix or 'sans extension'}) : seuls les fichiers CSV "
+                              f"({', '.join(ALLOWED_SUFFIXES)}) sont acceptes")
+    limit = float(max_file_mb if max_file_mb is not None else DEFAULT_MAX_FILE_MB)
+    size_mb = path.stat().st_size / 1e6
+    if size_mb > limit:
+        raise UserSourceError(f"Fichier trop volumineux : {size_mb:.1f} Mo > {limit:g} Mo (uploads.max_file_mb)")
+    with open(path, "rb") as handle:
+        if b"\x00" in handle.read(1 << 16):
+            raise UserSourceError(f"Contenu binaire detecte dans {path.name} : un fichier CSV texte est attendu")
+    return path
 
 
 # --------------------------------------------------------------------------- lecture
