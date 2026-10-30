@@ -289,6 +289,9 @@ class RawSources:
             return {**out, "error": f"{count} enregistrement(s) brut(s) pour la cle"}
         raw_value = numeric.loc[matches, column].iloc[0]
         out["raw_text"] = str(text.loc[matches, column].iloc[0])
+        for name in ("codewb", "SERIES_CODE"):  # code tel qu'ecrit dans le fichier (alias inclus)
+            if name in text.columns:
+                record[name] = str(text.loc[matches, name].iloc[0])
         out["raw_value"] = None if pd.isna(raw_value) else float(raw_value)
         return out
 

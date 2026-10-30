@@ -14,6 +14,7 @@ paths:
   staging: data/staging
   processed: data/processed
   quality: data/quality
+  audit: data/audit                # rapport d'audit, explications, evaluation
 
 # --------------------------------------------------------------------------- LLM
 llm:

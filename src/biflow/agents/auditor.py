@@ -15,6 +15,7 @@ import duckdb
 
 from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
+from biflow.tools.audit_explain import build_explanations, decision_log
 from biflow.tools.audit_checks import (
     RawSources,
     caveat_checks,
@@ -84,6 +85,13 @@ class AuditorAgent(BaseAgent):
             "index_entry": index_entry,
             "raw_paths": raw_paths,
             "catalog_path": resolve(audit_cfg.get("catalog", DEFAULT_CATALOG_PATH)),
+            "audit_dir": resolve(paths.get("audit", "data/audit")),
+            "source_meta": {
+                name: {"file": str(raw_paths[name]) if name in raw_paths else None,
+                       "sha256": ((manifest.get("sources") or {}).get(name) or {}).get("sha256")
+                       or ((lineage.get("inputs") or {}).get(name) or {}).get("sha256")}
+                for name in set(raw_paths) | set(lineage.get("inputs") or {})
+            },
             "focus": focus,
             "peers": [p for p in peers if p and p != focus],
             "tolerance": float(audit_cfg.get("tolerance", 1e-9)),
@@ -102,6 +110,7 @@ class AuditorAgent(BaseAgent):
         fas_series = (inp["sources"].get("fas") or {}).get("series") or {}
         with duckdb.connect(str(inp["warehouse"]), read_only=True) as con:
             rows = read_kpi_rows(con)
+            dim = con.execute("SELECT iso3, country, is_aggregate FROM country_dim").fetchall()
             checks, recomputed = recompute_checks(
                 con, catalog, rows, inp["focus"], inp["peers"], inp["tolerance"])
             raw = RawSources(inp["raw_paths"], inp["sources"])
@@ -118,20 +127,32 @@ class AuditorAgent(BaseAgent):
         checks.append(quality_gate_check(inp["quality"]))
         checks += caveat_checks(rows, catalog, inp["quality"], recomputed, inp["min_change_pp"])
         return {"inputs": inp, "catalog": catalog, "catalog_sha256": catalog_sha256, "rows": rows,
+                "country_names": {iso3: name for iso3, name, _ in dim},
+                "aggregates": sorted(iso3 for iso3, _, aggregate in dim if aggregate),
                 "recomputed": recomputed, "raw_lookups": raw_lookups, "checks": checks}
 
     @staticmethod
-    def write_publication(warehouse: Path, decisions: Mapping[tuple, str]) -> Path:
-        """Seule ecriture de l'Auditor : kpi_values.publication_status, puis export
-        Parquet. kpi_values n'entre pas dans l'empreinte du contenu du warehouse."""
+    def write_outputs(warehouse: Path, decisions: Mapping[tuple, str],
+                      explanations: list[dict[str, Any]], audit_dir: Path) -> Path:
+        """Seules ecritures de l'Auditor : kpi_values.publication_status, table
+        kpi_explanations (+ explanations.jsonl) et export Parquet. Ces tables
+        n'entrent pas dans l'empreinte du contenu du warehouse."""
         parquet = warehouse.with_name("kpi_values.parquet")
         tmp = parquet.with_name(f".{parquet.name}.tmp")
+        documents = [((e["kpi_id"], e["iso3"], e["year"]), json.dumps(e, ensure_ascii=False, default=str))
+                     for e in explanations]
         with duckdb.connect(str(warehouse)) as con:
             con.execute("BEGIN TRANSACTION")
             try:
                 con.executemany(
                     "UPDATE kpi_values SET publication_status = ? WHERE kpi_id = ? AND iso3 = ? AND year = ?",
                     [(status, *key) for key, status in sorted(decisions.items())])
+                con.execute("CREATE OR REPLACE TABLE kpi_explanations (kpi_id VARCHAR NOT NULL, "
+                            "iso3 VARCHAR NOT NULL, year INTEGER NOT NULL, explanation JSON NOT NULL, "
+                            "PRIMARY KEY (kpi_id, iso3, year))")
+                if documents:
+                    con.executemany("INSERT INTO kpi_explanations VALUES (?, ?, ?, ?)",
+                                    [(*key, document) for key, document in documents])
                 con.execute("COMMIT")
             except Exception:
                 con.execute("ROLLBACK")
@@ -140,6 +161,11 @@ class AuditorAgent(BaseAgent):
             con.execute(f"COPY (SELECT * FROM kpi_values ORDER BY kpi_id, iso3, year) "
                         f"TO '{target}' (FORMAT PARQUET)")
         os.replace(tmp, parquet)
+        audit_dir.mkdir(parents=True, exist_ok=True)
+        jsonl = audit_dir / "explanations.jsonl"
+        jsonl_tmp = jsonl.with_name(f".{jsonl.name}.tmp")
+        jsonl_tmp.write_text("".join(document + "\n" for _, document in documents), encoding="utf-8")
+        os.replace(jsonl_tmp, jsonl)
         return parquet
 
     def execute(self, ctx: Mapping[str, Any]) -> dict[str, Any]:
@@ -148,7 +174,12 @@ class AuditorAgent(BaseAgent):
         verdict = verdict_of(checks)
         counts = count_results(checks)
         decisions = publication_decisions(result["rows"], checks)
-        self.write_publication(result["inputs"]["warehouse"], decisions)
+        inp = result["inputs"]
+        explanations = build_explanations(
+            result["rows"], result["recomputed"], result["raw_lookups"], result["catalog"],
+            result["catalog_sha256"], decisions, checks, inp["quality"], inp["source_meta"],
+            result["country_names"], inp["snapshot_id"])
+        self.write_outputs(inp["warehouse"], decisions, explanations, inp["audit_dir"])
         by_status = {status: 0 for status in ("approved", "approved_with_review_note", "blocked")}
         for status in decisions.values():
             by_status[status] += 1
@@ -169,6 +200,12 @@ class AuditorAgent(BaseAgent):
                 "rows": len(result["rows"]),
                 "publication": by_status,
                 "checks": checks,
+                "decision_log": decision_log(
+                    snapshot=ctx.get("snapshot") or {"snapshot_id": inp["snapshot_id"],
+                                                     "status": (inp["index_entry"] or {}).get("status")},
+                    lineage=inp["lineage"], quality=inp["quality"], aggregates=result["aggregates"],
+                    kpi_rows=result["rows"], audit_counts=counts, verdict=verdict),
+                "explanations_path": str(inp["audit_dir"] / "explanations.jsonl"),
             },
             "llm_notes": notes,
         }

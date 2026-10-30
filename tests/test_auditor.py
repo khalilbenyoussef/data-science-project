@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import duckdb
+import pandas as pd
 import pytest
 import yaml
 
@@ -26,7 +27,7 @@ FOCUS, PEERS = "TUN", ["DZA", "EGY", "JOR", "MAR"]
 def _cfg(base: Path, paths: dict) -> dict:
     return {
         "paths": {"processed": str(base / "processed"), "quality": str(base / "quality"),
-                  "reports": str(base / "reports")},
+                  "reports": str(base / "reports"), "audit": str(base / "audit")},
         "llm": {"enabled": False},
         "etl": {"min_year": 2011, "max_year": 2024, "write_csv_copy": False},
         "quality": {"min_rows": 1, "score_threshold": 0.5},
@@ -47,6 +48,17 @@ def built(tmp_path_factory):
     base = tmp_path_factory.mktemp("audit_world")
     (base / "raw").mkdir()
     paths = _inputs(base / "raw")
+    findex = pd.read_csv(paths["findex"])
+    extra = []
+    for iso3, year, men, women in (("TUN", 2024, 0.4957, 0.2661), ("TUN", 2021, 0.4514, 0.2875),
+                                   ("MAR", 2024, 0.55, 0.35), ("MAR", 2021, 0.56, 0.33)):
+        same_year = findex[(findex.codewb == iso3) & (findex.year == year)]
+        base_row = (same_year if len(same_year) else findex[findex.codewb == iso3]).iloc[0].to_dict()
+        for group2, value in (("men", men), ("women", women)):
+            extra.append({**base_row, "year": year, "group": "gender", "group2": group2,
+                          "account_t_d": value, "g20_any": None})
+    extra = pd.DataFrame(extra).astype({"g20_any": float})
+    pd.concat([findex, extra], ignore_index=True).to_csv(paths["findex"], index=False)
     cfg = _cfg(base, paths)
     raw_meta = {name: {"path": path, "sha256": sha256_file(path), **file_stat(path)} for name, path in paths.items()}
     snapshot = SnapshotStore(base / "snapshots").prepare(paths, cfg["sources"], run_id="audit_run")
@@ -270,7 +282,8 @@ def test_quality_diagnostic_on_an_input_is_a_caveat(world):
     world.edit_json(world.quality_path, lambda q: q["diagnostics"].append(diagnostic))
     check = _check(world.run(), "C3_input_quality_findings")
     assert check["result"] == "warn"
-    assert {r["kpi_id"] for r in check["affected_rows"]} == {"account_ownership", "unbanked_share"}
+    # Sans dimension, le diagnostic vise tous les faits account_t_d (sous-groupes inclus)
+    assert {r["kpi_id"] for r in check["affected_rows"]} == {"account_ownership", "unbanked_share", "gender_gap"}
 
 
 def test_partial_wave_caveat_only_for_survey_kpis(world):
@@ -332,3 +345,90 @@ def test_survey_noise_does_not_change_publication(world):
     _execute(world)
     # MAR 2021 -> 2024 : +0.09 pt, dans le bruit d'enquete, mais aucune note de revue pour la valeur
     assert _statuses(world)[("account_ownership", "MAR", 2024)] == "approved"
+
+
+# --------------------------------------------------------------------------- D : explications
+def _explanations(world):
+    _execute(world)
+    with duckdb.connect(str(world.tmp / "processed" / "warehouse.duckdb"), read_only=True) as con:
+        stored = {(k, i, y): json.loads(doc) for k, i, y, doc in con.execute(
+            "SELECT kpi_id, iso3, year, explanation FROM kpi_explanations").fetchall()}
+        rows = con.execute("SELECT count(*) FROM kpi_values").fetchone()[0]
+    return stored, rows
+
+
+def test_one_explanation_per_row_in_table_and_jsonl(world):
+    stored, rows = _explanations(world)
+    assert len(stored) == rows
+    path = world.tmp / "audit" / "explanations.jsonl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == rows
+    assert {(d["kpi_id"], d["iso3"], d["year"]) for d in map(json.loads, lines)} == set(stored)
+
+
+def test_explanation_traces_value_to_raw_record(world):
+    stored, _ = _explanations(world)
+    e = stored[("account_ownership", "TUN", 2024)]
+    assert e["value"] == pytest.approx(37.844486) and e["unit"] == "percent"
+    assert e["formula"] == "100 * value" and "x 100" in e["transformation"]
+    assert e["catalog_version"] == "1.3.0" and e["publication_status"] == "approved"
+    item, = e["inputs"]
+    assert item["fact_value"] == 0.37844486
+    raw = item["raw"]
+    assert raw["raw_value_text"] == "0.37844486" and raw["column"] == "account_t_d"
+    assert raw["record_key"] == {"codewb": "TUN", "year": 2024, "group": "all", "group2": "all"}
+    manifest = json.loads((world.tmp / "snapshots" / "v1" / "manifest.json").read_text(encoding="utf-8"))
+    assert raw["sha256"] == manifest["sources"]["findex"]["sha256"] and raw["snapshot_id"] == "v1"
+    fas = stored[("branch_density", "TUN", 2024)]["inputs"][0]["raw"]
+    assert fas["record_key"]["SERIES_CODE"] == "TUN.FA26N.PHTADLT_NUM.A" and fas["column"] == "2024"
+
+
+def test_dependencies_for_gaps_unbanked_and_peers(world):
+    stored, _ = _explanations(world)
+    gap = stored[("gender_gap", "TUN", 2024)]
+    assert [(d["label"], round(d["value"], 2)) for d in gap["dependencies"]] == [("men", 49.57), ("women", 26.61)]
+    assert gap["value"] == pytest.approx(49.57 - 26.61)
+    unbanked = stored[("unbanked_share", "TUN", 2024)]
+    assert unbanked["dependencies"][0]["kpi_id"] == "account_ownership"
+    assert unbanked["dependencies"][0]["value"] == pytest.approx(37.844486)
+    peers = stored[("account_ownership", "PEERS", 2024)]
+    assert [(d["iso3"], d["included"]) for d in peers["dependencies"]] == [
+        ("DZA", True), ("MAR", True), ("EGY", False), ("JOR", False)]
+    assert peers["publication_status"] == "approved_with_review_note"
+    missing = stored[("account_ownership", "EGY", 2024)]
+    assert missing["value"] is None and missing["inputs"][0]["status"] == "missing_observation"
+
+
+def test_gap_change_decomposes_into_subgroup_changes(world):
+    from biflow.tools.audit_explain import explain_change
+    stored, _ = _explanations(world)
+    change = explain_change(stored[("gender_gap", "TUN", 2021)], stored[("gender_gap", "TUN", 2024)])
+    assert change["kind"] == "years" and round(change["delta"], 2) == 6.57
+    men, women = change["components"]
+    assert (men["label"], round(men["delta"], 2), women["label"], round(women["delta"], 2)) == (
+        "men", 4.43, "women", -2.14)
+    assert change["delta"] == pytest.approx(men["contribution"] + women["contribution"])
+    assert change["within_survey_noise"] is False
+
+
+def test_peer_change_lists_each_peer_contribution(world):
+    from biflow.tools.audit_explain import explain_change
+    stored, _ = _explanations(world)
+    change = explain_change(stored[("gender_gap", "PEERS", 2021)], stored[("gender_gap", "PEERS", 2024)])
+    assert change["comparable"] and [c["label"] for c in change["components"]] == ["MAR"]
+    assert change["delta"] == pytest.approx(sum(c["contribution"] for c in change["components"]))
+    changed = explain_change(stored[("account_ownership", "PEERS", 2021)],
+                             stored[("account_ownership", "PEERS", 2024)])
+    assert changed["comparable"] is False and "pairs differents" in changed["reason"]
+    noise = explain_change(stored[("account_ownership", "MAR", 2021)], stored[("account_ownership", "MAR", 2024)])
+    assert noise["within_survey_noise"] is True
+
+
+def test_decision_log_explains_each_step(world):
+    audit = _execute(world)
+    steps = {entry["step"]: entry for entry in audit["decision_log"]}
+    assert list(steps) == ["collector", "snapshot", "quality", "etl", "semantic_kpi", "auditor"]
+    assert "gate PASS" in steps["quality"]["decision"]
+    assert steps["etl"]["decision"] == "annees 2011-2024 conservees"
+    assert any("rejetee" in reason for reason in steps["etl"]["reasons"])
+    assert steps["auditor"]["decision"] == "verdict pass_with_warnings"
