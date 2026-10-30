@@ -571,7 +571,7 @@ def caveat_checks(rows: list[dict[str, Any]], catalog: Mapping[str, Any], qualit
 PUBLICATION_STATUSES = ("approved", "approved_with_review_note", "blocked")
 
 
-def _touched(check: Mapping[str, Any], rows: list[dict[str, Any]]) -> set[tuple]:
+def touched_rows(check: Mapping[str, Any], rows: list[dict[str, Any]]) -> set[tuple]:
     """Lignes visees par un controle : (kpi, iso3, annee) explicites, tout un KPI
     (kpi_id seul) ou toutes les lignes (controle de niveau run)."""
     keys = {row_key(r) for r in rows}
@@ -594,7 +594,7 @@ def publication_decisions(rows: list[dict[str, Any]],
     for check in checks:
         if not check.get("affects_publication", True) or check["result"] == "pass":
             continue
-        (blocked if check["result"] == "fail" else noted).update(_touched(check, rows))
+        (blocked if check["result"] == "fail" else noted).update(touched_rows(check, rows))
     by_key = {row_key(r): r for r in rows}
     for key, row in by_key.items():  # une ligne PEERS herite du blocage d'un pair inclus
         if row["iso3"] == PEERS_ISO3 and any(
@@ -627,5 +627,5 @@ __all__ = [
     "PEERS_ISO3", "PUBLICATION_STATUSES", "RAW_TO_FACT", "publication_decisions", "RawSources", "caveat_checks", "catalog_checks", "content_digest",
     "count_results", "entity_checks", "expected_value", "kpi_inputs", "load_catalog_file", "make_check",
     "observe", "parse_formula", "provenance_checks", "quality_gate_check", "raw_to_fact_check",
-    "read_kpi_rows", "recompute_checks", "row_key", "unit_checks", "verdict_of",
+    "read_kpi_rows", "recompute_checks", "row_key", "touched_rows", "unit_checks", "verdict_of",
 ]

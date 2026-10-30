@@ -15,7 +15,8 @@ import duckdb
 
 from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
-from biflow.tools.audit_explain import build_explanations, decision_log
+from biflow.tools.audit_explain import build_explanations, decision_log, explain_change
+from biflow.tools.audit_text import change_text, rephrase, template_text
 from biflow.tools.audit_checks import (
     RawSources,
     caveat_checks,
@@ -47,6 +48,61 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 class AuditorAgent(BaseAgent):
     name = "auditor"
+
+    # ------------------------------------------------------------------ textes
+    def _ask(self):
+        """Fonction de reformulation LLM, ou None (LLM desactive / indisponible)."""
+        if self.get_llm() is None:
+            return None
+        return lambda prompt, system: self.ask_text(prompt, system=system)
+
+    def examples(self, explanations: list[dict[str, Any]], focus: str,
+                 min_change_pp: float, budget: int) -> list[dict[str, Any]]:
+        """3 explications du rapport : niveau (detention de compte), variation
+        (ecart hommes-femmes entre les deux dernieres vagues), comparaison aux pairs
+        (densite d'agences). Seules celles-ci peuvent etre reformulees par LLM."""
+        by_key = {(e["kpi_id"], e["iso3"], e["year"]): e for e in explanations}
+
+        def latest(kpi_id, iso3, n=None):
+            """Les n dernieres annees disponibles (toutes si n est None)."""
+            years = sorted(y for (k, i, y), e in by_key.items()
+                           if k == kpi_id and i == iso3 and e["value"] is not None)
+            if n is None:
+                return years
+            return years[-n:] if len(years) >= n else []
+
+        specs = []
+        if latest("account_ownership", focus, 1):
+            year, = latest("account_ownership", focus, 1)
+            specs.append(("Detention de compte", by_key[("account_ownership", focus, year)], None, None))
+        if len(latest("gender_gap", focus, 2)) == 2:
+            before, after = latest("gender_gap", focus, 2)
+            left, right = by_key[("gender_gap", focus, before)], by_key[("gender_gap", focus, after)]
+            specs.append(("Ecart hommes-femmes", right, left, explain_change(left, right, min_change_pp)))
+        common = sorted(set(latest("branch_density", focus)) & set(latest("branch_density", "PEERS")))
+        if common:
+            left, right = by_key[("branch_density", "PEERS", common[-1])], by_key[("branch_density", focus, common[-1])]
+            specs.append(("Densite d'agences et pairs", right, left, explain_change(left, right, min_change_pp)))
+
+        ask = self._ask()
+        out = []
+        for title, record, other, change in specs:
+            templates = {lang: (change_text(change, other, record, lang) if change else template_text(record, lang))
+                         for lang in ("fr", "en")}
+            french = rephrase(templates["fr"], "fr", ask if len(out) < budget else None)
+            self.log.info("[auditor] exemple '%s' : texte %s%s", title, french["origin"],
+                          f" (LLM ecarte : nombres non justifies {french['unsupported_numbers']})"
+                          if french.get("llm_status") == "rejected_ungrounded" else "")
+            out.append({
+                "title": title, "kpi_id": record["kpi_id"], "iso3": record["iso3"], "year": record["year"],
+                "compare": None if other is None else {"iso3": other["iso3"], "year": other["year"]},
+                "change": change, "template": templates,
+                "text": {"fr": french["text"], "en": templates["en"]},
+                "origin": {"fr": french["origin"], "en": "template"},
+                "llm": {k: v for k, v in french.items() if k not in ("text", "origin")},
+                "record": record,
+            })
+        return out
 
     # ------------------------------------------------------------------ entrees
     def _inputs(self, ctx: Mapping[str, Any]) -> dict[str, Any]:
@@ -179,6 +235,12 @@ class AuditorAgent(BaseAgent):
             result["rows"], result["recomputed"], result["raw_lookups"], result["catalog"],
             result["catalog_sha256"], decisions, checks, inp["quality"], inp["source_meta"],
             result["country_names"], inp["snapshot_id"])
+        for record in explanations:  # gabarits deterministes, toujours disponibles
+            record["narrative"] = {"fr": template_text(record, "fr"), "en": template_text(record, "en"),
+                                   "origin": "template"}
+        audit_cfg = self.cfg.get("auditor") or {}
+        examples = self.examples(explanations, inp["focus"], inp["min_change_pp"],
+                                 int(audit_cfg.get("llm_examples", 3)))
         self.write_outputs(inp["warehouse"], decisions, explanations, inp["audit_dir"])
         by_status = {status: 0 for status in ("approved", "approved_with_review_note", "blocked")}
         for status in decisions.values():
@@ -206,6 +268,7 @@ class AuditorAgent(BaseAgent):
                     lineage=inp["lineage"], quality=inp["quality"], aggregates=result["aggregates"],
                     kpi_rows=result["rows"], audit_counts=counts, verdict=verdict),
                 "explanations_path": str(inp["audit_dir"] / "explanations.jsonl"),
+                "examples": examples,
             },
             "llm_notes": notes,
         }

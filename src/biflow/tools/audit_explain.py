@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping
 
+from biflow.tools.audit_checks import touched_rows
+
 PEERS_ISO3 = "PEERS"
 TRANSFORMATIONS = {
     "value": "valeur publiee telle quelle (aucune transformation)",
@@ -17,15 +19,19 @@ TRANSFORMATIONS = {
 }
 
 
-def _transformation(formula: str) -> str:
-    if formula in TRANSFORMATIONS:
-        return TRANSFORMATIONS[formula]
-    return "ecart en points : 100 x (fraction du premier sous-groupe - fraction du second)"
+TRANSFORMATIONS_EN = {
+    "value": "published value as is (no transformation)",
+    "100 * value": "Findex fraction x 100 (share of adults in %)",
+    "100 * (1 - value)": "complement: 100 x (1 - account ownership fraction)",
+}
 
 
-def _rows_touched(check: Mapping[str, Any]) -> set[tuple]:
-    return {(r["kpi_id"], r["iso3"], int(r["year"])) for r in check["affected_rows"]
-            if {"kpi_id", "iso3", "year"} <= set(r)}
+def _transformation(formula: str, lang: str = "fr") -> str:
+    table = TRANSFORMATIONS if lang == "fr" else TRANSFORMATIONS_EN
+    if formula in table:
+        return table[formula]
+    return ("ecart en points : 100 x (fraction du premier sous-groupe - fraction du second)" if lang == "fr"
+            else "gap in points: 100 x (first subgroup fraction - second subgroup fraction)")
 
 
 def build_explanations(
@@ -47,7 +53,7 @@ def build_explanations(
     for check in checks:
         if check["result"] == "pass":
             continue
-        for key in _rows_touched(check):
+        for key in touched_rows(check, rows):  # meme regle que la publication
             touching.setdefault(key, []).append(
                 {"check_id": check["check_id"], "result": check["result"],
                  "affects_publication": check.get("affects_publication", True)})
@@ -79,6 +85,8 @@ def build_explanations(
             "definition_version": kpi.get("definition_version"), "formula": formula,
             "transformation": _transformation(formula) if iso3 != PEERS_ISO3 else
             "moyenne simple des pairs disponibles (non ponderee)",
+            "transformation_en": _transformation(formula, "en") if iso3 != PEERS_ISO3 else
+            "simple (unweighted) mean of available peers",
             "snapshot_id": snapshot_id, "inputs": [], "dependencies": [],
             "quality_findings": findings.get(key, []),
             "source_notices": notices.get(w.get("source"), []),

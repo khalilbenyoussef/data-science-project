@@ -86,6 +86,50 @@ def _print_state(state: dict) -> None:
             print(f"  - {error}")
 
 
+def explain_command(args) -> int:
+    """Affiche l'explication stockee par l'Auditor (table kpi_explanations).
+
+    Lecture seule du warehouse : aucun recalcul de KPI, aucun appel reseau ni LLM.
+    """
+    import json
+
+    import duckdb
+
+    from biflow.config import load_config, resolve
+    from biflow.tools.audit_explain import explain_change
+    from biflow.tools.audit_text import render_markdown
+    from biflow.utils.countries import normalize_iso3
+
+    cfg = load_config()
+    warehouse = resolve(args.warehouse or f"{(cfg.get('paths') or {}).get('processed', 'data/processed')}/warehouse.duckdb")
+
+    def code(value):
+        return "PEERS" if str(value).strip().upper() == "PEERS" else normalize_iso3(value)
+
+    keys = [(args.kpi, code(args.iso3), args.year)]
+    if args.compare_year is not None or args.compare_iso3:
+        keys.append((args.kpi, code(args.compare_iso3 or args.iso3), args.compare_year or args.year))
+    try:
+        with duckdb.connect(str(warehouse), read_only=True) as con:
+            found = [con.execute("SELECT explanation FROM kpi_explanations WHERE kpi_id = ? AND iso3 = ? "
+                                 "AND year = ?", list(key)).fetchone() for key in keys]
+    except duckdb.Error as exc:
+        print(f"Explications indisponibles ({exc}) : lancer d'abord le pipeline avec l'etape auditor.")
+        return 1
+    missing = [key for key, row in zip(keys, found) if row is None]
+    if missing:
+        print(f"Aucune explication pour {missing}.")
+        return 1
+    record = json.loads(found[0][0])
+    other = json.loads(found[1][0]) if len(found) > 1 else None
+    change = None
+    if other is not None:
+        threshold = float((cfg.get("auditor") or {}).get("min_meaningful_change_pp", 2.0))
+        change = explain_change(other, record, threshold)
+    print(render_markdown(record, args.lang, change, other))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="BIFlow - pipeline BI multi-agents")
     sub = parser.add_subparsers(dest="command")
@@ -102,11 +146,22 @@ def main() -> int:
 
     sub.add_parser("steps", help="liste les etapes du pipeline")
 
+    explain = sub.add_parser("explain", help="explique une valeur KPI (lecture seule, sans reseau)")
+    explain.add_argument("--kpi", required=True, help="identifiant du KPI (ex. account_ownership)")
+    explain.add_argument("--iso3", required=True, help="pays ISO3 ou PEERS")
+    explain.add_argument("--year", required=True, type=int)
+    explain.add_argument("--compare-year", type=int, default=None, help="annee de comparaison")
+    explain.add_argument("--compare-iso3", default=None, help="pays de comparaison (ex. PEERS)")
+    explain.add_argument("--lang", choices=("fr", "en"), default="fr")
+    explain.add_argument("--warehouse", default=None, help="warehouse DuckDB (defaut : config)")
+
     args = parser.parse_args()
     if args.command == "steps":
         for index, step in enumerate(STEP_ORDER, 1):
             print(f"S{index + 5:02d} {step}")
         return 0
+    if args.command == "explain":
+        return explain_command(args)
     if args.command != "run":
         parser.print_help()
         return 1

@@ -432,3 +432,84 @@ def test_decision_log_explains_each_step(world):
     assert steps["etl"]["decision"] == "annees 2011-2024 conservees"
     assert any("rejetee" in reason for reason in steps["etl"]["reasons"])
     assert steps["auditor"]["decision"] == "verdict pass_with_warnings"
+
+
+# --------------------------------------------------------------------------- E : texte et LLM
+def _with_llm(world, monkeypatch, answer, budget=3):
+    from biflow.agents.base import BaseAgent
+    calls = []
+    monkeypatch.setattr(BaseAgent, "get_llm", lambda self: object())
+
+    def ask_text(self, prompt, system=None):
+        calls.append(prompt)
+        return answer(prompt) if callable(answer) else answer
+
+    monkeypatch.setattr(BaseAgent, "ask_text", ask_text)
+    cfg = {**world.cfg, "llm": {"enabled": True}, "auditor": {**world.cfg["auditor"], "llm_examples": budget}}
+    return AuditorAgent(cfg=cfg, run_id="audit_run").execute(world.ctx)["audit"]["examples"], calls
+
+
+def test_every_explanation_has_fr_and_en_template(world):
+    stored, _ = _explanations(world)
+    for record in stored.values():
+        assert record["narrative"]["origin"] == "template"
+        assert record["narrative"]["fr"] and record["narrative"]["en"]
+
+
+def test_report_examples_without_llm_use_templates(world, monkeypatch):
+    from biflow.agents.base import BaseAgent
+    monkeypatch.setattr(BaseAgent, "ask_text", lambda *a, **k: pytest.fail("aucun appel LLM attendu"))
+    examples = _execute(world)["examples"]
+    assert [e["title"] for e in examples] == ["Detention de compte", "Ecart hommes-femmes",
+                                              "Densite d'agences et pairs"]
+    assert all(e["origin"] == {"fr": "template", "en": "template"} for e in examples)
+    assert "variation +6,6 pts. Decomposition : men +4,4 pts, women -2,1 pts." in examples[1]["text"]["fr"]
+    assert "Pairs : MAR" in examples[2]["text"]["fr"]
+
+
+def test_hallucinated_llm_number_falls_back_to_template(world, monkeypatch):
+    examples, calls = _with_llm(world, monkeypatch, "Environ 40 % des adultes ont un compte en 2024.")
+    assert len(calls) == 3
+    for example in examples:
+        assert example["origin"]["fr"] == "template" and example["text"]["fr"] == example["template"]["fr"]
+        assert example["llm"]["llm_status"] == "rejected_ungrounded"
+    assert "40" in examples[0]["llm"]["unsupported_numbers"]
+
+
+def test_grounded_llm_rephrasing_is_kept_within_budget(world, monkeypatch):
+    def faithful(prompt):  # reformule en gardant exactement les nombres du gabarit
+        return "En clair : " + prompt.split("Texte : ", 1)[1]
+
+    examples, calls = _with_llm(world, monkeypatch, faithful, budget=1)
+    assert len(calls) == 1  # budget d'appels respecte
+    assert examples[0]["origin"]["fr"] == "llm" and examples[0]["text"]["fr"].startswith("En clair : ")
+    assert [e["origin"]["fr"] for e in examples[1:]] == ["template", "template"]
+
+
+def test_explain_cli_reads_stored_explanations_only(world, monkeypatch, capsys):
+    import sys
+    import main as cli
+    _execute(world)
+    warehouse = str(world.tmp / "processed" / "warehouse.duckdb")
+    original = duckdb.connect
+
+    def read_only(*args, **kwargs):
+        assert kwargs.get("read_only") is True
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(duckdb, "connect", read_only)
+    monkeypatch.setattr(sys, "argv", ["main.py", "explain", "--kpi", "gender_gap", "--iso3", "tun", "--year",
+                                      "2024", "--compare-year", "2021", "--warehouse", warehouse])
+    assert cli.main() == 0
+    out = capsys.readouterr().out
+    assert out.startswith("# Account ownership gender gap - Tunisia 2024")
+    assert "Decomposition : men +4,4 pts, women -2,1 pts." in out
+    monkeypatch.setattr(sys, "argv", ["main.py", "explain", "--kpi", "branch_density", "--iso3", "TUN",
+                                      "--year", "2023", "--compare-iso3", "PEERS", "--lang", "en",
+                                      "--warehouse", warehouse])
+    assert cli.main() == 0
+    out = capsys.readouterr().out
+    assert "Peer average 2023 21.0 per 100 000 adults -> Tunisia 2023 18.0" in out and "Peers: MAR 21.0." in out
+    monkeypatch.setattr(sys, "argv", ["main.py", "explain", "--kpi", "account_ownership", "--iso3", "TUN",
+                                      "--year", "1999", "--warehouse", warehouse])
+    assert cli.main() == 1
