@@ -37,6 +37,7 @@ llm:
   routing:
     quality:      [groq, gemini]
     auditor:      [groq, gemini]   # reformulation seulement, verifiee (grounding)
+    mapper:       [groq, gemini]   # roles de colonnes des sources utilisateur, re-valides
 
 # --------------------------------------------------------------------------- Orchestrateur
 orchestrator:
