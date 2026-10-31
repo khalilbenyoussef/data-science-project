@@ -29,6 +29,25 @@ class PipelineState(TypedDict, total=False):
     semantic_kpi_request: dict[str, Any]
     semantic_kpi_response: dict[str, Any]
     lineage_path: str
+    # Optional Route 2 channels; Route 1 state is unchanged when they are absent.
+    analysis_request: dict[str, Any]
+    analysis_report: dict[str, Any]
+    analysis_dataset_path: str
+    dashboard_paths: dict[str, str]
+    dashboard_summary: dict[str, Any]
+    # Finova dashboard contract v2.0 (analysis -> spec -> public JSON).
+    user_question: str
+    facts: list[dict[str, Any]]
+    facts_path: str
+    country_name: str
+    insights: dict[str, list[dict[str, Any]]]
+    xai: dict[str, Any] | None
+    analyst_summary: dict[str, Any]
+    finova_spec_path: str
+    dashboard_public_path: str
+    dashboard_history_path: str
+    dashboard_spec_summary: dict[str, Any]
+    route2_summary: dict[str, Any]
 
     warnings: Annotated[list[str], operator.add]
     errors: Annotated[list[str], operator.add]

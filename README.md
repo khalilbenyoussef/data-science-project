@@ -1,11 +1,12 @@
 # BIFlow — Automatisation d'un pipeline BI multi-agents
 
-Pipeline Business Intelligence automatique : **données brutes → profilage →
-qualité → ETL**, orchestré par un graphe LangGraph et des agents LLM
-(Gemini, Groq).
+Pipeline Business Intelligence automatique en deux routes :
 
-Cette version couvre le **P1 — Données** : collecte, profilage, quality gate et
-construction du modèle en étoile.
+- **Route 1 — Données** : données brutes → profilage → qualité → ETL, orchestré
+  par LangGraph ; les agents LLM existants (Gemini, Groq) restent inchangés.
+- **Route 2 — Analyse** : warehouse → Semantic & KPI → **BI Analyst** →
+  **Dashboard React/ECharts**, entièrement déterministe (aucun LLM, aucun
+  recalcul, aucune interpolation).
 
 Domaine : **Économie & Finance / inclusion financière**.
 
@@ -22,11 +23,15 @@ Sources de données :
 - [x] **P0 — Socle** : configuration, package `biflow`, couche LLM multi-provider,
       vérification des clés.
 - [x] **P1 — Données** : collector, profiler, quality gate, ETL (nœuds LangGraph).
+- [x] **P2 — Semantic & KPI** : couche KPI déterministe (6 KPI, 6 actions,
+      provenance et revue).
+- [x] **P3 — Route 2** : BI Analyst déterministe, contrat dashboard et front
+      React/ECharts.
 
-Cette branche est limitée au périmètre P1. Les phases KPI, analyse, dashboard et
-XAI ne sont pas incluses.
+La Route 1 n'est pas modifiée par la Route 2 : graphe, agents et CLI existants
+conservent leur comportement.
 
-## Architecture (P1)
+## Architecture
 
 ```
 main.py / scripts/check_llm.py
@@ -34,12 +39,16 @@ src/biflow/
   config.py        configuration YAML + chemins
   llm.py           providers, fallback, cache, compteur de tokens
   state.py         etat partage du pipeline
-  graph.py         graphe LangGraph + repli sequentiel
+  graph.py         graphe LangGraph Route 1 + repli sequentiel
+  analysis_graph.py graphe Route 2 (BI Analyst -> Dashboard)
   agents/          base, collector, profiler, quality, etl
-  tools/           dictionnaire d'indicateurs (libelles, unites)
+                   + bi_analyst, dashboard, semantic_kpi
+  tools/           dictionnaire d'indicateurs, kpi, semantic_kpi,
+                   analysis, dashboard_contract
   utils/           io, logger, pays (ISO3)
-config/config.yaml     chemins, LLM, sources, seuils
+config/config.yaml     chemins, LLM, sources, seuils, analyst, dashboard
 data/                  raw, staging, processed, profiles, quality
+dashboard/             front React + Vite + ECharts (donnees JSON)
 outputs/               reports, profiles, logs, cache LLM
 ```
 
@@ -53,6 +62,51 @@ outputs/               reports, profiles, logs, cache LLM
 | S9 | `etl` | `data/processed/*.parquet`, `warehouse.duckdb`, `lineage.json` |
 
 Chaque execution ecrit un rapport dans `outputs/reports/<run_id>/`.
+
+## Route 2 — BI Analyst et Dashboard
+
+La Route 2 lit le warehouse en **lecture seule** et passe uniquement par les
+contrats sémantiques KPI (`list`, `describe`, `calculate`, `latest_available`,
+`compare_countries`, `compare_years`). Elle ne contient ni LLM, ni SQL ad hoc,
+ni calcul parallèle.
+
+| Etape | Agent | Sorties |
+|---|---|---|
+| S10 | `bi_analyst` | `analysis_dataset.json`, `bi_analyst.json`, `bi_analyst.md` |
+| S11 | `dashboard` | `dashboard_data.json`, `dashboard/public/data/dashboard.json` |
+
+Le **BI Analyst** produit des constats déterministes (`F-001`, …) rattachés à
+des identifiants de preuve (`EV-…`, `TR-…`, `CMP-…`). Le **Dashboard** valide
+le contrat (schéma `1.0`) puis l'exporte de façon atomique pour le front.
+
+```powershell
+# Rapport BI Analyst seul
+python main.py analyze --country TUN,MAR,DZA --mode latest --run-id demo
+
+# Analyste + donnees du dashboard
+python main.py dashboard --country TUN,MAR,DZA --kpis account_ownership,saving_rate `
+  --mode year --year 2024 --reference TUN --top 5 --run-id demo
+
+# Front React (Vite + ECharts)
+cd dashboard
+npm install
+npm run dev        # http://127.0.0.1:5173
+npm run build      # tsc --noEmit && vite build
+```
+
+Options : `--country` (répétable ou CSV), `--kpis`, `--mode latest|year`,
+`--year`, `--reference`, `--top`, `--no-series`, `--run-id`.
+
+- **Aucune valeur n'est inventée** : une observation absente reste `null` avec
+  `availability_status="unavailable"` et un motif ; aucun zéro de remplissage,
+  aucune interpolation.
+- **Comparaisons** : différence absolue `droite − gauche`, en points de
+  pourcentage pour les KPI en `percent`.
+- **Revue et publication** : `publication_status="not_evaluated"` est conservé
+  de bout en bout ; les motifs `requires_review` restent affichés (badges,
+  bandeau, notices, pied de page).
+- **Provenance** : SHA-256 du warehouse, lineage, rapport qualité, liaison de
+  contenu et écarts de sources sont exposés dans les rapports et l'interface.
 
 ## Démarrage
 
@@ -77,7 +131,13 @@ python main.py run --only quality
 python main.py run --from etl
 python main.py run --to etl --no-llm
 
-# 5. Tests
+# 5. Route 2 (warehouse deja construit)
+python main.py dashboard --country TUN,MAR,DZA --mode latest
+
+# 6. Front (Node.js >= 18)
+cd dashboard; npm install; npm run dev
+
+# 7. Tests
 python -m pytest tests -q
 ```
 
@@ -88,6 +148,17 @@ python -m pytest tests -q
 - `data/quality/` : rapport qualité JSON/Markdown, anomalies et gate PASS/FAIL ;
 - `data/processed/` : tables Parquet, `warehouse.duckdb` et `lineage.json` ;
 - `outputs/reports/<run_id>/` : rapport standardisé de chaque agent.
+
+## Sorties Route 2
+
+- `outputs/reports/<run_id>/analysis_dataset.json` : dataset déterministe
+  (observations, séries, tendances, classements, comparaisons, couverture,
+  notices, provenance) ;
+- `outputs/reports/<run_id>/bi_analyst.{json,md}` : rapport et constats
+  rattachés aux preuves ;
+- `outputs/reports/<run_id>/dashboard_data.json` : contrat validé ;
+- `dashboard/public/data/dashboard.json` : copie consommée par le front ;
+- `outputs/reports/<run_id>/run.json` : résumé du run Route 2.
 
 ## Données et périmètre
 
@@ -176,3 +247,74 @@ They are separate from structural/scored `issues` and do not change scores,
 critical issue counts or gate decisions. No value is dropped, clamped or rescaled.
 The threshold is a review trigger, not an official IMF validity limit; the
 underlying values and their denominators still require source verification.
+
+## Dashboard Finova — `dashboard_app/`
+
+Tableau de bord standalone : API **FastAPI en lecture seule** + front
+**React/Vite/TypeScript** (SVG maison). Il expose le contrat de la Route 2 tel
+que produit par le pipeline, sans LLM et sans recalcul côté client.
+
+Pré-requis : warehouse et rapport qualité déjà construits
+(`python main.py run --from quality --no-llm`) et Node.js >= 18.
+
+### 1. Produire le contrat publié
+
+```powershell
+$env:PYTHONPATH = "src"
+python -c "from biflow.route2_graph import run_route2; run_route2(use_llm=False)"
+```
+
+Écrit `dashboard_app/public/data/finova.json`, un `finova_spec.json` par run
+dans `outputs/reports/<run_id>/` et un snapshot dans
+`outputs/dashboard/history/` (Tunisie 2024 par défaut, `config/config.yaml`).
+
+### 2. Lancer le dashboard
+
+```powershell
+$env:PYTHONPATH = "src"
+$env:FINOVA_PREWARM = "1"   # optionnel : prépare en tâche de fond les vues 2024/2021/2017
+python -m uvicorn dashboard_app.api.app:app --host 127.0.0.1 --port 8000
+# http://127.0.0.1:8000  (API + UI buildée si dashboard_app/web/dist existe)
+```
+
+Les vues générées à la demande sont mises en cache dans
+`outputs/dashboard/generated/` (une entrée par pays, année et empreinte du
+warehouse) : la première ouverture d'un pays prend 20 à 40 secondes, les
+suivantes sont immédiates, y compris après redémarrage du serveur.
+
+Développement front avec proxy `/api` vers le port 8000 :
+
+```powershell
+cd dashboard_app/web
+npm install
+npm run dev        # http://127.0.0.1:5173
+npm run build      # tsc --noEmit && vite build
+```
+
+Le login est une démonstration d'interface (aucune authentification réelle).
+
+### 3. Endpoints
+
+| Méthode | Route | Rôle |
+|---|---|---|
+| GET | `/api/spec?iso3=TUN&year=2024` | contrat du scope demandé |
+| GET | `/api/runs?limit=20` | derniers `outputs/reports/*/run.json` |
+| POST | `/api/ask` | réponse déterministe vérifiée dans les faits |
+| GET | `/api/health` | présence du contrat et du warehouse |
+
+Le scope publié est servi tel quel (`X-Finova-Source: file`). Tout autre
+pays/année est **construit à la demande** depuis le warehouse
+(`X-Finova-Source: generated`), puis mémorisé ; le cache est invalidé si le
+warehouse change. Cette génération réutilise le moteur KPI existant : le
+premier appel sur un nouveau couple pays/année peut durer une à deux minutes,
+les appels suivants sont instantanés. Aucune année n'est substituée : les
+cartes affichent l'année réellement utilisée, ou « To load » / « Indisponible ».
+
+### 4. Tests
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m pytest tests/test_dashboard_api.py tests/test_dashboard_spec.py `
+  tests/test_analyst.py tests/test_warehouse_reader.py tests/test_route2_graph.py -q
+cd dashboard_app/web; npm run typecheck
+```

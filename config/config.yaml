@@ -35,6 +35,7 @@ llm:
   # collector, profiler et etl sont 100 % deterministes : aucun LLM
   routing:
     quality:      [groq, gemini]
+    analyst:      [groq, gemini]
 
 # --------------------------------------------------------------------------- Collecte
 collector:
@@ -113,3 +114,22 @@ sources:
     indicators:
       - NY.GDP.MKTP.CD             # PIB (USD courants)
       - NY.GDP.PCAP.CD             # PIB par habitant (USD courants)
+
+# ------------------------------------------------------------------- Route 2
+# Analyse et dashboard deterministes : aucun appel LLM, lecture seule du DW.
+analyst:
+  default_countries: [TUN, MAR, DZA]
+  default_kpis: [account_ownership, branch_density, digital_payment_rate,
+                 saving_rate, borrowing_rate, unbanked_share]
+  top_n: 10                        # constats max par code dans le rapport
+  trend_epsilon: 0.01              # seuil "stable" (points de % ou unite native)
+  narrate: false                   # narration LLM optionnelle, chiffres verifies
+
+dashboard:
+  data_output: dashboard/public/data/dashboard.json
+  spec_output: dashboard_app/public/data/finova.json
+  history_dir: outputs/dashboard/history
+  reference_path: config/reference/finova_reference.yaml
+  default_country: TUN
+  default_mode: latest
+  default_year: 2024

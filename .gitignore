@@ -14,19 +14,20 @@ __pycache__/
 !.env.example
 
 # Donnees brutes et derivees (volumineuses)
-data/raw/
-data/staging/
-data/processed/
-data/profiles/
-data/quality/
-data/reports/
+data/
 outputs/
-
-
-docs
 
 # Artefacts
 *.duckdb
 *.parquet
 *.log
 backups/
+
+# Dashboard (Node)
+node_modules
+dashboard/dist/
+dashboard/public/data/*.json
+dashboard_app/web/dist/
+
+# Videos d'arriere-plan (124 Mo, a heberger separement ou via Git LFS)
+*.mp4
