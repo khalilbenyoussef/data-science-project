@@ -142,18 +142,20 @@ def test_catalog_values_deltas_and_review_flags(spec):
     assert saving.chip.requires_review is True  # provenance absente dans cette fixture
     assert "provisional_definition" not in saving.chip.review_reasons  # catalogue 1.3.0 : verifie
     assert saving.label == "Épargne (toute forme)"
-    assert saving.chip.note == "Définition catalogue v1.3.0 appliquée au warehouse."
+    assert saving.chip.note == "Définition catalogue v1.4.0 appliquée au warehouse."
 
     emergency = spec.metric("emergency_money")
-    assert emergency.provider == "warehouse"
+    # catalogue 1.4.0 : KPI emergency_funds (fin24aP), identifiant du widget inchange
+    assert emergency.provider == "semantic" and emergency.chip.provider == "semantic"
+    assert emergency.evidence_ids == ("EV-emergency_funds-TUN-2024",)
     assert emergency.value == pytest.approx(88.39)
     # libelle du dictionnaire corrige (glossaire Findex 2025) : plus de signalement d'ecart
     assert emergency.label == "Fonds d'urgence en 30 jours : possible"
     assert "dictionary_label_mismatch" not in emergency.chip.review_reasons
     codes = {notice.code for notice in spec.notices}
     assert "fin24aP_definition" not in codes
-    outside = next(notice for notice in spec.notices if notice.code == "warehouse_not_in_catalog")
-    assert outside.message.startswith("Les séries ATM, dépôts/crédits et fin24aP viennent du")
+    # toutes les series affichees sont au catalogue : plus de notice « hors catalogue »
+    assert "warehouse_not_in_catalog" not in codes
 
 
 def test_warehouse_series_keep_their_observed_year(spec):
@@ -162,9 +164,38 @@ def test_warehouse_series_keep_their_observed_year(spec):
     depositors = spec.metric("depositors_per_1k")
     assert depositors.value == pytest.approx(1063.3) and depositors.year == 2018
     assert "série arrêtée" in (depositors.caveat or "")
+    assert depositors.evidence_ids == ("EV-depositors_per_1k-TUN-2018",)
     loans = spec.metric("loans_pct_gdp")
     assert loans.value == pytest.approx(67.8) and loans.year == 2024
     assert any(notice.code == "loans_pct_gdp_now_available" for notice in spec.notices)
+    # catalogue 1.4.0 : memes widgets, valeurs lues via les KPI (chip du catalogue)
+    access = spec.page("access")
+    assert {m.id: m.provider for m in access.metrics} == {
+        "atm_per_100k": "semantic", "branch_density": "semantic", "depositors_per_1k": "semantic",
+        "borrowers_per_1k": "semantic", "loans_pct_gdp": "semantic", "deposits_pct_gdp": "semantic"}
+    charts = {chart.id: chart for chart in access.charts}
+    assert all(series.provider == "semantic" for series in charts["physical_network"].series)
+    assert {bar.provider for bar in charts["atm_peers"].bars} == {"semantic"}
+    assert all(m.chip.label.startswith("KPI catalog") for m in access.metrics)
+
+
+def test_subgroups_and_gaps_come_from_catalog_kpis(spec):
+    inclusion = spec.page("inclusion")
+    dumbbell = next(chart for chart in inclusion.charts if chart.id == "account_ownership_groups")
+    gender = next(group for group in dumbbell.groups if group.dimension == "gender").rows[0]
+    assert gender.provider == "semantic"
+    assert (gender.left.value, gender.right.value) == (pytest.approx(26.6), pytest.approx(49.6))
+    assert gender.gap_pp == pytest.approx(23.0)  # lu dans gender_gap
+    assert gender.evidence_ids == ("EV-account_ownership_women-TUN-2024",
+                                   "EV-account_ownership_men-TUN-2024", "EV-gender_gap-TUN-2024")
+    facts = {fact.id: fact for fact in spec.facts}
+    assert facts["F-gap-gender-TUN-2024"].provider == "semantic"
+    assert facts["F-gap-gender-TUN-2024"].evidence_ids == ("EV-gender_gap-TUN-2024",)
+    assert facts["F-gender-femmes-TUN-2024"].evidence_ids == ("EV-account_ownership_women-TUN-2024",)
+    exclusion = spec.page("exclusion")
+    rural = next(metric for metric in exclusion.metrics if metric.id == "rural_account")
+    assert rural.provider == "semantic" and rural.value == pytest.approx(30.2)
+    assert rural.evidence_ids == ("EV-account_ownership_rural-TUN-2024",)
 
 
 def test_peers_reference_lines_and_placeholders(spec):

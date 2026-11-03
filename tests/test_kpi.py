@@ -39,6 +39,24 @@ def warehouse(tmp_path):
             ("TUN", 2024, "fas", "branch_density", "bank_type", "commercial_banks", 12.5, "per_100k_adults"),
             ("TUN", 2024, "fas", "branch_density", "bank_type", "other_banks", 99, "per_100k_adults"),
             ("TUN", 2024, "fas", "loans_pct_gdp", "bank_type", "commercial_banks", 20000, "percent_of_gdp"),
+            # catalogue 1.4.0 : series FAS et Findex ajoutees, sous-groupes de detention de compte
+            ("TUN", 2024, "fas", "atm_density", "bank_type", "commercial_banks", 35.4, "per_100k_adults"),
+            ("TUN", 2024, "fas", "depositors_per_1k", "bank_type", "commercial_banks", 1063.3, "per_1k_adults"),
+            ("TUN", 2024, "fas", "borrowers_per_1k", "bank_type", "commercial_banks", 253.7, "per_1k_adults"),
+            ("TUN", 2024, "fas", "deposit_accounts_per_1k", "bank_type", "commercial_banks", 1500.0, "per_1k_adults"),
+            ("TUN", 2024, "fas", "loan_accounts_per_1k", "bank_type", "commercial_banks", 400.0, "per_1k_adults"),
+            ("TUN", 2024, "fas", "deposits_pct_gdp", "bank_type", "commercial_banks", 71.7, "percent_of_gdp"),
+            ("TUN", 2024, "findex", "fin24aP", "all", "all", .88, "fraction"),
+            ("TUN", 2024, "findex", "fin24sav", "all", "all", .19, "fraction"),
+            ("TUN", 2024, "findex", "fin24bor", "all", "all", .06, "fraction"),
+            ("TUN", 2024, "findex", "mobileaccount_t_d", "all", "all", .03, "fraction"),
+            ("TUN", 2024, "findex", "inactive_t_d", "all", "all", .03, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "education", "prim edu or less", .29, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "education", "secondary edu or more", .46, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "laborforce", "out of laborforce", .25, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "laborforce", "in laborforce", .52, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "urbanicity", "rural", .30, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "urbanicity", "urban", .47, "fraction"),
             ("XKX", 2024, "findex", "account_t_d", "all", "all", .6, "fraction"),
             ("PSE", 2024, "findex", "account_t_d", "all", "all", .7, "fraction"),
         ])
@@ -63,7 +81,7 @@ def test_verified_values_subgroups_units_and_metadata(warehouse, kpi, expected, 
     assert result.iso3 == "TUN" and result.observation_year == 2024
     assert result.availability_status == "available" and result.reason is None
     assert result.definition == load_catalog()["kpis"][kpi]["definition"]
-    assert result.catalog_version == "1.3.0" and result.definition_version == "1.0.0"
+    assert result.catalog_version == "1.4.0" and result.definition_version == "1.0.0"
     assert len(result.catalog_sha256) == 64
     assert result.publication_status == "not_evaluated"
     with pytest.raises(FrozenInstanceError):
@@ -404,10 +422,13 @@ def test_provenance_for_all_six_kpis(warehouse, provenance_files, kpi):
     assert r.review_reasons == (("provisional_definition",) if r.requires_review else ())
     if kpi in GAPS:
         assert r.input_fact_key is None and len(r.component_inputs) == 2
-    else:
+    else:  # dimension et valeur du fait = celles declarees au catalogue (sous-groupes inclus)
+        mapping = load_catalog()["kpis"][kpi]["warehouse"]
         assert r.input_fact_key == ("TUN", 2024, r.source, r.indicator_code,
-                                    "bank_type" if r.source == "fas" else "all",
-                                    "commercial_banks" if r.source == "fas" else "all")
+                                    mapping["dimension"], mapping["dimension_value"])
+        assert (mapping["dimension"], mapping["dimension_value"]) == (
+            ("bank_type", "commercial_banks") if r.source == "fas"
+            else ("all", "all") if r.subgroup == "total_population" else (mapping["dimension"], mapping["dimension_value"]))
     assert r.formula == load_catalog()["kpis"][kpi]["formula"]["from_fact"]
     assert r.publication_status == "not_evaluated"
 
@@ -618,3 +639,19 @@ def test_gap_catalog_dependencies_must_match_subgroup_facts(tmp_path, warehouse)
     path.write_text(yaml.safe_dump(catalog), encoding="utf-8")
     with pytest.raises(CatalogError):
         load_catalog(path)
+
+
+def test_pct_gdp_plausibility_flag_reviews_only_the_flagged_row(provenance_files):
+    """Catalogue 1.4.0 : seule la ligne signalee (pays, annee, serie) requiert une revue."""
+    _, quality, calculator = provenance_files
+    quality["diagnostics"] = [diagnostic(
+        source="fas", indicator_code="loans_pct_gdp", code="fas_pct_gdp_plausibility",
+        series_code="TUN.OUTL_COMBANK.POGDP.A", value=20000.0, unit="percent_of_gdp",
+        reason="Value exceeds diagnostic threshold of 1000% GDP")]
+    calc = calculator()
+    loans = calc.calculate("TUN", 2024, "loans_pct_gdp")
+    assert loans.value == 20000 and loans.availability_status == "available"  # jamais plafonne
+    assert "unresolved_input_quality_warning" in loans.review_reasons
+    for other in ("deposits_pct_gdp", "branch_density", "atm_density"):  # aucune revue par association
+        result = calc.calculate("TUN", 2024, other)
+        assert not result.quality_warnings and not result.requires_review, other

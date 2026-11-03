@@ -44,7 +44,10 @@ USER_CONVERSIONS = {"none": lambda v: v, "percent_to_fraction": lambda v: v / 10
 
 # Bornes de plausibilite par unite KPI
 UNIT_BOUNDS = {"percent": (0.0, 100.0), "percentage_points": (-100.0, 100.0),
-               "per_100k_adults": (0.0, math.inf), "fraction": (0.0, 1.0)}
+               "per_100k_adults": (0.0, math.inf), "per_1k_adults": (0.0, math.inf),
+               # % du PIB : peut depasser 100 ; les valeurs implausibles relevent du
+               # diagnostic qualite fas_pct_gdp_plausibility (lignes signalees seulement)
+               "percent_of_gdp": (0.0, math.inf), "fraction": (0.0, 1.0)}
 
 
 # --------------------------------------------------------------------------- outils

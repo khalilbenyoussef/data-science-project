@@ -29,6 +29,38 @@ GAPS = {
 }
 
 
+# Catalogue 1.4.0 (REQUEST_CATALOG) : series FAS, Findex et sous-groupes de detention de compte
+FAS_NEW = {
+    "atm_density": ("FA18N.PHTADLT_NUM", "per_100k_adults", "atm_per_100k"),
+    "depositors_per_1k": ("FA29N_COMBANK.PTADLT_NUM", "per_1k_adults", "depositors_per_1k"),
+    "borrowers_per_1k": ("FA21N_COMBANK.PTADLT_NUM", "per_1k_adults", "borrowers_per_1k"),
+    "deposit_accounts_per_1k": ("FA30N_COMBANK.PTADLT_NUM", "per_1k_adults", "deposit_accounts_per_1k"),
+    "loan_accounts_per_1k": ("LOANACCN_COMBANK.PTADLT_NUM", "per_1k_adults", "loan_accounts_per_1k"),
+    "deposits_pct_gdp": ("OUTD_COMBANK.POGDP", "percent_of_gdp", None),
+    "loans_pct_gdp": ("OUTL_COMBANK.POGDP", "percent_of_gdp", None),
+}
+FINDEX_NEW = {  # kpi: (code, ligne du glossaire, annees observees)
+    "emergency_funds": ("fin24aP", 44, [2014, 2017, 2021, 2022, 2024]),
+    "emergency_source_savings": ("fin24sav", 34, [2021, 2022, 2024]),
+    "emergency_source_borrowing": ("fin24bor", 37, [2021, 2022, 2024]),
+    "mobile_money_account": ("mobileaccount_t_d", 120, [2014, 2017, 2021, 2022, 2024]),
+    "inactive_accounts": ("inactive_t_d", 109, [2014, 2017, 2021, 2022, 2024]),
+}
+SUBGROUPS = {
+    "account_ownership_women": ("gender", "women"), "account_ownership_men": ("gender", "men"),
+    "account_ownership_poorest_40": ("income", "poorest 40%"),
+    "account_ownership_richest_60": ("income", "richest 60%"),
+    "account_ownership_age_15_24": ("age_cat", "ages 15-24"),
+    "account_ownership_age_25_plus": ("age_cat", "age 25+"),
+    "account_ownership_primary_or_less": ("education", "prim edu or less"),
+    "account_ownership_secondary_or_more": ("education", "secondary edu or more"),
+    "account_ownership_out_of_laborforce": ("laborforce", "out of laborforce"),
+    "account_ownership_in_laborforce": ("laborforce", "in laborforce"),
+    "account_ownership_rural": ("urbanicity", "rural"),
+    "account_ownership_urban": ("urbanicity", "urban"),
+}
+
+
 @pytest.fixture(scope="module")
 def catalog():
     return yaml.safe_load((ROOT / "config/kpi_catalog.v1.yaml").read_text(encoding="utf-8"))
@@ -36,13 +68,13 @@ def catalog():
 
 def test_catalog_identity_and_versions(catalog):
     assert catalog["schema_version"] == 1
-    assert catalog["catalog_version"] == "1.3.0"
+    assert catalog["catalog_version"] == "1.4.0"
     assert catalog["status"] == "draft"
     assert catalog["scope"] == "country_year_total_population_and_subgroup_gaps"
-    assert set(catalog["kpis"]) == set(EXPECTED) | set(GAPS)
+    assert set(catalog["kpis"]) == set(EXPECTED) | set(GAPS) | set(FAS_NEW) | set(FINDEX_NEW) | set(SUBGROUPS)
     assert {k["business_objective"] for k in catalog["kpis"].values()} == {
         "financial_inclusion", "banking_infrastructure", "digital_finance",
-        "savings_deposits", "credit", "financial_exclusion_vulnerability",
+        "savings_deposits", "credit", "financial_exclusion_vulnerability", "financial_resilience",
     }
 
 
@@ -217,7 +249,9 @@ def test_traceability_and_review_cover_all_inputs_and_derived_dependencies(catal
     assert review["change_existing_quality_gate"] is False
     scope = review["current_diagnostic_scope"]
     assert scope["threshold_config"] in {"quality." + key for key in load_config()["quality"]}
-    assert set(scope["indicators"]).isdisjoint(k["warehouse"]["indicator_code"] for k in catalog["kpis"].values())
+    # catalogue 1.4.0 : les series % du PIB sont l'entree de leur seul KPI homonyme
+    assert {kpi_id for kpi_id, k in catalog["kpis"].items()
+            if k["warehouse"]["indicator_code"] in scope["indicators"]} == set(scope["indicators"])
     assert "inherit" in review["derived_kpis"]
     derived = catalog["kpis"]["unbanked_share"]
     parent = catalog["kpis"]["account_ownership"]
@@ -236,3 +270,53 @@ def test_external_references_are_existing_world_bank_documentation(catalog):
             parsed = urlparse(reference["url"])
             assert parsed.scheme == "https"
             assert parsed.hostname.endswith(".worldbank.org")
+
+
+@pytest.mark.parametrize("kpi_id", FAS_NEW)
+def test_new_fas_series_are_backed_by_raw_metadata(catalog, kpi_id):
+    series, unit, wide = FAS_NEW[kpi_id]
+    kpi = catalog["kpis"][kpi_id]
+    assert kpi["verification"]["status"] == "verified_metadata"
+    reference = catalog["references"][kpi["verification"]["evidence"][0]]
+    assert reference["path"] == "data/raw/fas.csv" and series in reference["locator"]
+    assert kpi["source"] == {"dataset": "fas", "indicator": series, "series_code_template": f"{{iso3}}.{series}.A"}
+    assert load_config()["sources"]["fas"]["series"][kpi_id] == series
+    mapping = kpi["warehouse"]
+    assert (mapping["indicator_code"], mapping["input_unit"], kpi["unit"]) == (kpi_id, unit, unit) == (kpi_id, UNITS[kpi_id], unit)
+    assert kpi["formula"]["from_fact"] == "value"  # valeur publiee, jamais recalculee
+    assert mapping["wide_column"] == wide
+    if wide is not None:
+        assert f"max(CASE WHEN indicator_code = '{kpi_id}' THEN value END) AS {wide}" in PIVOT_SQL
+    assert kpi["valid_years"] == list(range(2011, 2025))
+
+
+@pytest.mark.parametrize("kpi_id", FINDEX_NEW)
+def test_new_findex_series_cite_their_glossary_row(catalog, kpi_id):
+    code, row, years = FINDEX_NEW[kpi_id]
+    kpi = catalog["kpis"][kpi_id]
+    assert kpi["verification"]["status"] == "verified"
+    reference = catalog["references"][kpi["verification"]["evidence"][0]]
+    assert reference["url"] == catalog["references"]["findex_2025_glossary"]["url"]
+    assert reference["locator"].startswith(f"Glossary!A{row}:C{row}, ")
+    assert "(%, age 15+)" in reference["evidence"]
+    assert kpi["warehouse"]["indicator_code"] == code and code in load_config()["sources"]["findex"]["indicators"]
+    assert kpi["denominator"]["population"] == "all surveyed adults aged 15+"
+    assert kpi["formula"]["from_fact"] == "100 * value" and kpi["unit"] == "percent"
+    assert kpi["valid_years"] == years
+
+
+@pytest.mark.parametrize("kpi_id", SUBGROUPS)
+def test_subgroup_kpis_read_one_findex_subgroup_each(catalog, kpi_id):
+    dimension, value = SUBGROUPS[kpi_id]
+    kpi = catalog["kpis"][kpi_id]
+    mapping = kpi["warehouse"]
+    assert (mapping["indicator_code"], mapping["dimension"], mapping["dimension_value"]) == ("account_t_d", dimension, value)
+    assert kpi["formula"]["from_fact"] == "100 * value" and kpi["unit"] == "percent"
+    assert value in kpi["denominator"]["population"]
+    assert "findex_2025_glossary_account" in kpi["verification"]["evidence"]
+    # urbanicity n'est observe que pour la vague 2024 dans le fichier brut
+    assert kpi["valid_years"] == ([2024] if dimension == "urbanicity" else [2011, 2014, 2017, 2021, 2022, 2024])
+    # les ecarts du catalogue restent la difference de deux de ces sous-groupes
+    for gap_id, (gap_dimension, first, second, _) in GAPS.items():
+        if gap_dimension == dimension:
+            assert value in (first, second)

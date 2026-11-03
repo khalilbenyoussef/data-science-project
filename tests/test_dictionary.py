@@ -39,9 +39,10 @@ def test_glossary_rows_match_verified_positions():
     assert len(set(FINDEX_GLOSSARY_ROWS.values())) == len(FINDEX_GLOSSARY_ROWS)
 
 
-def test_no_catalog_kpi_uses_barrier_or_emergency_fund_codes():
+def test_catalog_uses_only_the_requested_emergency_fund_codes():
     used = {k["warehouse"]["indicator_code"] for k in load_catalog()["kpis"].values()}
-    assert used.isdisjoint(FIN24 + FIN11)
+    # catalogue 1.4.0 (REQUEST_CATALOG) : fin24aP, fin24sav, fin24bor seulement
+    assert used & set(FIN24 + FIN11) == {"fin24aP", "fin24sav", "fin24bor"}
     findex_used = {k["warehouse"]["indicator_code"] for k in load_catalog()["kpis"].values()
                    if k["warehouse"]["source"] == "findex"}
     assert findex_used <= set(FINDEX_GLOSSARY_ROWS)

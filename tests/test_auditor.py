@@ -282,8 +282,11 @@ def test_quality_diagnostic_on_an_input_is_a_caveat(world):
     world.edit_json(world.quality_path, lambda q: q["diagnostics"].append(diagnostic))
     check = _check(world.run(), "C3_input_quality_findings")
     assert check["result"] == "warn"
-    # Sans dimension, le diagnostic vise tous les faits account_t_d (sous-groupes inclus)
-    assert {r["kpi_id"] for r in check["affected_rows"]} == {"account_ownership", "unbanked_share", "gender_gap"}
+    # Sans dimension, le diagnostic vise tous les faits account_t_d (sous-groupes inclus) :
+    # catalogue 1.4.0, les KPI par sous-groupe (genre, seul present ici) lisent ces faits
+    assert {r["kpi_id"] for r in check["affected_rows"]} == {
+        "account_ownership", "unbanked_share", "gender_gap",
+        "account_ownership_men", "account_ownership_women"}
 
 
 def test_partial_wave_caveat_only_for_survey_kpis(world):
@@ -371,7 +374,7 @@ def test_explanation_traces_value_to_raw_record(world):
     e = stored[("account_ownership", "TUN", 2024)]
     assert e["value"] == pytest.approx(37.844486) and e["unit"] == "percent"
     assert e["formula"] == "100 * value" and "x 100" in e["transformation"]
-    assert e["catalog_version"] == "1.3.0" and e["publication_status"] == "approved"
+    assert e["catalog_version"] == "1.4.0" and e["publication_status"] == "approved"
     item, = e["inputs"]
     assert item["fact_value"] == 0.37844486
     raw = item["raw"]
@@ -527,3 +530,20 @@ def test_insights_in_state_are_audited_without_affecting_publication(world):
     f1 = next(c for c in audit["checks"] if c["check_id"] == "F1_insights_grounded")
     assert f1["result"] == "warn" and f1["affected_rows"][0]["insight_id"] == "bad"
     assert audit["publication"] == before["publication"]
+
+
+def test_new_units_have_bounds_and_pct_of_gdp_is_not_capped():
+    """Catalogue 1.4.0 : per_1k_adults et percent_of_gdp ont des bornes ; un % du PIB > 100
+    reste plausible (seul le diagnostic qualite signale les valeurs extremes)."""
+    from biflow.tools.audit_checks import unit_checks
+
+    catalog = {"kpis": {"depositors_per_1k": {"unit": "per_1k_adults"},
+                        "loans_pct_gdp": {"unit": "percent_of_gdp"}}}
+    rows = [{"kpi_id": "depositors_per_1k", "iso3": "TUN", "year": 2018, "unit": "per_1k_adults", "value": 1063.3},
+            {"kpi_id": "loans_pct_gdp", "iso3": "TUN", "year": 2024, "unit": "percent_of_gdp", "value": 145.0}]
+    units, ranges = unit_checks(rows, catalog)
+    assert units["result"] == ranges["result"] == "pass"
+    rows[0]["value"] = -1.0
+    units, ranges = unit_checks(rows, catalog)
+    assert units["result"] == "pass" and ranges["result"] == "fail"
+    assert [r["kpi_id"] for r in ranges["affected_rows"]] == ["depositors_per_1k"]

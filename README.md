@@ -24,9 +24,13 @@ Sources de données :
 - [x] **P0 — Socle** : configuration, package `biflow`, couche LLM multi-provider,
       vérification des clés.
 - [x] **P1 — Données** : collector, profiler, quality gate, ETL (nœuds LangGraph).
-- [x] **P2 — Semantic & KPI** : couche KPI déterministe (11 KPI du catalogue
-      1.3.0, 6 actions, provenance et revue) et étape `semantic_kpi` après l'ETL
-      (table `kpi_values`).
+- [x] **P2 — Semantic & KPI** : couche KPI déterministe (35 KPI du catalogue
+      1.4.0, 6 actions, provenance et revue) et étape `semantic_kpi` après l'ETL
+      (table `kpi_values`). Le catalogue 1.4.0 reprend les séries de
+      `REQUEST_CATALOG.md` : 7 séries FAS (ATM, déposants, emprunteurs, comptes,
+      encours en % du PIB), 5 séries Findex (fonds d'urgence et leurs sources,
+      mobile money, comptes inactifs) et la détention de compte par sous-groupe
+      (un KPI par groupe : genre, revenu, âge, éducation, activité, milieu).
 - [x] **P3 — Route 2** : BI Analyst déterministe, contrat dashboard et front
       React/ECharts.
 - [x] **Audit / XAI** : étape `auditor` (vérification indépendante, publication,
@@ -55,7 +59,7 @@ src/biflow/
                    user_sources ; analysis, dashboard_contract, dashboard_spec (Route 2)
   utils/           io, logger, pays (ISO3)
 config/config.yaml     chemins, LLM, orchestrateur, KPI, sources, seuils, analyst, dashboard
-config/kpi_catalog.v1.yaml  definitions declaratives des KPI (version 1.3.0)
+config/kpi_catalog.v1.yaml  definitions declaratives des KPI (version 1.4.0)
 data/                  raw, snapshots, staging, processed, profiles, quality, audit
 dashboard/             front React + Vite + ECharts (donnees JSON)
 outputs/               reports, profiles, logs, cache LLM

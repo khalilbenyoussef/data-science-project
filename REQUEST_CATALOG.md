@@ -1,5 +1,13 @@
 # REQUEST_CATALOG — séries à ajouter au catalogue KPI
 
+> **Statut 2026-11-03 — catalogue 1.4.0.** Les priorités 1 et 2 (hors barrières
+> `fin11a`–`fin11f`) et la détention de compte par sous-groupe (priorité 3, un KPI
+> par groupe) sont au catalogue. La Route 2 les lit via le chemin sémantique,
+> sans changement d'UI : le chip « Warehouse — not in KPI catalog yet » devient le
+> chip du catalogue. `fin17a`/`fin22a` sont les KPI `formal_saving_rate` /
+> `formal_borrowing_rate`. Dans le contrat, `tools/warehouse_reader.py` ne sert
+> plus qu'au contexte macro (PIB) et au résumé du warehouse.
+
 - **Émetteur** : propriétaire Route 2 (Analyst / Dashboard / UI)
 - **Destinataire** : propriétaire du catalogue (`config/kpi_catalog.v1.yaml`, version 1.0.0)
 - **Date** : 2026-10-29

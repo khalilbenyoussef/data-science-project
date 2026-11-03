@@ -26,7 +26,7 @@ from pydantic import (
 
 from biflow.config import resolve
 from biflow.tools.dictionary import label_for
-from biflow.tools.kpi import load_catalog
+from biflow.tools.kpi import SUBGROUP_KPIS, load_catalog
 from biflow.tools.warehouse_reader import (
     DEFINITION_UNVERIFIED, FIN24AP_MISLABELED, LABEL_MISMATCH, NOT_IN_CATALOG, WarehouseReader,
 )
@@ -45,10 +45,33 @@ PROVIDERS = ("semantic", "warehouse", "reference", "placeholder", "derived")
 STATUSES = ("available", "unavailable", "placeholder")
 
 BARRIER_CODES = ("fin11a", "fin11b", "fin11c", "fin11d", "fin11e", "fin11f")
+# Groupes compares (dimension, titre, cle gauche, cle droite, libelles) ; le KPI de
+# chaque groupe vient du catalogue (un KPI par valeur de sous-groupe).
+DIMENSION_SPECS = (
+    ("gender", "Genre", "women", "men", "Femmes", "Hommes"),
+    ("income", "Revenu", "poorest 40%", "richest 60%", "40 % les plus pauvres",
+     "60 % les plus riches"),
+    ("age_cat", "Âge", "ages 15-24", "age 25+", "15-24 ans", "25 ans et +"),
+    ("education", "Éducation", "prim edu or less", "secondary edu or more",
+     "Primaire ou moins", "Secondaire ou plus"),
+    ("laborforce", "Marché du travail", "out of laborforce", "in laborforce",
+     "Hors population active", "Population active"),
+    ("urbanicity", "Milieu", "rural", "urban", "Rural", "Urbain"),
+)
+SUBGROUP_KPI = {group: kpi_id for kpi_id, group in SUBGROUP_KPIS.items()}
+# Ecart droite − gauche deja au catalogue : lu tel quel au lieu d'etre soustrait ici
+GAP_KPIS = {"gender": "gender_gap", "income": "income_gap", "age_cat": "age_gap"}
+# Series FAS lues via le catalogue : identifiant du widget -> KPI
+ACCESS_KPIS = {
+    "atm_per_100k": "atm_density", "depositors_per_1k": "depositors_per_1k",
+    "borrowers_per_1k": "borrowers_per_1k", "loans_pct_gdp": "loans_pct_gdp",
+    "deposits_pct_gdp": "deposits_pct_gdp",
+}
 # KPI du catalogue lus par le contrat : le dataset doit les contenir
 SPEC_KPIS = (
     "account_ownership", "branch_density", "digital_payment_rate",
     "saving_rate", "borrowing_rate", "formal_saving_rate", "formal_borrowing_rate",
+    "emergency_funds", *ACCESS_KPIS.values(), *GAP_KPIS.values(), *SUBGROUP_KPIS,
 )
 
 
@@ -214,7 +237,7 @@ class DumbbellRow(FinModel):
     gap_pp: float | None
     status: Literal["available", "partial", "unavailable"]
     year: int
-    provider: Literal["warehouse"] = "warehouse"
+    provider: Literal["warehouse", "semantic"] = "warehouse"
     chip: Chip
     evidence_ids: tuple[str, ...] = ()
 
@@ -682,10 +705,15 @@ class _Data:
 
     def semantic_metric(
         self, kpi_id: str, *, iso3: str | None = None, label: str | None = None,
-        previous: bool = True,
+        previous: bool = True, metric_id: str | None = None, upto: bool = False,
     ) -> dict[str, Any]:
+        """Metrique d'un KPI du catalogue. ``metric_id`` garde l'identifiant du widget ;
+        ``upto`` reprend la regle de lecture annuelle : derniere annee observee au plus
+        tard a l'annee choisie (jamais une annee posterieure), affichee telle quelle."""
         code = iso3 or self.iso3
         observation = self.observation(kpi_id, code)
+        if upto and observation["availability_status"] != "available":
+            observation = self._latest_upto(kpi_id, code, observation)
         meta = self.kpi_meta[kpi_id]
         definition = (self.catalog.get("kpis") or {}).get(kpi_id, {})
         source_meta = definition.get("source")
@@ -693,7 +721,7 @@ class _Data:
         unit = observation["unit"]
         available = observation["availability_status"] == "available" and observation["value"] is not None
         metric = {
-            "id": kpi_id,
+            "id": metric_id or kpi_id,
             "label": label or meta["name"],
             "value": float(observation["value"]) if available else None,
             "display": format_value(observation["value"] if available else None, unit),
@@ -722,7 +750,51 @@ class _Data:
         }
         if not available:
             metric["delta"] = None
+        elif upto and observation["year"] != self.year:
+            metric["caveat"] = (
+                f"Dernière année observée {observation['year']} (série arrêtée) : elle est "
+                f"affichée telle quelle, sans substitution par {self.year}."
+            )
         return metric
+
+    def review_of(self, *kpi_ids: str) -> dict[str, Any]:
+        """Motifs de revue reunis des observations (annee choisie) de plusieurs KPI."""
+        rows = [self.observations.get((self.iso3, kpi_id)) or {} for kpi_id in kpi_ids]
+        reasons = tuple(dict.fromkeys(r for row in rows for r in row.get("review_reasons") or ()))
+        return {"requires_review": any(row.get("requires_review") for row in rows),
+                "review_reasons": reasons}
+
+    def kpi_point(self, kpi_id: str, year: int, iso3: str | None = None) -> dict[str, Any]:
+        """Valeur d'un KPI pour une annee : observation de l'annee choisie, sinon point
+        de la serie. {value | None, evidence_id | None} ; jamais de substitution d'annee."""
+        code = iso3 or self.iso3
+        observation = self.observations.get((code, kpi_id)) or {}
+        if observation.get("year") == year:
+            row = observation
+        else:
+            row = next((p for p in (self.series.get((code, kpi_id)) or {}).get("points") or []
+                        if int(p["year"]) == year), None) or {}
+        available = row.get("availability_status") == "available" and row.get("value") is not None
+        return {"value": float(row["value"]) if available else None,
+                "evidence_id": row.get("evidence_id") if available else None}
+
+    def _latest_upto(self, kpi_id: str, code: str,
+                     observation: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Dernier point disponible de la serie du KPI au plus tard a l'annee choisie."""
+        points = (self.series.get((code, kpi_id)) or {}).get("points") or []
+        candidates = [p for p in points if p.get("availability_status") == "available"
+                      and p.get("value") is not None and int(p["year"]) <= self.year]
+        if not candidates:
+            return observation
+        point = max(candidates, key=lambda p: int(p["year"]))
+        return {
+            **observation, "year": int(point["year"]), "value": point["value"],
+            "availability_status": "available", "reason": None,
+            "evidence_id": point["evidence_id"],
+            "requires_review": bool(point.get("requires_review")),
+            "review_reasons": tuple(observation.get("review_reasons") or ())
+            if point.get("requires_review") else (),
+        }
 
     # ----------------------------------------------------------------- warehouse
     def warehouse_metric(
@@ -980,8 +1052,8 @@ def _build_blocks(
         data.semantic_metric("digital_payment_rate"),
         data.semantic_metric("saving_rate", label=_provisional_suffix(
             data, "saving_rate", "Épargne (toute forme", ", définition provisoire") + ")"),
-        data.warehouse_metric(  # libelle du dictionnaire (glossaire Findex 2025)
-            "emergency_money", label=label_for("fin24aP")),
+        data.semantic_metric(  # KPI emergency_funds ; libelle du dictionnaire (glossaire 2025)
+            "emergency_funds", metric_id="emergency_money", upto=True, label=label_for("fin24aP")),
     ]
     account_metric = overview_metrics[0]
     account_points = data.kpi_points("account_ownership")
@@ -1174,26 +1246,26 @@ def _build_blocks(
             f"Écart emprunt tout − formel : {formal_bars[2]['value'] - formal_bars[3]['value']:+.1f} pt."
         )
 
+    def group_gap(dimension: str, left_key: str, right_key: str, gap_year: int):
+        """(gauche, droite, ecart, preuves) : sous-groupes et ecart lus au catalogue ;
+        l'ecart n'est soustrait ici que s'il n'existe pas de KPI d'ecart."""
+        left = data.kpi_point(SUBGROUP_KPI[(dimension, left_key)], gap_year)
+        right = data.kpi_point(SUBGROUP_KPI[(dimension, right_key)], gap_year)
+        evidence = [p["evidence_id"] for p in (left, right) if p["evidence_id"]]
+        if dimension in GAP_KPIS:
+            stored = data.kpi_point(GAP_KPIS[dimension], gap_year)
+            gap = stored["value"] if left["value"] is not None and right["value"] is not None else None
+            if gap is not None:
+                evidence.append(stored["evidence_id"])
+        else:
+            gap = (right["value"] - left["value"]
+                   if left["value"] is not None and right["value"] is not None else None)
+        return left["value"], right["value"], gap, tuple(evidence)
+
     dumbbell_groups = []
-    dimension_specs = (
-        ("gender", "Genre", "women", "men", "Femmes", "Hommes"),
-        ("income", "Revenu", "poorest 40%", "richest 60%", "40 % les plus pauvres",
-         "60 % les plus riches"),
-        ("age_cat", "Âge", "ages 15-24", "age 25+", "15-24 ans", "25 ans et +"),
-        ("education", "Éducation", "prim edu or less", "secondary edu or more",
-         "Primaire ou moins", "Secondaire ou plus"),
-        ("laborforce", "Marché du travail", "out of laborforce", "in laborforce",
-         "Hors population active", "Population active"),
-        ("urbanicity", "Milieu", "rural", "urban", "Rural", "Urbain"),
-    )
-    for dimension, title, left_key, right_key, left_label, right_label in dimension_specs:
-        groups = data.subgroup("account_t_d", dimension, year)
+    for dimension, title, left_key, right_key, left_label, right_label in DIMENSION_SPECS:
         rows = []
-        left = groups.get(left_key)
-        right = groups.get(right_key)
-        left_value = left["value"] if left and left["status"] == "available" else None
-        right_value = right["value"] if right and right["status"] == "available" else None
-        gap = right_value - left_value if left_value is not None and right_value is not None else None
+        left_value, right_value, gap, evidence = group_gap(dimension, left_key, right_key, year)
         status = ("available" if gap is not None else
                   "partial" if left_value is not None or right_value is not None
                   else "unavailable")
@@ -1209,12 +1281,12 @@ def _build_blocks(
             "gap_pp": gap,
             "status": status,
             "year": year,
-            "chip": _warehouse_chip("Sous-groupe Findex lu dans le warehouse."),
-            "evidence_ids": tuple(
-                f"WH-sub-account_t_d-{dimension}-{key}-{iso3}-{year}"
-                for key, value in ((left_key, left_value), (right_key, right_value))
-                if value is not None
-            ),
+            "provider": "semantic",
+            "chip": _semantic_chip(
+                data.kpi_meta[SUBGROUP_KPI[(dimension, left_key)]]["verification_status"],
+                data.review_of(*(SUBGROUP_KPI[(dimension, key)] for key in (left_key, right_key))),
+                data.catalog.get("catalog_version")),
+            "evidence_ids": evidence,
         })
         if rows[0]["gap_pp"] is None and not any(value is not None for value in
                                                  (left_value, right_value)):
@@ -1249,17 +1321,9 @@ def _build_blocks(
         gaps: dict[int, float | None] = {}
         evidence: list[str] = []
         for gap_year in (2021, 2024):
-            values = data.subgroup("account_t_d", dimension, gap_year)
-            left = values.get(left_key)
-            right = values.get(right_key)
-            if left and right and left["value"] is not None and right["value"] is not None:
-                gaps[gap_year] = right["value"] - left["value"]
-                evidence.extend([
-                    f"WH-sub-account_t_d-{dimension}-{left_key}-{iso3}-{gap_year}",
-                    f"WH-sub-account_t_d-{dimension}-{right_key}-{iso3}-{gap_year}",
-                ])
-            else:
-                gaps[gap_year] = None
+            _, _, gaps[gap_year], cited = group_gap(dimension, left_key, right_key, gap_year)
+            if gaps[gap_year] is not None:
+                evidence.extend(cited)
         change = (gaps[2024] - gaps[2021]
                   if gaps.get(2024) is not None and gaps.get(2021) is not None else None)
         gap_points.append({
@@ -1299,25 +1363,33 @@ def _build_blocks(
     })
 
     # ------------------------------------------------------------ access/credit
+    def access_metric(widget_id: str, label: str | None = None) -> dict[str, Any]:
+        # meme libelle et meme regle d'annee qu'avant, valeur lue au catalogue KPI
+        return data.semantic_metric(
+            ACCESS_KPIS[widget_id], metric_id=widget_id, upto=True,
+            label=label or WarehouseReader.spec(widget_id).label)
+
     access_metrics = [
-        data.warehouse_metric("atm_per_100k", label="Distributeurs automatiques"),
+        access_metric("atm_per_100k", "Distributeurs automatiques"),
         data.semantic_metric("branch_density", label="Agences bancaires"),
-        data.warehouse_metric("depositors_per_1k"),
-        data.warehouse_metric("borrowers_per_1k"),
-        data.warehouse_metric("loans_pct_gdp"),
-        data.warehouse_metric("deposits_pct_gdp"),
+        access_metric("depositors_per_1k"),
+        access_metric("borrowers_per_1k"),
+        access_metric("loans_pct_gdp"),
+        access_metric("deposits_pct_gdp"),
     ]
     network_series = []
-    atm_series = data.reader.series("atm_per_100k", iso3) if data.reader else []
+    atm_series = data.kpi_points("atm_density")
     branch_points = data.kpi_points("branch_density")
     window = [p for p in atm_series if p["year"] >= 2015]
     branch_window = [p for p in branch_points if p["year"] >= 2015]
     if window:
         network_series.append({
             "id": "atm_per_100k", "label": "Distributeurs automatiques",
-            "unit": "per_100k_adults", "points": window, "provider": "warehouse",
-            "chip": _warehouse_chip("Série FAS annuelle du warehouse."),
-            "evidence_ids": tuple(f"WH-atm_per_100k-{iso3}-{p['year']}" for p in window),
+            "unit": "per_100k_adults", "points": window, "provider": "semantic",
+            "chip": access_metrics[0]["chip"],
+            "evidence_ids": tuple(p["evidence_id"] for p in
+                                  data.series[(iso3, "atm_density")]["points"]
+                                  if p["year"] >= 2015),
         })
     if branch_window:
         network_series.append({
@@ -1340,22 +1412,21 @@ def _build_blocks(
         "notes": ["Deux échelles comparables (même unité). Aucune donnée annuelle inventée."],
     }
     peer_atm_bars = []
-    if data.reader is not None:
-        for code in PEERS:
-            meta = data.countries.get(code, {})
-            point = data.reader.latest_upto("atm_per_100k", code, year)
-            value = point["value"] if point["status"] == "available" else None
-            peer_atm_bars.append({
-                "id": f"atm_peer_{code}",
-                "label": COUNTRY_LABELS.get(code, meta.get("name", code)), "iso3": code, "value": value,
-                "display": format_value(value, "per_100k_adults"),
-                "status": "available" if value is not None else "unavailable",
-                "year": point.get("year"), "highlight": code == iso3,
-                "provider": "warehouse",
-                "chip": _warehouse_chip("Série FAS ATM hors catalogue KPI."),
-                "evidence_ids": (f"WH-atm_per_100k-{code}-{point.get('year')}",)
-                if value is not None else (),
-            })
+    for code in PEERS:
+        if (code, "atm_density") not in data.observations:
+            continue
+        meta = data.countries.get(code, {})
+        point = data.semantic_metric("atm_density", iso3=code, upto=True, previous=False)
+        value = point["value"]
+        peer_atm_bars.append({
+            "id": f"atm_peer_{code}",
+            "label": COUNTRY_LABELS.get(code, meta.get("name", code)), "iso3": code, "value": value,
+            "display": format_value(value, "per_100k_adults"),
+            "status": "available" if value is not None else "unavailable",
+            "year": point["year"], "highlight": code == iso3,
+            "provider": "semantic", "chip": point["chip"],
+            "evidence_ids": point["evidence_ids"] if value is not None else (),
+        })
     peer_atm_chart = {
         "id": "atm_peers", "kind": "bar",
         "title": "ATMs pour 100 000 adultes — pairs",
@@ -1368,8 +1439,8 @@ def _build_blocks(
     base_year = 2017
     digital_points = data.kpi_points("digital_payment_rate")
     for series_id, label, points, provider, chip, color in (
-        ("atm_per_100k", "ATMs (offre)", atm_series, "warehouse",
-         _warehouse_chip("Série FAS ATM."), "#FFC93C"),
+        ("atm_per_100k", "ATMs (offre)", atm_series, "semantic",
+         access_metrics[0]["chip"], "#FFC93C"),
         ("digital_payment_rate", "Paiements numériques (demande)", digital_points,
          "semantic", overview_metrics[1]["chip"], "#8DB0FF"),
     ):
@@ -1439,10 +1510,10 @@ def _build_blocks(
             "Aucune barre n'est dessinée à partir d'une valeur inventée.",
         ],
     }
-    urban = data.warehouse_metric("urban_account", label="Compte — milieu urbain",
-                                  exact=True, previous=False)
-    rural = data.warehouse_metric("rural_account", label="Compte — milieu rural",
-                                  exact=True, previous=False)
+    urban = data.semantic_metric("account_ownership_urban", metric_id="urban_account",
+                                 label="Compte — milieu urbain", previous=False)
+    rural = data.semantic_metric("account_ownership_rural", metric_id="rural_account",
+                                 label="Compte — milieu rural", previous=False)
     urban_rural_chart = {
         "id": "urban_rural", "kind": "bar",
         "title": "Détention d'un compte : urbain vs rural",
@@ -1451,11 +1522,11 @@ def _build_blocks(
         "bars": [
             {"id": "urban_account", "label": "Urbain", "iso3": iso3, "value": urban["value"],
              "display": urban["display"], "status": urban["status"],
-             "year": urban["year"], "highlight": False, "provider": "warehouse",
+             "year": urban["year"], "highlight": False, "provider": urban["provider"],
              "chip": urban["chip"], "evidence_ids": urban["evidence_ids"]},
             {"id": "rural_account", "label": "Rural", "iso3": iso3, "value": rural["value"],
              "display": rural["display"], "status": rural["status"],
-             "year": rural["year"], "highlight": True, "provider": "warehouse",
+             "year": rural["year"], "highlight": True, "provider": rural["provider"],
              "chip": rural["chip"], "evidence_ids": rural["evidence_ids"]},
         ],
         "notes": [],
@@ -1732,9 +1803,9 @@ def _build_blocks(
         notices.append(
             {"code": "publication_not_evaluated", "severity": "review", "kpi_id": None,
              "message": "Aucune donnée n'est approuvée pour publication : statut not_evaluated."})
-    if data.reader is not None:
-        for series_id in ("loans_pct_gdp", "deposits_pct_gdp"):
-            point = data.reader.latest_upto(series_id, iso3, year)
+    for series_id in ("loans_pct_gdp", "deposits_pct_gdp"):
+        if (iso3, series_id) in data.observations:
+            point = data.semantic_metric(series_id, upto=True, previous=False)
             if point["status"] == "available":
                 notices.append({
                     "code": f"{series_id}_now_available", "severity": "info",
@@ -1799,6 +1870,24 @@ def _display_number(text: Any) -> float | None:
         )
     except ValueError:
         return None
+
+
+def _gap_fact(dimension: str, title: str, value: float, year: int, iso3: str,
+              evidence: Sequence[str], *, label: str, display: str) -> dict[str, Any]:
+    """Ecart entre deux groupes : fait semantique s'il est lu dans un KPI d'ecart du
+    catalogue (preuve unique), sinon derive des deux sous-groupes cites."""
+    stored = f"EV-{GAP_KPIS[dimension]}-{iso3}-{year}" if dimension in GAP_KPIS else None
+    semantic = stored is not None and stored in evidence
+    return {
+        "id": f"F-gap-{dimension}-{iso3}-{year}",
+        "code": f"gap_{dimension}",
+        "label": label,
+        "value": value, "unit": "percentage_points",
+        "year": year, "iso3": iso3,
+        "provider": "semantic" if semantic else "derived",
+        "display": display,
+        "evidence_ids": (stored,) if semantic else tuple(evidence),
+    }
 
 
 def _baseline_evidence(metric: Mapping[str, Any]) -> tuple[str, ...]:
@@ -1880,32 +1969,29 @@ def extract_facts(blocks: Mapping[str, Any], *, iso3: str, year: int) -> list[di
                     ))
             if chart["kind"] == "dumbbell":
                 for group in chart["groups"]:
+                    spec = next(s for s in DIMENSION_SPECS if s[0] == group["dimension"])
                     for row in group["rows"]:
-                        for side_key, side_label in (("left", "gauche"),
-                                                     ("right", "droite")):
+                        for side_key, group_key in (("left", spec[2]), ("right", spec[3])):
                             side = row[side_key]
                             if side["value"] is None:
                                 continue
+                            # preuve propre a chaque cote : le KPI du sous-groupe
+                            evidence = f"EV-{SUBGROUP_KPI[(group['dimension'], group_key)]}-{iso3}-{row['year']}"
                             facts.append({
                                 "id": f"F-{group['dimension']}-{_slug(side['label'])}-{iso3}-{row['year']}",
                                 "code": f"{group['dimension']}_{_slug(side['label'])}",
                                 "label": f"Compte — {group['title']} : {side['label']}",
                                 "value": side["value"], "unit": "percent",
                                 "year": row["year"], "iso3": iso3,
-                                "provider": "warehouse", "display": side["display"],
-                                "evidence_ids": row["evidence_ids"],
+                                "provider": row.get("provider", "warehouse"), "display": side["display"],
+                                "evidence_ids": (evidence,) if evidence in row["evidence_ids"]
+                                else row["evidence_ids"],
                             })
                         if row["gap_pp"] is not None:
-                            facts.append({
-                                "id": f"F-gap-{group['dimension']}-{iso3}-{row['year']}",
-                                "code": f"gap_{group['dimension']}",
-                                "label": f"Écart de compte — {group['title']}",
-                                "value": row["gap_pp"], "unit": "percentage_points",
-                                "year": row["year"], "iso3": iso3,
-                                "provider": "derived",
-                                "display": f"{row['gap_pp']:+.1f} pt",
-                                "evidence_ids": row["evidence_ids"],
-                            })
+                            facts.append(_gap_fact(group["dimension"], group["title"], row["gap_pp"],
+                                                   row["year"], iso3, row["evidence_ids"],
+                                                   label=f"Écart de compte — {group['title']}",
+                                                   display=f"{row['gap_pp']:+.1f} pt"))
             if chart["kind"] == "gap":
                 for point in chart["gap_points"]:
                     for year, value in ((point["from_year"], point["gap_from_pp"]),
@@ -1913,15 +1999,10 @@ def extract_facts(blocks: Mapping[str, Any], *, iso3: str, year: int) -> list[di
                         if value is None:
                             continue
                         dimension = point["id"].removeprefix("gap-")
-                        facts.append({
-                            "id": f"F-gap-{dimension}-{iso3}-{year}",
-                            "code": f"gap_{dimension}",
-                            "label": f"Écart — {point['label']}",
-                            "value": value, "unit": "percentage_points",
-                            "year": year, "iso3": iso3, "provider": "derived",
-                            "display": f"{value:.1f} pt",
-                            "evidence_ids": point["evidence_ids"],
-                        })
+                        facts.append(_gap_fact(
+                            dimension, point["label"], value, year, iso3,
+                            tuple(e for e in point["evidence_ids"] if e.endswith(f"-{year}")),
+                            label=f"Écart — {point['label']}", display=f"{value:.1f} pt"))
                     if point["change_pp"] is None:
                         continue
                     facts.append({

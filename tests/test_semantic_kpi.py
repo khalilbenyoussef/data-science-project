@@ -41,7 +41,7 @@ def test_catalog_discovery_needs_no_warehouse_or_duckdb(tmp_path, monkeypatch):
     tools = SemanticKpiTools(tmp_path / "absent.duckdb")
     response = tools.list_kpis(ListKpisRequest())
     catalog = load_catalog()
-    assert response.catalog_version == "1.3.0"
+    assert response.catalog_version == "1.4.0"
     assert {k.kpi_id for k in response.kpis} == set(catalog["kpis"])
     for summary in response.kpis:
         entry = catalog["kpis"][summary.kpi_id]
@@ -93,7 +93,7 @@ def test_invalid_typed_requests_rejected_before_queries(agent, monkeypatch, inpu
 
 @pytest.mark.parametrize("action", ["calculate", "describe"])
 def test_unsupported_kpis_rejected(agent, action):
-    request = {"action": action, "kpi_id": "deposits_pct_gdp"}
+    request = {"action": action, "kpi_id": "merchant_payment_rate"}  # deposits_pct_gdp est au catalogue 1.4.0
     if action == "calculate":
         request.update(iso3="TUN", year=2024)
     with pytest.raises(ValueError, match="Unknown KPI"):

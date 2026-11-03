@@ -123,9 +123,10 @@ def insights_from_finova(insights_by_page: Mapping[str, Iterable[Mapping[str, An
     """Insights du FinOVA Analyst -> Insight a auditer.
 
     Seuls les faits fournis par le catalogue KPI (provider semantic, une preuve
-    EV-<kpi>-<iso3>-<annee>) deviennent des claims. Une variation (fait derive
-    ``<kpi>_delta``) apporte les claims de ses deux annees, lus sur les faits
-    semantiques qui portent ces preuves. Un insight sans fait KPI n'est pas
+    EV-<kpi>-<iso3>-<annee>) deviennent des claims. Un fait derive (variation,
+    ecart entre groupes) apporte les claims des faits KPI dont il est issu, lus sur
+    les faits semantiques qui portent ses preuves (une variation 2021 -> 2024 cite
+    ainsi ses deux annees). Un insight sans fait KPI n'est pas
     auditable (liste renvoyee a part). Aucune valeur n'est calculee ici.
     """
     facts = list(facts)
@@ -154,8 +155,7 @@ def insights_from_finova(insights_by_page: Mapping[str, Iterable[Mapping[str, An
             for evidence in item.get("evidence_ids") or ():
                 fact = by_id.get(evidence) or {}
                 found = [claim(fact)]
-                code = str(fact.get("code") or "")
-                if fact.get("provider") == "derived" and code.removesuffix("_delta") in kpis and code.endswith("_delta"):
+                if fact.get("provider") == "derived":  # variation, ecart : faits KPI d'origine
                     found = [carriers.get(ev) for ev in fact.get("evidence_ids") or ()]
                 claims.extend(c for c in found if c is not None and c not in claims)
             identifier = f"{page}:{item.get('id')}"

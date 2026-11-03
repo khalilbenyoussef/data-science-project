@@ -64,6 +64,54 @@ CONTRACTS = {
 }
 GAP_SUBTRAHEND = {"gender_gap": "women", "income_gap": "poorest 40%", "age_gap": "ages 15-24"}
 
+# Series FAS du catalogue 1.4.0 : KPI = indicateur canonique, code FAS publie, unite.
+FAS_SERIES = {
+    "branch_density": ("FA26N.PHTADLT_NUM", "per_100k_adults"),
+    "atm_density": ("FA18N.PHTADLT_NUM", "per_100k_adults"),
+    "depositors_per_1k": ("FA29N_COMBANK.PTADLT_NUM", "per_1k_adults"),
+    "borrowers_per_1k": ("FA21N_COMBANK.PTADLT_NUM", "per_1k_adults"),
+    "deposit_accounts_per_1k": ("FA30N_COMBANK.PTADLT_NUM", "per_1k_adults"),
+    "loan_accounts_per_1k": ("LOANACCN_COMBANK.PTADLT_NUM", "per_1k_adults"),
+    "deposits_pct_gdp": ("OUTD_COMBANK.POGDP", "percent_of_gdp"),
+    "loans_pct_gdp": ("OUTL_COMBANK.POGDP", "percent_of_gdp"),
+}
+CONTRACTS.update({
+    kpi_id: ("fas", kpi_id, unit, "bank_type", "commercial_banks", "commercial_banks_all_adults",
+             unit, "value", "verified_metadata")
+    for kpi_id, (_series, unit) in FAS_SERIES.items() if kpi_id != "branch_density"
+})
+# Findex, population totale : fraction x 100 (glossaire Findex 2025)
+CONTRACTS.update({
+    kpi_id: ("findex", code, "fraction", "all", "all", "total_population", "percent",
+             "100 * value", "verified")
+    for kpi_id, code in (
+        ("emergency_funds", "fin24aP"), ("emergency_source_savings", "fin24sav"),
+        ("emergency_source_borrowing", "fin24bor"), ("mobile_money_account", "mobileaccount_t_d"),
+        ("inactive_accounts", "inactive_t_d"),
+    )
+})
+# Detention de compte par sous-groupe Findex : un KPI par valeur de sous-groupe.
+SUBGROUP_KPIS = {
+    "account_ownership_women": ("gender", "women"),
+    "account_ownership_men": ("gender", "men"),
+    "account_ownership_poorest_40": ("income", "poorest 40%"),
+    "account_ownership_richest_60": ("income", "richest 60%"),
+    "account_ownership_age_15_24": ("age_cat", "ages 15-24"),
+    "account_ownership_age_25_plus": ("age_cat", "age 25+"),
+    "account_ownership_primary_or_less": ("education", "prim edu or less"),
+    "account_ownership_secondary_or_more": ("education", "secondary edu or more"),
+    "account_ownership_out_of_laborforce": ("laborforce", "out of laborforce"),
+    "account_ownership_in_laborforce": ("laborforce", "in laborforce"),
+    "account_ownership_rural": ("urbanicity", "rural"),
+    "account_ownership_urban": ("urbanicity", "urban"),
+}
+CONTRACTS.update({
+    kpi_id: ("findex", "account_t_d", "fraction", dimension, value,
+             f"{dimension}_{value.replace(' ', '_').replace('%', '').replace('+', '_plus').replace('-', '_')}",
+             "percent", "100 * value", "verified")
+    for kpi_id, (dimension, value) in SUBGROUP_KPIS.items()
+})
+
 
 class CatalogError(ValueError):
     """Catalog is malformed or incompatible with the supported calculations."""
@@ -110,7 +158,7 @@ def _validate_catalog(catalog: Any) -> None:
                     or w.get("subtrahend_dimension_value") != GAP_SUBTRAHEND.get(kpi_id)
                     or k["dependencies"] != (["account_ownership"] if kpi_id == "unbanked_share" else [])
                     or k["source"]["indicator"] != (
-                        "FA26N.PHTADLT_NUM" if kpi_id == "branch_density" else w["indicator_code"])):
+                        FAS_SERIES[kpi_id][0] if kpi_id in FAS_SERIES else w["indicator_code"])):
                 raise CatalogError(f"Unsupported calculation contract: {kpi_id}")
         for kpi_id, kpi in kpis.items():  # KPI utilisateur : contrat generique et restreint
             if kpi_id in CONTRACTS:
