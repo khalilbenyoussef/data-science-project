@@ -90,6 +90,17 @@ CONTRACTS.update({
         ("inactive_accounts", "inactive_t_d"),
     )
 })
+# Raisons de ne pas avoir de compte bancaire (fin11a-f) : part de tous les adultes 15+.
+BARRIER_KPIS = {
+    "barrier_too_far": "fin11a", "barrier_too_expensive": "fin11b",
+    "barrier_no_documents": "fin11c", "barrier_insufficient_funds": "fin11d",
+    "barrier_family_has_account": "fin11e", "barrier_no_trust": "fin11f",
+}
+CONTRACTS.update({
+    kpi_id: ("findex", code, "fraction", "all", "all", "total_population", "percent",
+             "100 * value", "verified")
+    for kpi_id, code in BARRIER_KPIS.items()
+})
 # Detention de compte par sous-groupe Findex : un KPI par valeur de sous-groupe.
 SUBGROUP_KPIS = {
     "account_ownership_women": ("gender", "women"),

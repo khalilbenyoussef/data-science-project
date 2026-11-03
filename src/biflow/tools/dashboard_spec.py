@@ -26,7 +26,7 @@ from pydantic import (
 
 from biflow.config import resolve
 from biflow.tools.dictionary import label_for
-from biflow.tools.kpi import SUBGROUP_KPIS, load_catalog
+from biflow.tools.kpi import BARRIER_KPIS, SUBGROUP_KPIS, load_catalog
 from biflow.tools.warehouse_reader import (
     DEFINITION_UNVERIFIED, FIN24AP_MISLABELED, LABEL_MISMATCH, NOT_IN_CATALOG, WarehouseReader,
 )
@@ -72,7 +72,9 @@ SPEC_KPIS = (
     "account_ownership", "branch_density", "digital_payment_rate",
     "saving_rate", "borrowing_rate", "formal_saving_rate", "formal_borrowing_rate",
     "emergency_funds", *ACCESS_KPIS.values(), *GAP_KPIS.values(), *SUBGROUP_KPIS,
+    *BARRIER_KPIS,
 )
+BARRIER_KPI = {code: kpi_id for kpi_id, code in BARRIER_KPIS.items()}
 
 
 # --------------------------------------------------------------------------- models
@@ -1483,32 +1485,58 @@ def _build_blocks(
     })
 
     # ------------------------------------------------------------- why exclusion
+    # Barrieres fin11a-f : KPI du catalogue pour le pays, moyenne PEERS de kpi_values
     barrier_rows = list(BARRIER_CODES)
-    barrier_cells = [
-        {"column": "Tunisie", "row": code, "value": None, "status": "placeholder",
-         "display": "To load",
-         "note": "Série fin11 non chargée dans le warehouse."}
-        for code in barrier_rows
+    country_column = COUNTRY_LABELS.get(iso3, country.get("name", iso3))
+    barrier_cells, peer_rows = [], {}
+    for code in barrier_rows:
+        observation = data.observations.get((iso3, BARRIER_KPI[code])) or {}
+        available = observation.get("availability_status") == "available" and observation.get("value") is not None
+        value = float(observation["value"]) if available else None
+        barrier_cells.append({
+            "column": country_column, "row": code, "value": value,
+            "status": "available" if available else "unavailable",
+            "display": format_value(value, "percent"),
+            "note": label_for(code) if available else (
+                f"Aucune observation {year} ({observation.get('reason') or 'missing_observation'}).")})
+        peer_rows[code] = data.reader.peer_average(BARRIER_KPI[code], year) if data.reader else None
+    configured = sorted({c for row in peer_rows.values() if row
+                         for c in (*row["peers_included"], *row["missing_peers"])})
+    peer_column = f"Moyenne des pairs ({', '.join(configured)})" if configured else "Moyenne des pairs"
+    missing = sorted({c for row in peer_rows.values() if row and row["status"] == "available"
+                      for c in row["missing_peers"]})
+    for code in barrier_rows:
+        row = peer_rows[code]
+        value = row["value"] if row and row["status"] == "available" else None
+        if row is None:
+            note = "Moyenne des pairs indisponible : kpi_values absent du warehouse."
+        elif value is None:
+            note = f"Aucun pair observé en {year}."
+        elif row["missing_peers"]:
+            note = (f"Couverture partielle : moyenne de {', '.join(row['peers_included'])} ; "
+                    f"{', '.join(row['missing_peers'])} sans observation {year}.")
+        else:
+            note = f"Moyenne simple de {', '.join(row['peers_included'])}."
+        barrier_cells.append({"column": peer_column, "row": code, "value": value,
+                              "status": "available" if value is not None else "unavailable",
+                              "display": format_value(value, "percent"), "note": note})
+    barrier_notes = [
+        "Plusieurs raisons peuvent être citées : les parts ne s'additionnent pas à 100 %.",
+        "Part de tous les adultes (15 ans et plus) ; comptes bancaires uniquement (hors mobile money).",
     ]
-    barrier_cells.extend([
-        {"column": "Référence régionale", "row": code, "value": None,
-         "status": "placeholder", "display": "To load",
-         "note": "Aucune valeur régionale vérifiée chargée."}
-        for code in barrier_rows
-    ])
+    if missing:
+        barrier_notes.append(
+            f"Moyenne des pairs partielle : {', '.join(missing)} sans observation en {year}.")
+    barrier_notes.append("Aucune barre n'est dessinée à partir d'une valeur inventée.")
     barrier_chart = {
         "id": "barriers_heatmap", "kind": "heatmap",
         "title": "Barrières à l'ouverture d'un compte",
-        "subtitle": "fin11a→fin11f : cellules vides tant que la source n'est pas chargée.",
+        "subtitle": f"Raisons déclarées de ne pas avoir de compte bancaire, année {year} (Findex).",
         "x_label": None, "y_label": None, "unit": "percent",
-        "columns": ("Tunisie", "Référence régionale"),
+        "columns": (country_column, peer_column),
         "rows": tuple(barrier_rows),
         "cells": barrier_cells,
-        "notes": [
-            "Les colonnes fin11a-fin11f existent dans le fichier Findex brut mais "
-            "ne sont pas configurées dans l'ETL : elles restent 'To load'.",
-            "Aucune barre n'est dessinée à partir d'une valeur inventée.",
-        ],
+        "notes": barrier_notes,
     }
     urban = data.semantic_metric("account_ownership_urban", metric_id="urban_account",
                                  label="Compte — milieu urbain", previous=False)
@@ -2014,6 +2042,21 @@ def extract_facts(blocks: Mapping[str, Any], *, iso3: str, year: int) -> list[di
                         "provider": "derived",
                         "display": f"{point['change_pp']:+.1f} pt",
                         "evidence_ids": point["evidence_ids"],
+                    })
+            if chart["kind"] == "heatmap" and chart["id"] == "barriers_heatmap":
+                # colonne 1 : KPI du pays ; colonne 2 : ligne PEERS de kpi_values
+                for cell in chart["cells"]:
+                    if cell["status"] != "available" or cell["value"] is None:
+                        continue
+                    peers = cell["column"] == chart["columns"][1]
+                    owner = "PEERS" if peers else iso3
+                    kpi_id = BARRIER_KPI[cell["row"]]
+                    facts.append({
+                        "id": f"F-{kpi_id}-{owner}-{year}", "code": kpi_id,
+                        "label": f"{label_for(cell['row'])} — {cell['column']}",
+                        "value": cell["value"], "unit": "percent", "year": year,
+                        "iso3": owner, "provider": "semantic", "display": cell["display"],
+                        "evidence_ids": (f"EV-{kpi_id}-{owner}-{year}",),
                     })
             if chart["kind"] == "line" and chart.get("unit") == "index_2017_100":
                 for series in chart["series"]:

@@ -124,7 +124,13 @@ sources:
       - fin24aP
       - fin24sav
       - fin24bor
-  fas:                             # IMF Financial Access Survey (offre) - source STATIQUE
+      - fin11a                     # raisons de ne pas avoir de compte bancaire (part de tous
+      - fin11b                     # les adultes 15+, glossaire Findex 2025 lignes 6-11) ;
+      - fin11c                     # observees pour la vague 2024 seulement
+      - fin11d
+      - fin11e
+      - fin11f
+  fas:                            # IMF Financial Access Survey (offre) - source STATIQUE
     type: csv
     static: true                   # fichier local fourni, jamais réécrit par le Collector
     path: data/raw/fas.csv

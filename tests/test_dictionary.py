@@ -41,8 +41,9 @@ def test_glossary_rows_match_verified_positions():
 
 def test_catalog_uses_only_the_requested_emergency_fund_codes():
     used = {k["warehouse"]["indicator_code"] for k in load_catalog()["kpis"].values()}
-    # catalogue 1.4.0 (REQUEST_CATALOG) : fin24aP, fin24sav, fin24bor seulement
-    assert used & set(FIN24 + FIN11) == {"fin24aP", "fin24sav", "fin24bor"}
+    # catalogue 1.4.0 (REQUEST_CATALOG) : fin24aP, fin24sav, fin24bor seulement ;
+    # catalogue 1.5.0 : les six barrieres fin11a-f
+    assert used & set(FIN24 + FIN11) == {"fin24aP", "fin24sav", "fin24bor", *FIN11}
     findex_used = {k["warehouse"]["indicator_code"] for k in load_catalog()["kpis"].values()
                    if k["warehouse"]["source"] == "findex"}
     assert findex_used <= set(FINDEX_GLOSSARY_ROWS)

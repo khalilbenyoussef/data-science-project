@@ -348,6 +348,26 @@ class WarehouseReader:
             for group, value, unit in rows
         ]
 
+    def peer_average(self, kpi_id: str, year: int) -> dict[str, Any] | None:
+        """Ligne PEERS de kpi_values (moyenne simple calculee par l'etape semantic_kpi,
+        jamais recalculee ici) ; None si la table ou la ligne est absente."""
+        try:
+            rows = self._rows(
+                "SELECT value, unit, availability_status, peers_included, missing_peers, "
+                "publication_status FROM kpi_values WHERE kpi_id = ? AND iso3 = 'PEERS' AND year = ?",
+                [kpi_id, int(year)],
+            )
+        except duckdb.Error:  # warehouse sans kpi_values (etape semantic_kpi non executee)
+            return None
+        if len(rows) != 1:
+            return None
+        value, unit, status, included, missing, publication = rows[0]
+        available = status == "available" and value is not None and math.isfinite(float(value))
+        return {"value": float(value) if available else None, "unit": unit,
+                "status": "available" if available else "unavailable",
+                "peers_included": list(included or []), "missing_peers": list(missing or []),
+                "publication_status": publication}
+
     def country_meta(self, iso3: str) -> dict[str, Any] | None:
         rows = self._rows(
             "SELECT iso3, country, region, income_group FROM country_dim WHERE iso3 = ?",

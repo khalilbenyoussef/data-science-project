@@ -1,6 +1,6 @@
 # Declarative definitions only. No calculations, publication decisions or agents execute this file.
 schema_version: 1
-catalog_version: "1.4.0"
+catalog_version: "1.5.0"
 catalog_id: biflow_core_kpis
 created_on: "2026-10-22"
 updated_on: "2026-11-03"
@@ -113,6 +113,31 @@ references:
     path: data/raw/findex.csv
     locator: "group/group2 values: education = prim edu or less / secondary edu or more; laborforce = in laborforce / out of laborforce; urbanicity = rural / urban"
     evidence: official Findex subgroup breakdowns of account.t.d; education and laborforce observed for every survey year 2011-2024, urbanicity for 2024 only
+
+  findex_2025_glossary_fin11a:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A6:C6, fin11a (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "No account because bank or similar financial institutions are too far away (%, age 15+): The percentage of respondents who report that they don't have a bank or similar financial institution account because bank or similar financial institutions are too far away"
+  findex_2025_glossary_fin11b:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A7:C7, fin11b (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "No account because financial services are too expensive (%, age 15+): The percentage of respondents who report not having a bank or similar financial institution account because financial services are too expensive"
+  findex_2025_glossary_fin11c:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A8:C8, fin11c (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "No account because of a lack of necessary documentation (%, age 15+): The percentage of respondents who report not having a bank or similar financial institution account because they lack the documentation needed to open one, such as an identity card, a wage slip, or the like"
+  findex_2025_glossary_fin11d:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A10:C10, fin11d (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "No account because of insufficient funds (%, age 15+): The percentage of respondents who report not having a bank or similar financial institution account because they do not have enough money to use one"
+  findex_2025_glossary_fin11e:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A11:C11, fin11e (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "No account because someone in the family has one (%, age 15+): The percentage of respondents who report not having a bank or similar financial institution account because someone else in their family already has one"
+  findex_2025_glossary_fin11f:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A9:C9, fin11f (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "No account because of a lack of trust in bank or similar financial institutions (%, age 15+): The percentage of respondents who report not having a bank or similar financial institution account because they do not trust bank or similar financial institutions"
 
 missing_data_policy:
   id: preserve_missing_v1
@@ -1496,6 +1521,234 @@ kpis:
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2024]
     year_evidence: findex_subgroups_extended
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  barrier_too_far:
+    definition_version: "1.0.0"
+    name: "No bank account because financial institutions are too far away"
+    business_objective: financial_exclusion_vulnerability
+    definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because financial institutions are too far away. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin11a, etl_contract]
+      uncertainties:
+        - "Several reasons can be cited by the same person: barrier shares do not add up to 100% and must never be summed."
+        - "The reason refers to a bank or similar financial-institution account only; mobile money is excluded."
+        - "Observed for the 2024 wave only in the local Findex file."
+    source: {dataset: findex, indicator: fin11a, official_indicator: fin11a}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin11a
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    subgroup: total_population
+    reference_period: at survey time
+    valid_years: [2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [unbanked_share]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  barrier_too_expensive:
+    definition_version: "1.0.0"
+    name: "No bank account because financial services are too expensive"
+    business_objective: financial_exclusion_vulnerability
+    definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because financial services are too expensive. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin11b, etl_contract]
+      uncertainties:
+        - "Several reasons can be cited by the same person: barrier shares do not add up to 100% and must never be summed."
+        - "The reason refers to a bank or similar financial-institution account only; mobile money is excluded."
+        - "Observed for the 2024 wave only in the local Findex file."
+    source: {dataset: findex, indicator: fin11b, official_indicator: fin11b}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin11b
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    subgroup: total_population
+    reference_period: at survey time
+    valid_years: [2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [unbanked_share]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  barrier_no_documents:
+    definition_version: "1.0.0"
+    name: "No bank account because they lack the documentation needed to open one"
+    business_objective: financial_exclusion_vulnerability
+    definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because they lack the documentation needed to open one. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin11c, etl_contract]
+      uncertainties:
+        - "Several reasons can be cited by the same person: barrier shares do not add up to 100% and must never be summed."
+        - "The reason refers to a bank or similar financial-institution account only; mobile money is excluded."
+        - "Observed for the 2024 wave only in the local Findex file."
+    source: {dataset: findex, indicator: fin11c, official_indicator: fin11c}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin11c
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    subgroup: total_population
+    reference_period: at survey time
+    valid_years: [2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [unbanked_share]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  barrier_insufficient_funds:
+    definition_version: "1.0.0"
+    name: "No bank account because they do not have enough money to use one"
+    business_objective: financial_exclusion_vulnerability
+    definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because they do not have enough money to use one. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin11d, etl_contract]
+      uncertainties:
+        - "Several reasons can be cited by the same person: barrier shares do not add up to 100% and must never be summed."
+        - "The reason refers to a bank or similar financial-institution account only; mobile money is excluded."
+        - "Observed for the 2024 wave only in the local Findex file."
+    source: {dataset: findex, indicator: fin11d, official_indicator: fin11d}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin11d
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    subgroup: total_population
+    reference_period: at survey time
+    valid_years: [2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [unbanked_share]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  barrier_family_has_account:
+    definition_version: "1.0.0"
+    name: "No bank account because someone else in their family already has one"
+    business_objective: financial_exclusion_vulnerability
+    definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because someone else in their family already has one. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin11e, etl_contract]
+      uncertainties:
+        - "Several reasons can be cited by the same person: barrier shares do not add up to 100% and must never be summed."
+        - "The reason refers to a bank or similar financial-institution account only; mobile money is excluded."
+        - "Observed for the 2024 wave only in the local Findex file."
+    source: {dataset: findex, indicator: fin11e, official_indicator: fin11e}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin11e
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    subgroup: total_population
+    reference_period: at survey time
+    valid_years: [2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [unbanked_share]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  barrier_no_trust:
+    definition_version: "1.0.0"
+    name: "No bank account because they do not trust financial institutions"
+    business_objective: financial_exclusion_vulnerability
+    definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because they do not trust financial institutions. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin11f, etl_contract]
+      uncertainties:
+        - "Several reasons can be cited by the same person: barrier shares do not add up to 100% and must never be summed."
+        - "The reason refers to a bank or similar financial-institution account only; mobile money is excluded."
+        - "Observed for the 2024 wave only in the local Findex file."
+    source: {dataset: findex, indicator: fin11f, official_indicator: fin11f}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin11f
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    subgroup: total_population
+    reference_period: at survey time
+    valid_years: [2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [unbanked_share]
     aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
     missing_data_policy: preserve_missing_v1
     aggregation_policy: compatible_denominators_v1

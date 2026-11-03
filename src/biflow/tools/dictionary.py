@@ -14,7 +14,8 @@ FINDEX_LABELS = {
     "g20_any": "Paiement numerique effectue ou recu dans l'annee",
     "fin17a": "Epargne aupres d'une banque ou institution financiere similaire (12 mois)",
     "fin22a": "Emprunt aupres d'une banque ou institution financiere similaire, carte de credit incluse (12 mois)",
-    # Raisons de ne pas avoir de compte (part de tous les adultes 15+) : pas de KPI
+    # Raisons de ne pas avoir de compte bancaire (part de tous les adultes 15+, hors mobile
+    # money) : KPI barrier_* du catalogue 1.5.0 ; plusieurs raisons possibles par personne
     "fin11a": "Sans compte : institution financiere trop eloignee",
     "fin11b": "Sans compte : services financiers trop chers",
     "fin11c": "Sans compte : documents requis manquants",

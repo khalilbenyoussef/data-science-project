@@ -58,6 +58,9 @@ def finova_warehouse(tmp_path_factory):
             _row("TUN", 2024, "findex", "fin17a", "all", 0.216, dimension_value="all"),
             _row("TUN", 2024, "findex", "fin22a", "all", 0.035, dimension_value="all"),
             _row("TUN", 2024, "findex", "fin24aP", "all", 0.8839, dimension_value="all"),
+            *[_row("TUN", 2024, "findex", code, "all", value, dimension_value="all")
+              for code, value in (("fin11a", 0.0916), ("fin11b", 0.1239), ("fin11c", 0.1333),
+                                  ("fin11d", 0.4575), ("fin11e", 0.2240), ("fin11f", 0.1553))],
             _row("TUN", 2024, "fas", "branch_density", "bank_type", 22.37,
                  "per_100k_adults", "commercial_banks"),
             _row("TUN", 2017, "fas", "atm_density", "bank_type", 30.0,
@@ -142,7 +145,7 @@ def test_catalog_values_deltas_and_review_flags(spec):
     assert saving.chip.requires_review is True  # provenance absente dans cette fixture
     assert "provisional_definition" not in saving.chip.review_reasons  # catalogue 1.3.0 : verifie
     assert saving.label == "Épargne (toute forme)"
-    assert saving.chip.note == "Définition catalogue v1.4.0 appliquée au warehouse."
+    assert saving.chip.note == "Définition catalogue v1.5.0 appliquée au warehouse."
 
     emergency = spec.metric("emergency_money")
     # catalogue 1.4.0 : KPI emergency_funds (fin24aP), identifiant du widget inchange
@@ -211,7 +214,44 @@ def test_peers_reference_lines_and_placeholders(spec):
     ])
     heatmap = spec.page("exclusion").charts[0]
     assert heatmap.kind == "heatmap"
-    assert {cell.display for cell in heatmap.cells} == {"To load"}
+    # catalogue 1.5.0 : plus aucune cellule « To load » ; KPI barrier_* pour le pays
+    assert "To load" not in {cell.display for cell in heatmap.cells}
+    assert heatmap.columns[0] == "Tunisie" and heatmap.rows == (
+        "fin11a", "fin11b", "fin11c", "fin11d", "fin11e", "fin11f")
+    country = {cell.row: cell for cell in heatmap.cells if cell.column == "Tunisie"}
+    assert country["fin11d"].value == pytest.approx(45.75) and country["fin11d"].status == "available"
+    # sans kpi_values (fixture), la moyenne des pairs reste indisponible, jamais 0
+    peers = [cell for cell in heatmap.cells if cell.column == heatmap.columns[1]]
+    assert all(cell.value is None and cell.status == "unavailable" for cell in peers)
+    assert heatmap.notes[:2] == (
+        "Plusieurs raisons peuvent être citées : les parts ne s'additionnent pas à 100 %.",
+        "Part de tous les adultes (15 ans et plus) ; comptes bancaires uniquement (hors mobile money).",
+    )
+    assert not any("To load" in note or "ETL" in note for note in heatmap.notes)
+
+
+def test_barrier_peer_column_reads_kpi_values_peers_with_partial_coverage(dataset, finova_warehouse, tmp_path):
+    import shutil
+
+    warehouse = tmp_path / "warehouse.duckdb"
+    shutil.copyfile(finova_warehouse, warehouse)
+    with duckdb.connect(str(warehouse)) as con:
+        con.execute("CREATE TABLE kpi_values (kpi_id VARCHAR, iso3 VARCHAR, year INTEGER, value DOUBLE, "
+                    "unit VARCHAR, availability_status VARCHAR, peers_included VARCHAR[], "
+                    "missing_peers VARCHAR[], publication_status VARCHAR)")
+        con.execute("INSERT INTO kpi_values VALUES ('barrier_insufficient_funds', 'PEERS', 2024, 49.06, "
+                    "'percent', 'available', ['EGY', 'JOR', 'MAR'], ['DZA'], 'approved_with_review_note')")
+    spec = build_finova_spec(dataset, run_id="peers", reader=WarehouseReader(warehouse),
+                             reference=load_reference())
+    heatmap = spec.page("exclusion").charts[0]
+    assert heatmap.columns == ("Tunisie", "Moyenne des pairs (DZA, EGY, JOR, MAR)")
+    peers = {cell.row: cell for cell in heatmap.cells if cell.column == heatmap.columns[1]}
+    assert peers["fin11d"].value == pytest.approx(49.06)  # valeur stockee, jamais recalculee
+    assert "Couverture partielle" in peers["fin11d"].note and "DZA" in peers["fin11d"].note
+    assert peers["fin11a"].value is None  # aucune ligne PEERS : indisponible
+    assert "Moyenne des pairs partielle : DZA sans observation en 2024." in heatmap.notes
+    fact = next(f for f in spec.facts if f.id == "F-barrier_insufficient_funds-PEERS-2024")
+    assert fact.evidence_ids == ("EV-barrier_insufficient_funds-PEERS-2024",)
 
 
 def test_facts_are_unique_and_numbered(spec):

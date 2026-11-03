@@ -127,6 +127,18 @@ def test_review_wording_returns_when_the_backend_says_so(facts, monkeypatch):
     assert "ne concorde pas" in overview["INS-overview-emergency"]["statement"]
 
 
+def test_xai_barrier_sentence_follows_the_loaded_barriers(facts):
+    card, _ = build_xai(facts, "Tunisie")
+    assert "ne sont pas chargées" in card["interpretation"][1]["statement"]
+    loaded = facts + [F("barrier_insufficient_funds", 45.7, "45.7 %", provider="semantic")]
+    card, warnings = build_xai(loaded, "Tunisie")
+    assert warnings == []
+    sentence = card["interpretation"][1]
+    assert "ne sont pas chargées" not in sentence["statement"]
+    assert "plusieurs" in sentence["statement"] and "sans en mesurer la cause" in sentence["statement"]
+    assert sentence["evidence_ids"] == ("F-barrier_insufficient_funds-TUN-2024",)
+
+
 def test_xai_is_hypothesis_with_association_caveat(facts):
     card, warnings = build_xai(facts, "Tunisie")
     assert warnings == [] and card is not None

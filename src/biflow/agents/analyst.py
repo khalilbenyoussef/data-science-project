@@ -411,11 +411,18 @@ def build_xai(
         "associations observées sur des sous-groupes distincts.",
         "info", "xai_interpretation", cited_gap,
     )
+    # barrieres fin11 du pays (KPI barrier_*) : le texte suit leur presence dans les faits
+    barriers = [fact for fact in facts if str(fact.get("code", "")).startswith("barrier_")
+                and fact.get("iso3") not in (None, "PEERS") and fact.get("value") is not None]
     interpretation_barriers = make(
         "XAI-interpretation-barriers",
+        "Findex mesure les raisons déclarées de ne pas avoir de compte : une même "
+        "personne peut en citer plusieurs, et ces raisons décrivent l'exclusion sans "
+        "en mesurer la cause."
+        if barriers else
         "Les barrières déclarées ne sont pas chargées dans le warehouse : "
         "aucune explication par ces barrières n'est mesurée dans ce run.",
-        "review", "xai_interpretation", cited_gap,
+        "review", "xai_interpretation", barriers or cited_gap,
     )
     recommendation = make(
         "XAI-hypothesis",

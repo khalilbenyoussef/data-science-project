@@ -57,6 +57,10 @@ def warehouse(tmp_path):
             ("TUN", 2024, "findex", "account_t_d", "laborforce", "in laborforce", .52, "fraction"),
             ("TUN", 2024, "findex", "account_t_d", "urbanicity", "rural", .30, "fraction"),
             ("TUN", 2024, "findex", "account_t_d", "urbanicity", "urban", .47, "fraction"),
+            # catalogue 1.5.0 : barrieres fin11a-f (part de tous les adultes)
+            *[("TUN", 2024, "findex", code, "all", "all", value, "fraction") for code, value in (
+                ("fin11a", .09), ("fin11b", .12), ("fin11c", .13), ("fin11d", .46),
+                ("fin11e", .22), ("fin11f", .16))],
             ("XKX", 2024, "findex", "account_t_d", "all", "all", .6, "fraction"),
             ("PSE", 2024, "findex", "account_t_d", "all", "all", .7, "fraction"),
         ])
@@ -81,7 +85,7 @@ def test_verified_values_subgroups_units_and_metadata(warehouse, kpi, expected, 
     assert result.iso3 == "TUN" and result.observation_year == 2024
     assert result.availability_status == "available" and result.reason is None
     assert result.definition == load_catalog()["kpis"][kpi]["definition"]
-    assert result.catalog_version == "1.4.0" and result.definition_version == "1.0.0"
+    assert result.catalog_version == "1.5.0" and result.definition_version == "1.0.0"
     assert len(result.catalog_sha256) == 64
     assert result.publication_status == "not_evaluated"
     with pytest.raises(FrozenInstanceError):

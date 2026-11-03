@@ -7,6 +7,14 @@
 > chip du catalogue. `fin17a`/`fin22a` sont les KPI `formal_saving_rate` /
 > `formal_borrowing_rate`. Dans le contrat, `tools/warehouse_reader.py` ne sert
 > plus qu'au contexte macro (PIB) et au résumé du warehouse.
+>
+> **Catalogue 1.5.0.** Barrières `fin11a`–`fin11f` chargées par l'ETL et au
+> catalogue (`barrier_*`). Dénominateur vérifié dans le glossaire Findex 2025
+> (lignes 6 à 11, « %, age 15+ ») : **tous les adultes**, pas seulement ceux sans
+> compte ; la raison porte sur un compte bancaire (hors mobile money). Observées
+> pour la vague 2024 seulement. La heatmap « Pourquoi l'exclusion ? » lit ces KPI
+> et, en colonne de référence, la moyenne PEERS de `kpi_values` (couverture
+> partielle signalée).
 
 - **Émetteur** : propriétaire Route 2 (Analyst / Dashboard / UI)
 - **Destinataire** : propriétaire du catalogue (`config/kpi_catalog.v1.yaml`, version 1.0.0)

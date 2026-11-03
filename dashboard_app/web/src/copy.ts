@@ -226,13 +226,14 @@ export const STEP_LABELS: Record<string, string> = {
   formal_borrowing: "Emprunt formel",
 };
 
+// Libellés du glossaire Findex 2025 (lignes 6 à 11)
 export const HEATMAP_ROW_LABELS: Record<string, string> = {
-  fin11a: "Obstacle 1",
-  fin11b: "Obstacle 2",
-  fin11c: "Obstacle 3",
-  fin11d: "Obstacle 4",
-  fin11e: "Obstacle 5",
-  fin11f: "Obstacle 6",
+  fin11a: "Trop éloigné",
+  fin11b: "Trop cher",
+  fin11c: "Documents manquants",
+  fin11d: "Fonds insuffisants",
+  fin11e: "Un proche en a déjà un",
+  fin11f: "Manque de confiance",
 };
 
 // Statut de publication fixé par l'Auditor ; « en attente de validation » reprend la règle not_evaluated ci-dessus.

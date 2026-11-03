@@ -61,6 +61,14 @@ SUBGROUPS = {
 }
 
 
+# Catalogue 1.5.0 : raisons de ne pas avoir de compte (code, ligne du glossaire 2025)
+BARRIERS = {
+    "barrier_too_far": ("fin11a", 6), "barrier_too_expensive": ("fin11b", 7),
+    "barrier_no_documents": ("fin11c", 8), "barrier_insufficient_funds": ("fin11d", 10),
+    "barrier_family_has_account": ("fin11e", 11), "barrier_no_trust": ("fin11f", 9),
+}
+
+
 @pytest.fixture(scope="module")
 def catalog():
     return yaml.safe_load((ROOT / "config/kpi_catalog.v1.yaml").read_text(encoding="utf-8"))
@@ -68,10 +76,11 @@ def catalog():
 
 def test_catalog_identity_and_versions(catalog):
     assert catalog["schema_version"] == 1
-    assert catalog["catalog_version"] == "1.4.0"
+    assert catalog["catalog_version"] == "1.5.0"
     assert catalog["status"] == "draft"
     assert catalog["scope"] == "country_year_total_population_and_subgroup_gaps"
-    assert set(catalog["kpis"]) == set(EXPECTED) | set(GAPS) | set(FAS_NEW) | set(FINDEX_NEW) | set(SUBGROUPS)
+    assert set(catalog["kpis"]) == (set(EXPECTED) | set(GAPS) | set(FAS_NEW) | set(FINDEX_NEW)
+                                    | set(SUBGROUPS) | set(BARRIERS))
     assert {k["business_objective"] for k in catalog["kpis"].values()} == {
         "financial_inclusion", "banking_infrastructure", "digital_finance",
         "savings_deposits", "credit", "financial_exclusion_vulnerability", "financial_resilience",
@@ -320,3 +329,21 @@ def test_subgroup_kpis_read_one_findex_subgroup_each(catalog, kpi_id):
     for gap_id, (gap_dimension, first, second, _) in GAPS.items():
         if gap_dimension == dimension:
             assert value in (first, second)
+
+
+@pytest.mark.parametrize("kpi_id", BARRIERS)
+def test_barriers_state_their_all_adults_denominator(catalog, kpi_id):
+    code, row = BARRIERS[kpi_id]
+    kpi = catalog["kpis"][kpi_id]
+    assert kpi["verification"]["status"] == "verified"
+    reference = catalog["references"][kpi["verification"]["evidence"][0]]
+    assert reference["locator"].startswith(f"Glossary!A{row}:C{row}, {code} ")
+    assert "(%, age 15+)" in reference["evidence"] and "bank or similar financial institution account" in reference["evidence"]
+    assert code in load_config()["sources"]["findex"]["indicators"]
+    # denominateur = tous les adultes 15+, compte bancaire seulement, raisons non additives
+    assert kpi["denominator"]["population"] == "all surveyed adults aged 15+"
+    assert "all adults" in kpi["definition"] and "mobile-money" in kpi["definition"]
+    assert any("do not add up to 100%" in text for text in kpi["verification"]["uncertainties"])
+    assert kpi["valid_years"] == [2024] and kpi["unit"] == "percent"
+    assert kpi["formula"]["from_fact"] == "100 * value"
+    assert "unbanked_share" in kpi["not_equivalent_to"]
