@@ -4,12 +4,12 @@ import json
 import pytest
 
 from biflow.route2_graph import run_route2
+from biflow.tools.dashboard_spec import SPEC_KPIS
 from test_dashboard_spec import finova_warehouse  # reusable temporary warehouse
 
 REQUEST = {
     "iso3": ("TUN", "DZA", "EGY", "JOR", "MAR"), "mode": "year", "year": 2024,
-    "kpi_ids": ("account_ownership", "branch_density", "digital_payment_rate",
-                "saving_rate", "borrowing_rate"),
+    "kpi_ids": SPEC_KPIS,
 }
 
 
@@ -91,9 +91,16 @@ def _audited_copy(tmp_path, finova_warehouse, config):
     with duckdb.connect(str(warehouse)) as con:
         con.execute("CREATE TABLE kpi_values (kpi_id VARCHAR, iso3 VARCHAR, year INTEGER, value DOUBLE, "
                     "unit VARCHAR, publication_status VARCHAR, review_reasons VARCHAR[])")
-        con.executemany("INSERT INTO kpi_values VALUES (?, ?, ?, ?, ?, 'approved', [])", [
-            (row["kpi_id"], row["iso3"], row["year"], row["value"], row["unit"])
-            for row in dataset["observations"] if row["year"] is not None])
+        # observations et points de serie (annees de base des variations), sans doublon
+        rows = {(row["kpi_id"], row["iso3"], row["year"]): (row["value"], row["unit"])
+                for row in dataset["observations"] if row["year"] is not None}
+        for series in dataset["series"]:
+            for point in series["points"]:
+                if point["availability_status"] == "available":
+                    rows.setdefault((series["kpi_id"], series["iso3"], point["year"]),
+                                    (point["value"], series.get("unit") or "percent"))
+        con.executemany("INSERT INTO kpi_values VALUES (?, ?, ?, ?, ?, 'approved', [])",
+                        [(*key, *value) for key, value in rows.items()])
     write_report({"run_id": "r1", "snapshot_id": "v1", "created_at": "2026-11-03T10:00:00",
                   "verdict": "pass", "counts": {"pass": 1, "warn": 0, "fail": 0}, "rows": 1,
                   "checks": [], "caveats": [], "publication": {"by_status": {}, "blocked_rows": []},
@@ -116,7 +123,10 @@ def test_route2_insights_are_audited_into_the_audit_report(tmp_path, finova_ware
     assert block["accepted"] + block["rejected"] == block["audited"]
     assert block["not_auditable"] == len(block["not_auditable_ids"])
     assert block["accepted"] >= 1
-    md = (tmp_path / "audit" / "audit_report.md").read_text(encoding="utf-8")
+    accepted = {r["insight_id"] for r in block["results"] if r["accepted"]}
+    # variation 2021 -> 2024 et entonnoir formel : claims KPI pour chaque nombre cite
+    assert {"overview:INS-overview-account", "inclusion:INS-inclusion-funnel"} <= accepted
+    md =(tmp_path / "audit" / "audit_report.md").read_text(encoding="utf-8")
     assert "## Insights de la Route 2 (FinOVA Analyst)" in md
     # statut de publication fixe par l'Auditor, notice « non evalue » retiree
     spec = json.loads((tmp_path / "public" / "finova.json").read_text(encoding="utf-8"))

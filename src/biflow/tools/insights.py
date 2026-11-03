@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from itertools import combinations
+import re
 from typing import Any, Iterable, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
@@ -18,6 +19,8 @@ from biflow.tools.audit_text import NUMBER
 from biflow.utils.countries import normalize_iso3
 
 APPROVED = ("approved", "approved_with_review_note")
+# Preuve d'une observation KPI du dataset Route 2 (analysis.evidence_id)
+EVIDENCE = re.compile(r"EV-(?P<kpi>[a-z0-9_]+)-(?P<iso3>[A-Z]{3}|PEERS)-(?P<year>\d{4})")
 
 
 class Claim(BaseModel):
@@ -119,21 +122,42 @@ def insights_from_finova(insights_by_page: Mapping[str, Iterable[Mapping[str, An
                          ) -> tuple[list[dict[str, Any]], list[str]]:
     """Insights du FinOVA Analyst -> Insight a auditer.
 
-    Seuls les faits fournis par le catalogue KPI (provider semantic) deviennent des
-    claims ; un insight sans fait KPI n'est pas auditable (liste renvoyee a part).
+    Seuls les faits fournis par le catalogue KPI (provider semantic, une preuve
+    EV-<kpi>-<iso3>-<annee>) deviennent des claims. Une variation (fait derive
+    ``<kpi>_delta``) apporte les claims de ses deux annees, lus sur les faits
+    semantiques qui portent ces preuves. Un insight sans fait KPI n'est pas
+    auditable (liste renvoyee a part). Aucune valeur n'est calculee ici.
     """
+    facts = list(facts)
     by_id = {fact.get("id"): fact for fact in facts}
     kpis = set(kpi_ids)
+
+    def claim(fact: Mapping[str, Any]) -> dict[str, Any] | None:
+        evidence = tuple(fact.get("evidence_ids") or ())
+        match = EVIDENCE.fullmatch(evidence[0]) if len(evidence) == 1 else None
+        if (fact.get("provider") != "semantic" or match is None or match["kpi"] not in kpis
+                or fact.get("value") is None or fact.get("year") is None
+                or int(match["year"]) != int(fact["year"])):
+            return None
+        return {"kpi_id": match["kpi"], "iso3": match["iso3"], "year": int(fact["year"]),
+                "value": float(fact["value"]), "unit": fact.get("unit")}
+
+    carriers = {}  # preuve -> claim du fait semantique qui la porte seule
+    for fact in facts:
+        found = claim(fact)
+        if found is not None:
+            carriers.setdefault(fact["evidence_ids"][0], found)
     converted, not_auditable = [], []
     for page, items in (insights_by_page or {}).items():
         for item in items or []:
             claims = []
             for evidence in item.get("evidence_ids") or ():
                 fact = by_id.get(evidence) or {}
-                if (fact.get("provider") == "semantic" and fact.get("code") in kpis
-                        and fact.get("value") is not None and fact.get("year") is not None):
-                    claims.append({"kpi_id": fact["code"], "iso3": fact.get("iso3"), "year": int(fact["year"]),
-                                   "value": float(fact["value"]), "unit": fact.get("unit")})
+                found = [claim(fact)]
+                code = str(fact.get("code") or "")
+                if fact.get("provider") == "derived" and code.removesuffix("_delta") in kpis and code.endswith("_delta"):
+                    found = [carriers.get(ev) for ev in fact.get("evidence_ids") or ()]
+                claims.extend(c for c in found if c is not None and c not in claims)
             identifier = f"{page}:{item.get('id')}"
             if not claims:
                 not_auditable.append(identifier)

@@ -6,18 +6,30 @@ import {
   formatBytes,
   formatDateTime,
   formatScore,
+  publicationBadgeClass,
+  publicationLabel,
   reasonLabel,
   shortHash,
 } from "../format";
 
-const FALLBACK_LIMITATIONS = [
-  "Les valeurs proviennent uniquement des contrats KPI déterministes ; aucun chiffre n'est recalculé, lissé ou extrapolé.",
-  "Le statut de publication reste « non évalué » : ce tableau de bord ne vaut pas approbation.",
-  "Les observations marquées « revue requise » conservent leurs motifs et ne sont pas certifiées.",
-  "Les définitions provisoires (épargne, emprunt) ne sont pas vérifiées.",
-  "Les comparaisons sont des différences absolues (droite − gauche), jamais des taux de croissance.",
-  "Le paiement numérique et la détention de compte sont deux mesures distinctes : aucun écart n'est interprété comme une causalité.",
-];
+// Limites par défaut (sans rapport de l'analyste) : chaque phrase suit les données du contrat.
+function fallbackLimitations(data: DashboardData): string[] {
+  const provisional = data.scope.kpis
+    .filter((kpi) => kpi.verification_status === "provisional")
+    .map((kpi) => kpi.name);
+  return [
+    "Les valeurs proviennent uniquement des contrats KPI déterministes ; aucun chiffre n'est recalculé, lissé ou extrapolé.",
+    ...(data.publication_status === "not_evaluated" || !data.publication_status
+      ? ["Le statut de publication reste « non évalué » : ce tableau de bord ne vaut pas approbation."]
+      : []),
+    "Les observations marquées « revue requise » conservent leurs motifs et ne sont pas certifiées.",
+    ...(provisional.length > 0
+      ? [`Les définitions provisoires (${provisional.join(", ")}) ne sont pas vérifiées.`]
+      : []),
+    "Les comparaisons sont des différences absolues (droite − gauche), jamais des taux de croissance.",
+    "Le paiement numérique et la détention de compte sont deux mesures distinctes : aucun écart n'est interprété comme une causalité.",
+  ];
+}
 
 function MetaItem({
   label,
@@ -45,13 +57,15 @@ function gateBadge(passed: boolean | null) {
 export function ProvenanceFooter({ data }: { data: DashboardData }) {
   const provenance = data.provenance;
   const limitations =
-    data.limitations && data.limitations.length > 0 ? data.limitations : FALLBACK_LIMITATIONS;
+    data.limitations && data.limitations.length > 0 ? data.limitations : fallbackLimitations(data);
 
   return (
     <footer className="panel provenance">
       <header className="panel__head">
         <h2>Provenance et limites</h2>
-        <span className="badge badge-danger">Publication non évaluée</span>
+        <span className={`badge ${publicationBadgeClass(data.publication_status)}`}>
+          Publication : {publicationLabel(data.publication_status)}
+        </span>
       </header>
 
       <dl className="meta-grid">

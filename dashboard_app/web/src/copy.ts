@@ -235,6 +235,14 @@ export const HEATMAP_ROW_LABELS: Record<string, string> = {
   fin11f: "Obstacle 6",
 };
 
+// Statut de publication fixé par l'Auditor ; « en attente de validation » reprend la règle not_evaluated ci-dessus.
+export const PUBLICATION_LABELS: Record<string, string> = {
+  approved: "Approuvé",
+  approved_with_review_note: "Approuvé avec réserve",
+  blocked: "Bloqué",
+  not_evaluated: "En attente de validation",
+};
+
 export const DEFINITION_STATUS: Record<string, string> = {
   verified: "Définition vérifiée",
   verified_metadata: "Métadonnées vérifiées",

@@ -142,3 +142,22 @@ export function associationLabel(status: string): string {
   if (status === "inconsistent") return "Incohérente";
   return "Non vérifiée";
 }
+
+// Statut de publication fixé par l'Auditor (kpi_values) ; jamais déduit ici.
+const PUBLICATION_LABELS: Record<string, string> = {
+  approved: "Approuvé",
+  approved_with_review_note: "Approuvé avec réserve",
+  blocked: "Bloqué",
+  not_evaluated: "En attente de validation",
+};
+
+export function publicationLabel(status: string | null | undefined): string {
+  return PUBLICATION_LABELS[status ?? "not_evaluated"] ?? PUBLICATION_LABELS.not_evaluated;
+}
+
+// Classes existantes uniquement : rouge pour « Bloqué », succès pour « Approuvé ».
+export function publicationBadgeClass(status: string | null | undefined): string {
+  if (status === "blocked") return "badge-danger";
+  if (status === "approved") return "badge-ok";
+  return "badge-neutral";
+}

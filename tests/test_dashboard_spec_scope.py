@@ -6,15 +6,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from biflow.tools.analysis import AnalysisRequest, AnalysisService
-from biflow.tools.dashboard_spec import build_finova_spec, load_reference
+from biflow.tools.dashboard_spec import SPEC_KPIS, build_finova_spec, load_reference
 from biflow.tools.warehouse_reader import WarehouseReader
 from dashboard_app.api.app import create_app
 
 PEERS = ("TUN", "DZA", "EGY", "JOR", "MAR")
-KPIS = (
-    "account_ownership", "branch_density", "digital_payment_rate",
-    "saving_rate", "borrowing_rate",
-)
+KPIS = SPEC_KPIS  # KPI lus par le contrat (epargne/emprunt formels inclus)
 TUNISIA_ONLY_REFERENCES = {
     "fx_tnd_usd_2024", "smig_2025",
     "poverty_rate_urban_2021", "poverty_rate_rural_2021",

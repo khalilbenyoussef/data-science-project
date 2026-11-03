@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from biflow.tools.insights import Insight, audit_insights
+from biflow.tools.insights import Insight, audit_insights, insights_from_finova
 
 ROWS = [
     {"kpi_id": "account_ownership", "iso3": "TUN", "year": 2024, "value": 37.844486, "unit": "percent",
@@ -96,3 +96,58 @@ def test_publication_statuses_from_the_audit_take_precedence():
 def test_schema_is_exported():
     schema = Insight.model_json_schema()
     assert set(schema["required"]) == {"insight_id", "text", "claims", "recommendation", "confidence"}
+
+
+# ------------------------------------------------------------- conversion FinOVA -> Insight
+def _fact(fact_id, code, value, year, provider="semantic", unit="percent", evidence=(), iso3="TUN"):
+    return {"id": fact_id, "code": code, "value": value, "unit": unit, "year": year, "iso3": iso3,
+            "provider": provider, "evidence_ids": tuple(evidence)}
+
+
+FINOVA_FACTS = [
+    _fact("F-account_ownership-TUN-2024", "account_ownership", 37.844486, 2024,
+          evidence=("EV-account_ownership-TUN-2024",)),
+    _fact("F-account_ownership-TUN-2021", "account_ownership", 36.853236, 2021,
+          evidence=("EV-account_ownership-TUN-2021",)),
+    _fact("F-account_ownership-delta-TUN-2024", "account_ownership_delta", 0.991250, 2024,
+          provider="derived", unit="percentage_points",
+          evidence=("EV-account_ownership-TUN-2024", "EV-account_ownership-TUN-2021")),
+    # identifiant de widget stable (formal_saving) : le KPI vient de la preuve
+    _fact("F-formal_saving-TUN-2024", "formal_saving", 21.6, 2024,
+          evidence=("EV-formal_saving_rate-TUN-2024",)),
+    _fact("F-index-atm-TUN-2024", "index_atm_per_100k", 119.0, 2024, provider="derived",
+          unit="index_2017_100", evidence=("EV-atm_density-TUN-2017", "EV-atm_density-TUN-2024")),
+]
+KPI_IDS = ("account_ownership", "formal_saving_rate", "atm_density")
+CHANGE_ROWS = [
+    {"kpi_id": "account_ownership", "iso3": "TUN", "year": 2024, "value": 37.844486, "unit": "percent",
+     "publication_status": "approved", "review_reasons": []},
+    {"kpi_id": "account_ownership", "iso3": "TUN", "year": 2021, "value": 36.853236, "unit": "percent",
+     "publication_status": "approved", "review_reasons": []},
+]
+
+
+def test_change_insight_carries_claims_for_both_years():
+    insights = {"overview": [{"id": "INS-overview-account", "evidence_ids": [
+        "F-account_ownership-TUN-2024", "F-account_ownership-delta-TUN-2024"],
+        "statement": "En 2024, 37.8 % des adultes en Tunisie détiennent un compte. (+1.0 pt vs 2021)"}]}
+    converted, not_auditable = insights_from_finova(insights, FINOVA_FACTS, KPI_IDS)
+    assert not_auditable == []
+    assert {(c["year"], c["value"]) for c in converted[0]["claims"]} == {(2024, 37.844486), (2021, 36.853236)}
+    result, = audit_insights(converted, CHANGE_ROWS)
+    assert result["accepted"] is True, result["reasons"]
+    # sans la ligne 2021, la regle de l'Auditor rejette toujours la variation
+    result, = audit_insights(converted, CHANGE_ROWS[:1])
+    assert result["accepted"] is False
+    assert any("2021" in reason for reason in result["reasons"])
+
+
+def test_widget_facts_use_the_kpi_of_their_evidence_and_derived_indexes_stay_unaudited():
+    insights = {"inclusion": [{"id": "INS-funnel", "evidence_ids": ["F-formal_saving-TUN-2024"],
+                               "statement": "21.6 % épargnent."}],
+                "access": [{"id": "INS-index", "evidence_ids": ["F-index-atm-TUN-2024"],
+                            "statement": "Indice 119.0."}]}
+    converted, not_auditable = insights_from_finova(insights, FINOVA_FACTS, KPI_IDS)
+    assert [c["claims"] for c in converted] == [[{"kpi_id": "formal_saving_rate", "iso3": "TUN",
+                                                  "year": 2024, "value": 21.6, "unit": "percent"}]]
+    assert not_auditable == ["access:INS-index"]

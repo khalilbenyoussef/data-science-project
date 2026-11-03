@@ -45,6 +45,11 @@ PROVIDERS = ("semantic", "warehouse", "reference", "placeholder", "derived")
 STATUSES = ("available", "unavailable", "placeholder")
 
 BARRIER_CODES = ("fin11a", "fin11b", "fin11c", "fin11d", "fin11e", "fin11f")
+# KPI du catalogue lus par le contrat : le dataset doit les contenir
+SPEC_KPIS = (
+    "account_ownership", "branch_density", "digital_payment_rate",
+    "saving_rate", "borrowing_rate", "formal_saving_rate", "formal_borrowing_rate",
+)
 
 
 # --------------------------------------------------------------------------- models
@@ -1086,25 +1091,23 @@ def _build_blocks(
 
     # ------------------------------------------------------- inclusion/inequalities
     funnel_steps = []
+    # (identifiant du widget, KPI du catalogue, libelle) : l'identifiant reste stable
+    # pour l'interface, la valeur vient du KPI semantique.
     funnel_inputs = (
-        ("account_ownership", "semantic", None),
-        ("digital_payment_rate", "semantic", None),
-        ("formal_saving", "warehouse", "Épargne formelle (fin17a)"),
-        ("formal_borrowing", "warehouse", "Emprunt formel (fin22a)"),
+        ("account_ownership", "account_ownership", None),
+        ("digital_payment_rate", "digital_payment_rate", None),
+        ("formal_saving", "formal_saving_rate", "Épargne formelle (fin17a)"),
+        ("formal_borrowing", "formal_borrowing_rate", "Emprunt formel (fin22a)"),
     )
     previous_value: float | None = None
-    for series_id, provider, label in funnel_inputs:
-        if provider == "semantic":
-            metric = data.semantic_metric(series_id, label=label, previous=False)
-        else:
-            metric = data.warehouse_metric(series_id, label=label, exact=True,
-                                           previous=False)
+    for widget_id, kpi_id, label in funnel_inputs:
+        metric = data.semantic_metric(kpi_id, label=label, previous=False)
         value = metric["value"]
         drop = None
         if value is not None and previous_value is not None:
             drop = value - previous_value
         funnel_steps.append({
-            "id": metric["id"],
+            "id": widget_id,
             "label": metric["label"],
             "value": value,
             "display": metric["display"],
@@ -1133,22 +1136,21 @@ def _build_blocks(
     }
 
     formal_bars = []
-    for series_id, provider, label in (
-        ("saving_rate", "semantic",
-         _provisional_suffix(data, "saving_rate", "Épargne — toute forme", " (provisoire)")),
-        ("formal_saving", "warehouse", "Épargne formelle (fin17a)"),
-        ("borrowing_rate", "semantic",
-         _provisional_suffix(data, "borrowing_rate", "Emprunt — toute forme", " (provisoire)")),
-        ("formal_borrowing", "warehouse", "Emprunt formel (fin22a)"),
+    # (widget, KPI, libelle, mis en avant) : seules les mesures « toute forme » sont mises en avant
+    for widget_id, kpi_id, label, highlight in (
+        ("saving_rate", "saving_rate",
+         _provisional_suffix(data, "saving_rate", "Épargne — toute forme", " (provisoire)"), True),
+        ("formal_saving", "formal_saving_rate", "Épargne formelle (fin17a)", False),
+        ("borrowing_rate", "borrowing_rate",
+         _provisional_suffix(data, "borrowing_rate", "Emprunt — toute forme", " (provisoire)"), True),
+        ("formal_borrowing", "formal_borrowing_rate", "Emprunt formel (fin22a)", False),
     ):
-        metric = (data.semantic_metric(series_id, label=label, previous=False)
-                  if provider == "semantic" else
-                  data.warehouse_metric(series_id, label=label, exact=True, previous=False))
+        metric = data.semantic_metric(kpi_id, label=label, previous=False)
         formal_bars.append({
-            "id": series_id,
+            "id": widget_id,
             "label": metric["label"], "iso3": iso3, "value": metric["value"],
             "display": metric["display"], "status": metric["status"],
-            "year": metric["year"], "highlight": provider == "semantic",
+            "year": metric["year"], "highlight": highlight,
             "provider": metric["provider"], "chip": metric["chip"],
             "evidence_ids": metric["evidence_ids"],
         })
@@ -1799,6 +1801,44 @@ def _display_number(text: Any) -> float | None:
         return None
 
 
+def _baseline_evidence(metric: Mapping[str, Any]) -> tuple[str, ...]:
+    """Preuve de l'annee de base d'une variation semantique (EV-<kpi>-<iso3>-<annee>)."""
+    delta = metric.get("delta")
+    evidence = tuple(metric.get("evidence_ids") or ())
+    if metric.get("provider") != "semantic" or delta is None or len(evidence) != 1:
+        return ()
+    return (f"{evidence[0].rsplit('-', 1)[0]}-{delta['from_year']}",)
+
+
+def baseline_facts(blocks: Mapping[str, Any], dataset: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Observation de l'annee de base de chaque variation semantique, lue telle quelle
+    dans la serie du dataset (aucun calcul) : la variation reste verifiable."""
+    points = {
+        point.get("evidence_id"): (row, point)
+        for row in dataset.get("series") or []
+        for point in row.get("points") or []
+        if point.get("evidence_id")
+    }
+    facts = []
+    for page in blocks["pages"]:
+        for metric in page["metrics"]:
+            for evidence in _baseline_evidence(metric):
+                row, point = points.get(evidence, (None, None))
+                if point is None or point.get("availability_status") != "available" or point.get("value") is None:
+                    continue
+                facts.append({
+                    "id": f"F-{row['kpi_id']}-{row['iso3']}-{point['year']}",
+                    "code": row["kpi_id"],
+                    "label": metric["label"],
+                    "value": float(point["value"]), "unit": metric["unit"],
+                    "year": int(point["year"]), "iso3": row["iso3"],
+                    "provider": "semantic",
+                    "display": format_value(float(point["value"]), metric["unit"]),
+                    "evidence_ids": (evidence,),
+                })
+    return facts
+
+
 def extract_facts(blocks: Mapping[str, Any], *, iso3: str, year: int) -> list[dict[str, Any]]:
     facts: list[dict[str, Any]] = []
     for page in blocks["pages"]:
@@ -1815,7 +1855,9 @@ def extract_facts(blocks: Mapping[str, Any], *, iso3: str, year: int) -> list[di
                     "value": delta["value"], "unit": delta["unit"],
                     "year": delta["to_year"], "iso3": metric.get("iso3") or iso3,
                     "provider": "derived", "display": delta["label"],
-                    "evidence_ids": metric.get("evidence_ids") or (),
+                    # une variation cite les deux annees comparees
+                    "evidence_ids": (*(metric.get("evidence_ids") or ()),
+                                     *_baseline_evidence(metric)),
                 })
         for chart in page["charts"]:
             if chart["kind"] == "bar":
@@ -2201,7 +2243,7 @@ def build_finova_spec(
         dataset, reader=reader, reference=reference, iso3=iso3, year=spec_year,
         history=history, pipeline=pipeline, catalog=catalog,
     )
-    facts = extract_facts(blocks, iso3=iso3, year=spec_year)
+    facts = extract_facts(blocks, iso3=iso3, year=spec_year) + baseline_facts(blocks, dataset)
     known_years = sorted({
         point["year"]
         for row in dataset.get("series") or []

@@ -5,6 +5,8 @@ import {
   formatDateTime,
   formatNumber,
   formatValue,
+  publicationBadgeClass,
+  publicationLabel,
   severityLabel,
   statusLabel,
   unitLabel,
@@ -138,7 +140,9 @@ function DashboardView({ data }: { data: DashboardData }) {
           <span className="meta-pill">
             Catalogue <code>{data.catalog.version}</code>
           </span>
-          <span className="badge badge-danger">Publication non évaluée</span>
+          <span className={`badge ${publicationBadgeClass(data.publication_status)}`}>
+            Publication : {publicationLabel(data.publication_status)}
+          </span>
         </div>
       </header>
 

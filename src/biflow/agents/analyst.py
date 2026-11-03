@@ -17,6 +17,8 @@ from pydantic import BaseModel, ConfigDict, StrictStr, field_validator
 
 from biflow.agents.base import BaseAgent
 from biflow.config import path_of
+from biflow.tools.kpi import load_catalog
+from biflow.tools.warehouse_reader import FIN24AP_MISLABELED
 from biflow.utils.io import save_json
 
 SCHEMA_VERSION = "1.0"
@@ -136,6 +138,12 @@ def _delta_sentence(delta: Mapping[str, Any] | None) -> str:
     return f" ({delta['display']})" if delta is not None else ""
 
 
+def _is_provisional(kpi_id: str) -> bool:
+    """Statut lu dans le catalogue : la mention « provisoire » suit le catalogue."""
+    definition = (load_catalog().get("kpis") or {}).get(kpi_id) or {}
+    return (definition.get("verification") or {}).get("status") == "provisional"
+
+
 # -------------------------------------------------------------------- insights
 def build_insights(
     facts: Sequence[Mapping[str, Any]], country: str,
@@ -177,26 +185,29 @@ def build_insights(
         ))
     saving = pick(index, "saving_rate")
     if saving is not None:
+        provisional = _is_provisional("saving_rate")
         statement = (
             f"L'épargne, toutes formes confondues, est estimée à {saving['display']} "
-            f"en {saving['year']} ; cet indicateur du catalogue est provisoire."
+            f"en {saving['year']}"
+            + (" ; cet indicateur du catalogue est provisoire." if provisional else ".")
         )
         add("overview", _insight(
             "INS-overview-saving", "saving_rate", statement,
-            severity="review", kind="auto", cited=(saving,),
+            severity="review" if provisional else "info", kind="auto", cited=(saving,),
             facts=facts, warnings=warnings,
         ))
     emergency = pick(index, "emergency_money")
     if emergency is not None:
+        # l'avertissement de libelle ne reste que si le dictionnaire garde l'ancien libelle
         statement = (
             f"{emergency['display']} des adultes déclarent pouvoir obtenir de "
-            f"l'argent en urgence (fin24aP, {emergency['year']}) ; le libellé du "
-            "dictionnaire ne concorde pas avec la définition Findex attendue, la "
-            "valeur brute reste à revoir."
+            f"l'argent en urgence (fin24aP, {emergency['year']})"
+            + (" ; le libellé du dictionnaire ne concorde pas avec la définition Findex "
+               "attendue, la valeur brute reste à revoir." if FIN24AP_MISLABELED else ".")
         )
         add("overview", _insight(
             "INS-overview-emergency", "emergency_money", statement,
-            severity="warning", kind="auto", cited=(emergency,),
+            severity="warning" if FIN24AP_MISLABELED else "info", kind="auto", cited=(emergency,),
             facts=facts, warnings=warnings,
         ))
     peers = [pick(index, f"account_peer_{code}") for code in

@@ -124,7 +124,7 @@ def _analysis_request(args: argparse.Namespace, cfg: dict) -> dict:
     return {
         "action": "analyze",
         "iso3": _csv(args.country) or list(analyst.get("default_countries") or []),
-        "kpi_ids": _csv(args.kpis) or list(analyst.get("default_kpis") or []),
+        "kpi_ids": _csv([args.kpis] if args.kpis else None) or list(analyst.get("default_kpis") or []),
         "mode": mode,
         "year": year,
         "reference_iso3": args.reference,

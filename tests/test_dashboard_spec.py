@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from biflow.tools.analysis import AnalysisRequest, AnalysisService
 from biflow.tools.dashboard_spec import (
-    PAGE_IDS, SCHEMA_VERSION, build_finova_spec, diff_snapshots, format_value,
+    PAGE_IDS, SCHEMA_VERSION, SPEC_KPIS, build_finova_spec, diff_snapshots, format_value,
     load_reference, snapshot_from_spec, validate_spec,
 )
 from biflow.tools.warehouse_reader import WarehouseReader
@@ -106,8 +106,7 @@ def _service(warehouse, tmp_path):
 def dataset(finova_warehouse, tmp_path_factory):
     request = AnalysisRequest(
         iso3=("TUN", "DZA", "EGY", "JOR", "MAR"), mode="year", year=2024,
-        kpi_ids=("account_ownership", "branch_density", "digital_payment_rate",
-                 "saving_rate", "borrowing_rate"),
+        kpi_ids=SPEC_KPIS,
     )
     return _service(finova_warehouse, tmp_path_factory.mktemp("finova_prov")).build(request)
 
@@ -191,6 +190,30 @@ def test_facts_are_unique_and_numbered(spec):
     assert {"gender_femmes", "gap_gender", "gap_change_gender"} <= codes
     rural_poverty = next(fact for fact in spec.facts if fact.code == "poverty_rate_rural_2021")
     assert rural_poverty.value == pytest.approx(24.8)
+
+
+def test_formal_saving_and_borrowing_come_from_the_catalog_with_stable_widget_ids(spec):
+    inclusion = spec.page("inclusion")
+    charts = {chart.id: chart for chart in inclusion.charts}
+    steps = {step.id: step for step in charts["inclusion_funnel"].steps}
+    bars = {bar.id: bar for bar in charts["formal_vs_any"].bars}
+    for widget, kpi, value in (("formal_saving", "formal_saving_rate", 21.6),
+                               ("formal_borrowing", "formal_borrowing_rate", 3.5)):
+        for item in (steps[widget], bars[widget]):
+            assert item.provider == "semantic" and item.chip.provider == "semantic"
+            assert item.value == pytest.approx(value)
+            assert item.evidence_ids == (f"EV-{kpi}-TUN-2024",)
+    # seules les mesures « toute forme » restent mises en avant
+    assert [bar.id for bar in charts["formal_vs_any"].bars if bar.highlight] == ["saving_rate", "borrowing_rate"]
+
+
+def test_delta_fact_cites_both_years_and_the_baseline_is_a_fact(spec):
+    delta = next(fact for fact in spec.facts if fact.code == "account_ownership_delta")
+    assert delta.evidence_ids == ("EV-account_ownership-TUN-2024", "EV-account_ownership-TUN-2021")
+    baseline = next(fact for fact in spec.facts if fact.id == "F-account_ownership-TUN-2021")
+    assert baseline.provider == "semantic" and baseline.year == 2021
+    assert baseline.value == pytest.approx(36.91)  # lu dans la serie, aucun calcul
+    assert baseline.evidence_ids == ("EV-account_ownership-TUN-2021",)
 
 
 def test_history_diff_is_stable_then_changed(spec):

@@ -106,9 +106,25 @@ def test_insights_are_number_checked(facts):
             assert item["statement"].strip()
             assert set(item["evidence_ids"]) <= fact_ids
             assert verify_numbers(item["statement"], facts) == []
-    saving = next(item for item in insights["overview"]
-                  if item["id"] == "INS-overview-saving")
-    assert saving["severity"] == "review"
+    # catalogue 1.3.0+ : epargne verifiee, fin24aP correctement libelle -> aucune mise en garde
+    overview = {item["id"]: item for item in insights["overview"]}
+    assert overview["INS-overview-saving"]["severity"] == "info"
+    assert "provisoire" not in overview["INS-overview-saving"]["statement"]
+    assert overview["INS-overview-emergency"]["severity"] == "info"
+    assert "ne concorde pas" not in overview["INS-overview-emergency"]["statement"]
+
+
+def test_review_wording_returns_when_the_backend_says_so(facts, monkeypatch):
+    import biflow.agents.analyst as analyst
+
+    monkeypatch.setattr(analyst, "_is_provisional", lambda kpi_id: kpi_id == "saving_rate")
+    monkeypatch.setattr(analyst, "FIN24AP_MISLABELED", True)
+    insights, _ = build_insights(facts, "Tunisie")
+    overview = {item["id"]: item for item in insights["overview"]}
+    assert overview["INS-overview-saving"]["severity"] == "review"
+    assert overview["INS-overview-saving"]["statement"].endswith("est provisoire.")
+    assert overview["INS-overview-emergency"]["severity"] == "warning"
+    assert "ne concorde pas" in overview["INS-overview-emergency"]["statement"]
 
 
 def test_xai_is_hypothesis_with_association_caveat(facts):

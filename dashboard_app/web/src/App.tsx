@@ -4,7 +4,7 @@ import { ApiError, askFinova, fetchSpec } from "./api";
 import { PageView } from "./pages";
 import { AskDock, ChatMessage, NoticeList } from "./ui";
 import { prettyDate } from "./format";
-import { PAGE_COPY, plainText } from "./copy";
+import { PAGE_COPY, PUBLICATION_LABELS, plainText } from "./copy";
 
 const NAV = [
   { id: "overview", label: "Vue d'ensemble", icon: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" },
@@ -188,7 +188,7 @@ export function App() {
           <span className="eyebrow">Version {spec?.schema_version ?? "2.0"}</span>
           <span
             className={`status ${spec?.publication_status === "not_evaluated" ? "status-warning" : "status-available"}`}
-            title={`Publication : ${spec?.publication_status ?? "en attente"}`}
+            title={`Publication : ${PUBLICATION_LABELS[spec?.publication_status ?? "not_evaluated"] ?? PUBLICATION_LABELS.not_evaluated}`}
           >
             Démonstration
           </span>
