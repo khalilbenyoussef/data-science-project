@@ -31,6 +31,17 @@ LIMITATIONS = [
 ]
 
 
+def limitations(dataset: dict[str, Any]) -> list[str]:
+    """LIMITATIONS, sans les phrases que le backend a rendues fausses : statut de
+    publication evalue par l'Auditor, aucune definition provisoire au catalogue."""
+    provisional = any(item.get("verification_status") == "provisional"
+                      for item in (dataset.get("scope") or {}).get("kpis") or [])
+    evaluated = dataset.get("publication_status", "not_evaluated") != "not_evaluated"
+    return [text for text in LIMITATIONS
+            if not (evaluated and text.startswith("Le statut de publication reste"))
+            and not (not provisional and text.startswith("Les définitions provisoires"))]
+
+
 def format_value(value: float | None, unit: str) -> str:
     if value is None:
         return "indisponible"
@@ -314,8 +325,8 @@ def build_report(dataset: dict[str, Any], findings: list[dict[str, Any]]) -> dic
         "coverage": dataset["coverage"],
         "notices": dataset["notices"],
         "provenance": dataset["provenance"],
-        "limitations": LIMITATIONS,
-        "publication_status": "not_evaluated",
+        "limitations": limitations(dataset),
+        "publication_status": dataset.get("publication_status", "not_evaluated"),
     }
 
 

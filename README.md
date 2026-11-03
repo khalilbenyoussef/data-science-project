@@ -197,7 +197,11 @@ confidence}`. Chaque claim doit correspondre à une ligne approuvée de
 `kpi_values` (même arrondi, unité, année) ; chaque nombre du texte doit être la
 valeur ou l'année d'un claim, ou l'écart entre deux claims du même KPI (deux
 années d'un pays ou deux pays d'une année). Sinon l'insight est rejeté avec sa
-raison.
+raison. L'Auditor lit ces insights dans la clé d'état `audit_insights` (la clé
+`insights` reste celle du FinOVA Analyst). Après l'analyste, la Route 2 convertit
+ses insights en claims (seuls les faits du catalogue KPI deviennent des claims) et
+consigne les comptes acceptés / rejetés dans `data/audit/audit_report.{json,md}`
+(section « Insights de la Route 2 »), sans changement d'interface.
 
 ### Clés de configuration
 

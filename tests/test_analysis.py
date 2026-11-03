@@ -47,10 +47,11 @@ def test_latest_dataset_preserves_contract_statuses_and_never_fills_zero(service
 
     tun = observation(dataset, "TUN", "saving_rate")
     assert tun["year"] == 2024 and tun["value"] == pytest.approx(23)
-    assert tun["definition_status"] == "provisional"
-    assert tun["requires_review"] is True
-    assert tun["publication_status"] == "not_evaluated"
-    assert set(tun["review_reasons"]) == {"provisional_definition"}
+    # catalogue 1.3.0 : epargne verifiee (glossaire Findex 2025), provenance liee
+    assert tun["definition_status"] == "verified"
+    assert tun["requires_review"] is False
+    assert tun["publication_status"] == "not_evaluated"  # aucun audit dans ce warehouse
+    assert set(tun["review_reasons"]) == set()
 
     missing = observation(dataset, "XKX", "saving_rate")
     assert missing["value"] is None and missing["year"] is None
@@ -211,8 +212,9 @@ def test_review_notices_and_provenance_are_never_upgraded(service):
         iso3=("TUN",), kpi_ids=("saving_rate", "borrowing_rate"),
     ))
     codes = {notice["code"] for notice in dataset["notices"]}
-    assert "provisional_definition" in codes
-    assert "observation_requires_review" in codes
+    # catalogue 1.3.0 : plus aucune definition provisoire, donc aucune notice de ce type
+    assert "provisional_definition" not in codes
+    assert "observation_requires_review" not in codes
     assert all(
         notice["severity"] in {"review", "warning", "info"} for notice in dataset["notices"]
     )
@@ -223,7 +225,35 @@ def test_review_notices_and_provenance_are_never_upgraded(service):
     assert provenance["quality_gate_passed"] is True
     assert provenance["content_binding"] == "recorded_and_verified"
     assert provenance["sources"] and all(item["hash_match"] for item in provenance["sources"])
-    assert dataset["catalog"]["version"] == "1.0.0"
+    assert dataset["catalog"]["version"] == "1.3.0"
+
+
+def test_review_notice_still_emitted_when_provenance_is_unbound(warehouse, provenance_files):
+    _, quality, write = provenance_files
+    quality.pop("run_id")  # rapport qualite non lie au run : revue requise
+    write()
+    dataset = service_for(warehouse).build(request(iso3=("TUN",), kpi_ids=("saving_rate", "borrowing_rate")))
+    codes = {notice["code"] for notice in dataset["notices"]}
+    assert "observation_requires_review" in codes
+    assert all(row["requires_review"] for row in dataset["observations"])
+
+
+def test_audited_publication_status_comes_from_kpi_values(warehouse, provenance_files):
+    _, _, write = provenance_files
+    write()
+    with duckdb.connect(str(warehouse)) as con:
+        con.execute("CREATE TABLE kpi_values (kpi_id VARCHAR, iso3 VARCHAR, year INTEGER, "
+                    "publication_status VARCHAR)")
+        con.execute("INSERT INTO kpi_values VALUES ('account_ownership', 'TUN', 2024, 'approved'), "
+                    "('saving_rate', 'TUN', 2024, 'approved_with_review_note')")
+    dataset = service_for(warehouse).build(request(
+        iso3=("TUN",), kpi_ids=("account_ownership", "saving_rate")))
+    assert observation(dataset, "TUN", "account_ownership")["publication_status"] == "approved"
+    assert observation(dataset, "TUN", "saving_rate")["publication_status"] == "approved_with_review_note"
+    assert dataset["publication_status"] == "approved_with_review_note"  # le plus restrictif
+    mixed = service_for(warehouse).build(request(
+        iso3=("TUN", "XKX"), kpi_ids=("account_ownership",)))
+    assert mixed["publication_status"] == "not_evaluated"  # une ligne non auditee
 
 
 def test_provenance_discloses_recorded_path_mismatch(warehouse, provenance_files):

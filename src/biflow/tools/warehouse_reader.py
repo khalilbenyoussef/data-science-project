@@ -14,11 +14,14 @@ from typing import Any, Iterable, Mapping, Sequence
 
 import duckdb
 
+from biflow.tools.dictionary import FINDEX_LABELS
 from biflow.config import resolve
 
 NOT_IN_CATALOG = "not_in_kpi_catalog"
 DEFINITION_UNVERIFIED = "warehouse_definition_unverified"
 LABEL_MISMATCH = "dictionary_label_mismatch"
+# fin24aP etait libelle « Paiement numerique » ; le glossaire Findex 2025 l'a corrige
+FIN24AP_MISLABELED = "paiement" in FINDEX_LABELS.get("fin24aP", "").lower()
 
 
 @dataclass(frozen=True)
@@ -80,11 +83,12 @@ SERIES: dict[str, SeriesSpec] = {
     "emergency_money": SeriesSpec(
         "emergency_money", "Capacite a obtenir une somme d'urgence",
         "percent", "fin24aP", "all", "all",
+        # Signalement conserve seulement si le dictionnaire garde l'ancien libelle
         note=(
             "fin24aP est etiquete differemment dans tools/dictionary.py : la "
             "definition Findex 2025 est « could obtain emergency money »."
-        ),
-        extra_review=(LABEL_MISMATCH,),
+        ) if FIN24AP_MISLABELED else None,
+        extra_review=(LABEL_MISMATCH,) if FIN24AP_MISLABELED else (),
     ),
     "urban_account": SeriesSpec(
         "urban_account", "Detention d'un compte - milieu urbain",

@@ -239,8 +239,8 @@ class AuditorAgent(BaseAgent):
         checks = result["checks"]
         decisions = publication_decisions(result["rows"], checks)
         insight_audit = None
-        if ctx.get("insights") is not None:  # contrat de l'agent Analyst (a venir)
-            insight_audit = audit_insights(ctx["insights"], result["rows"], decisions)
+        if ctx.get("audit_insights") is not None:  # insights a auditer (liste d'Insight)
+            insight_audit = audit_insights(ctx["audit_insights"], result["rows"], decisions)
             rejected = [i for i in insight_audit if not i["accepted"]]
             checks.append(make_check(
                 "F1_insights_grounded", "insight", "warn" if rejected else "pass",

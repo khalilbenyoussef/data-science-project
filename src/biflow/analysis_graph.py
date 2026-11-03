@@ -83,8 +83,9 @@ def run_analysis_pipeline(
             for step in steps:
                 graph.add_node(
                     step,
-                    pipeline_graph._node(
-                        AGENTS[step](cfg=cfg, run_id=run_id, **agent_kwargs)
+                    pipeline_graph._node(  # Route 2 : aucun nouvel essai (conception)
+                        AGENTS[step](cfg=cfg, run_id=run_id, **agent_kwargs),
+                        {"orchestrator": {"max_retries": 0}},
                     ),
                 )
             graph.add_edge(pipeline_graph.START, steps[0])

@@ -13,7 +13,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
 
+import duckdb
+
 from biflow import graph as pipeline_graph
+from biflow.tools.audit_checks import read_kpi_rows
+from biflow.tools.audit_report import record_insight_audit
+from biflow.tools.insights import audit_insights, insights_from_finova
+from biflow.tools.kpi import load_catalog
 from biflow.agents.analyst import FinovaAnalystAgent
 from biflow.agents.dashboard import DashboardSpecAgent
 from biflow.config import load_config, path_of, resolve
@@ -160,7 +166,39 @@ def run_route2(
             "country_name": spec.country.name,
         }
 
+    def audit_route2_insights(current: Mapping[str, Any]) -> dict[str, Any]:
+        """Insights FinOVA -> claims -> controle d'insight de l'Auditor ; comptes
+        consignes dans le rapport d'audit uniquement (aucun changement d'interface)."""
+        claims, not_auditable = insights_from_finova(
+            current.get("insights"), current.get("facts") or [], load_catalog(catalog_path)["kpis"])
+        warnings = []
+        rows = []
+        if warehouse.is_file():
+            try:
+                with duckdb.connect(str(warehouse), read_only=True) as con:
+                    rows = read_kpi_rows(con)
+            except duckdb.Error:
+                rows = []
+        if not rows:
+            warnings.append("[route2] kpi_values absent : insights non audites")
+            return {"audit_insights": claims, "warnings": warnings}
+        results = audit_insights(claims, rows)
+        audit_dir = (cfg.get("paths") or {}).get("audit")
+        if not audit_dir:  # jamais de repli implicite vers le rapport reel
+            warnings.append("[route2] paths.audit absent : resultats des insights non consignes")
+            return {"audit_insights": claims, "warnings": warnings}
+        written = record_insight_audit(resolve(audit_dir), {
+            "run_id": run_id, "created_at": datetime.now().isoformat(timespec="seconds"),
+            "audited": len(results), "accepted": sum(r["accepted"] for r in results),
+            "rejected": sum(not r["accepted"] for r in results), "not_auditable": len(not_auditable),
+            "results": results, "not_auditable_ids": not_auditable,
+        })
+        if written is None:
+            warnings.append("[route2] aucun rapport d'audit : resultats des insights non consignes")
+        return {"audit_insights": claims, "warnings": warnings}
+
     def finalize(current: Mapping[str, Any]) -> dict[str, Any]:
+        audit_updates = audit_route2_insights(current)
         spec = _attach_analysis(
             _spec_file(current), current.get("insights"), current.get("xai"),
         )
@@ -171,6 +209,7 @@ def run_route2(
             snapshot_from_spec(spec), history_dir / f"{run_id}.json"
         )
         return {
+            **audit_updates,
             "finova_spec_path": str(reports_dir / "finova_spec.json"),
             "dashboard_public_path": str(public_path),
             "dashboard_history_path": str(history_path),
@@ -203,8 +242,9 @@ def run_route2(
         if pipeline_graph.LANGGRAPH_AVAILABLE:
             graph = pipeline_graph.StateGraph(PipelineState)
             graph.add_node("prepare", prepare)
-            graph.add_node("analyst", pipeline_graph._node(analyst_agent))
-            graph.add_node("dashboard", pipeline_graph._node(dashboard_agent))
+            # Route 2 : aucun nouvel essai d'agent (conception)
+            graph.add_node("analyst", pipeline_graph._node(analyst_agent, {"orchestrator": {"max_retries": 0}}))
+            graph.add_node("dashboard", pipeline_graph._node(dashboard_agent, {"orchestrator": {"max_retries": 0}}))
             graph.add_node("finalize", finalize)
             graph.add_edge(pipeline_graph.START, "prepare")
             graph.add_edge("prepare", "analyst")

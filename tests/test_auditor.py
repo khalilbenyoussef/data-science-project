@@ -522,7 +522,7 @@ def test_insights_in_state_are_audited_without_affecting_publication(world):
                         "unit": "percent"}], "recommendation": "-", "confidence": "high"}
     bad = {**good, "insight_id": "bad", "text": "En 2024, 41 % des adultes tunisiens avaient un compte."}
     before = _execute(world)
-    audit = AuditorAgent(cfg=world.cfg, run_id="audit_run").execute({**world.ctx, "insights": [good, bad]})["audit"]
+    audit = AuditorAgent(cfg=world.cfg, run_id="audit_run").execute({**world.ctx, "audit_insights": [good, bad]})["audit"]
     assert [(i["insight_id"], i["accepted"]) for i in audit["insight_audit"]] == [("good", True), ("bad", False)]
     f1 = next(c for c in audit["checks"] if c["check_id"] == "F1_insights_grounded")
     assert f1["result"] == "warn" and f1["affected_rows"][0]["insight_id"] == "bad"

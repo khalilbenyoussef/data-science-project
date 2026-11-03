@@ -196,6 +196,30 @@ class AnalysisRequest(Contract):
         return self
 
 
+# Ordre conservateur : un tableau n'est jamais "approuve" si une ligne ne l'est pas
+PUBLICATION_ORDER = ("blocked", "not_evaluated", "approved_with_review_note", "approved")
+
+
+def audited_publication_statuses(warehouse_path) -> dict[tuple[str, str, int], str]:
+    """Statuts de kpi_values fixes par l'Auditor ; vide s'il n'y a pas d'audit."""
+    path = Path(warehouse_path)
+    if not path.is_file():
+        return {}
+    try:
+        with duckdb.connect(str(path), read_only=True) as con:
+            rows = con.execute("SELECT kpi_id, iso3, year, publication_status FROM kpi_values "
+                               "WHERE publication_status <> 'not_evaluated'").fetchall()
+    except duckdb.Error:  # pas de table kpi_values ou ancienne table sans statut
+        return {}
+    return {(kpi_id, iso3, int(year)): status for kpi_id, iso3, year, status in rows}
+
+
+def aggregate_publication_status(statuses) -> str:
+    """Statut d'un ensemble : le plus restrictif ; not_evaluated sans audit."""
+    found = set(statuses)
+    return next((status for status in PUBLICATION_ORDER if status in found), "not_evaluated")
+
+
 class AnalysisService:
     """Read-only analysis dataset; semantic contracts remain the only data path.
 
@@ -232,6 +256,8 @@ class AnalysisService:
             "version": listing.catalog_version,
             "sha256": listing.catalog_sha256,
         }
+        # Statut de publication fixe par l'Auditor (kpi_values), si un audit existe
+        self._published = audited_publication_statuses(self.warehouse_path)
         self._observations: dict[tuple[str, int, str], KpiResult] = {}
         self._latest: dict[tuple[str, str], Any] = {}
         self._countries: dict[str, dict[str, Any]] = {}
@@ -294,7 +320,7 @@ class AnalysisService:
             "coverage": coverage,
             "notices": notices,
             "provenance": self._provenance(selected),
-            "publication_status": "not_evaluated",
+            "publication_status": aggregate_publication_status(row["publication_status"] for row in rows),
         }
 
     # ------------------------------------------------------------------ metadata
@@ -397,7 +423,8 @@ class AnalysisService:
             "formula": result.formula,
             "subgroup": result.subgroup,
             "dependencies": list(result.dependencies),
-            "publication_status": result.publication_status,
+            "publication_status": self._published.get(
+                (result.kpi_id, result.iso3, result.observation_year), result.publication_status),
             "provenance_issues": list(result.provenance.issues) if result.provenance else [],
             "quality_warning_codes": sorted({item.code for item in result.quality_warnings}),
             "source_warning_codes": sorted({item.code for item in result.source_warnings}),

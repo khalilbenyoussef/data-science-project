@@ -140,12 +140,12 @@ def _faults(focus: str) -> list[dict[str, Any]]:
     def wrong_number(ws):
         value = round(ws.query("SELECT value FROM kpi_values WHERE kpi_id='account_ownership' AND iso3=? "
                                "AND year=?", [focus, latest(ws, "account_ownership")])[0], 1) + 1.0
-        ws.ctx["insights"] = [_insight(ws, value, f"En {{year}}, {value:.1f} % des adultes avaient un compte.")]
+        ws.ctx["audit_insights"] = [_insight(ws, value, f"En {{year}}, {value:.1f} % des adultes avaient un compte.")]
 
     def uncited(ws):
         value = round(ws.query("SELECT value FROM kpi_values WHERE kpi_id='account_ownership' AND iso3=? "
                                "AND year=?", [focus, latest(ws, "account_ownership")])[0], 1)
-        ws.ctx["insights"] = [_insight(ws, value, f"En {{year}}, {value:.1f} % des adultes avaient un compte, "
+        ws.ctx["audit_insights"] = [_insight(ws, value, f"En {{year}}, {value:.1f} % des adultes avaient un compte, "
                                                   "dont 99 % en ville.")]
 
     return [

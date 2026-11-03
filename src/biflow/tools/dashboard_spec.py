@@ -25,9 +25,10 @@ from pydantic import (
 )
 
 from biflow.config import resolve
+from biflow.tools.dictionary import label_for
 from biflow.tools.kpi import load_catalog
 from biflow.tools.warehouse_reader import (
-    DEFINITION_UNVERIFIED, LABEL_MISMATCH, NOT_IN_CATALOG, WarehouseReader,
+    DEFINITION_UNVERIFIED, FIN24AP_MISLABELED, LABEL_MISMATCH, NOT_IN_CATALOG, WarehouseReader,
 )
 from biflow.utils.io import sha256_file
 
@@ -409,7 +410,7 @@ class DashboardSpec(FinModel):
     notices: tuple[Notice, ...]
     provenance: dict[str, Any]
     reference: dict[str, Any]
-    publication_status: Literal["not_evaluated"] = "not_evaluated"
+    publication_status: Literal["not_evaluated", "approved", "approved_with_review_note", "blocked"] = "not_evaluated"
 
     @model_validator(mode="after")
     def _cross_checks(self) -> "DashboardSpec":
@@ -566,13 +567,20 @@ def _chip(
     }
 
 
-def _semantic_chip(verification: str, observation: Mapping[str, Any]) -> dict[str, Any]:
+def _semantic_chip(verification: str, observation: Mapping[str, Any],
+                   catalog_version: str | None = None) -> dict[str, Any]:
     return _chip(
         "semantic", f"KPI catalog · {verification}",
         review=bool(observation.get("requires_review")),
         reasons=tuple(observation.get("review_reasons") or ()),
-        note="Définition catalogue v1.0.0 appliquée au warehouse.",
+        note=f"Définition catalogue v{catalog_version or '?'} appliquée au warehouse.",
     )
+
+
+def _provisional_suffix(data: "_Data", kpi_id: str, label: str, suffix: str) -> str:
+    """Mention « provisoire » seulement si le catalogue le dit."""
+    meta = data.kpi_meta.get(kpi_id) or {}
+    return label + suffix if meta.get("verification_status") == "provisional" else label
 
 
 def _warehouse_chip(series_note: str | None, extra: Sequence[str] = ()) -> dict[str, Any]:
@@ -689,7 +697,7 @@ class _Data:
             "status": "available" if available else "unavailable",
             "provider": "semantic",
             "iso3": code,
-            "chip": _semantic_chip(meta["verification_status"], observation),
+            "chip": _semantic_chip(meta["verification_status"], observation, self.catalog.get("catalog_version")),
             "delta": _delta(self.kpi_points(kpi_id, code), observation["year"], unit) if previous else None,
             "evidence_ids": (observation["evidence_id"],),
             "why": {
@@ -845,7 +853,8 @@ class _Data:
                 "year": observation["year"],
                 "highlight": code == self.iso3,
                 "provider": "semantic",
-                "chip": _semantic_chip(meta["verification_status"], observation),
+                "chip": _semantic_chip(meta["verification_status"], observation,
+                                       self.catalog.get("catalog_version")),
                 "evidence_ids": (observation["evidence_id"],),
             })
         return bars
@@ -964,10 +973,10 @@ def _build_blocks(
     overview_metrics = [
         data.semantic_metric("account_ownership"),
         data.semantic_metric("digital_payment_rate"),
-        data.semantic_metric("saving_rate",
-                             label="Épargne (toute forme, définition provisoire)"),
-        data.warehouse_metric(
-            "emergency_money", label="Fonds d'urgence (fin24aP, définition à confirmer)"),
+        data.semantic_metric("saving_rate", label=_provisional_suffix(
+            data, "saving_rate", "Épargne (toute forme", ", définition provisoire") + ")"),
+        data.warehouse_metric(  # libelle du dictionnaire (glossaire Findex 2025)
+            "emergency_money", label=label_for("fin24aP")),
     ]
     account_metric = overview_metrics[0]
     account_points = data.kpi_points("account_ownership")
@@ -1125,9 +1134,11 @@ def _build_blocks(
 
     formal_bars = []
     for series_id, provider, label in (
-        ("saving_rate", "semantic", "Épargne — toute forme (provisoire)"),
+        ("saving_rate", "semantic",
+         _provisional_suffix(data, "saving_rate", "Épargne — toute forme", " (provisoire)")),
         ("formal_saving", "warehouse", "Épargne formelle (fin17a)"),
-        ("borrowing_rate", "semantic", "Emprunt — toute forme (provisoire)"),
+        ("borrowing_rate", "semantic",
+         _provisional_suffix(data, "borrowing_rate", "Emprunt — toute forme", " (provisoire)")),
         ("formal_borrowing", "warehouse", "Emprunt formel (fin22a)"),
     ):
         metric = (data.semantic_metric(series_id, label=label, previous=False)
@@ -1692,21 +1703,33 @@ def _build_blocks(
             "message": notice.get("message", ""),
             "kpi_id": notice.get("kpi_id"),
         })
-    notices.extend([
-        {"code": "fin24aP_definition", "severity": "warning", "kpi_id": "emergency_money",
-         "message": (
-             "fin24aP : le dictionnaire l'appelle « Paiement numerique » alors que la "
-             "définition Findex 2025 attendue est « could obtain emergency money ». "
-             "La valeur brute est affichée avec un badge de revue, sans validation."
-         )},
-        {"code": "warehouse_not_in_catalog", "severity": "review", "kpi_id": None,
-         "message": (
-             "Les séries ATM, dépôts/crédits, fin17a, fin22a et fin24aP viennent du "
-             "warehouse et ne sont pas encore dans le catalogue KPI : revue requise."
-         )},
-        {"code": "publication_not_evaluated", "severity": "review", "kpi_id": None,
-         "message": "Aucune donnée n'est approuvée pour publication : statut not_evaluated."},
-    ])
+    # Notices dependant du backend : affichees seulement si elles restent vraies
+    if FIN24AP_MISLABELED:
+        notices.append(
+            {"code": "fin24aP_definition", "severity": "warning", "kpi_id": "emergency_money",
+             "message": (
+                 "fin24aP : le dictionnaire l'appelle « Paiement numerique » alors que la "
+                 "définition Findex 2025 attendue est « could obtain emergency money ». "
+                 "La valeur brute est affichée avec un badge de revue, sans validation."
+             )})
+    catalog_codes = {(k.get("warehouse") or {}).get("indicator_code")
+                     for k in (data.catalog.get("kpis") or {}).values()}
+    outside = [name for name, codes in (
+        ("ATM", ("atm_density",)), ("dépôts/crédits", ("deposits_pct_gdp", "loans_pct_gdp")),
+        ("fin17a", ("fin17a",)), ("fin22a", ("fin22a",)), ("fin24aP", ("fin24aP",)),
+    ) if not set(codes) & catalog_codes]
+    if outside:
+        listed = ", ".join(outside[:-1]) + f" et {outside[-1]}" if len(outside) > 1 else outside[0]
+        notices.append(
+            {"code": "warehouse_not_in_catalog", "severity": "review", "kpi_id": None,
+             "message": (
+                 f"Les séries {listed} viennent du "
+                 "warehouse et ne sont pas encore dans le catalogue KPI : revue requise."
+             )})
+    if dataset.get("publication_status", "not_evaluated") == "not_evaluated":
+        notices.append(
+            {"code": "publication_not_evaluated", "severity": "review", "kpi_id": None,
+             "message": "Aucune donnée n'est approuvée pour publication : statut not_evaluated."})
     if data.reader is not None:
         for series_id in ("loans_pct_gdp", "deposits_pct_gdp"):
             point = data.reader.latest_upto(series_id, iso3, year)
@@ -1946,7 +1969,8 @@ def finalize_spec(
         "notices": [dict(item) for item in (*blocks["notices"], *extra_notices)],
         "provenance": blocks["provenance"],
         "reference": blocks["provenance"]["reference"],
-        "publication_status": "not_evaluated",
+        # statut fixe par l'Auditor (kpi_values) ; not_evaluated sans audit
+        "publication_status": blocks["provenance"].get("publication_status") or "not_evaluated",
     }
     return DashboardSpec.model_validate(data)
 

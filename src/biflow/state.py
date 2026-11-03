@@ -40,8 +40,6 @@ class PipelineState(TypedDict, total=False):
     facts: list[dict[str, Any]]
     facts_path: str
     country_name: str
-    # Insights du FinOVA Analyst (par page). L'Auditor du pipeline Route 1 audite aussi
-    # state["insights"] lorsqu'il s'agit d'une liste d'Insight (biflow.tools.insights).
     insights: dict[str, list[dict[str, Any]]]
     xai: dict[str, Any] | None
     analyst_summary: dict[str, Any]
@@ -59,6 +57,7 @@ class PipelineState(TypedDict, total=False):
     audit: dict[str, Any]              # verdict + controles de l'Auditor
     excluded_sources: list[dict[str, Any]]  # sources utilisateur exclues (etape, raison, score qualite)
     rebuild: bool                      # --rebuild : sources lues depuis le snapshot publie
+    audit_insights: list[dict[str, Any]]  # insights convertis en claims (biflow.tools.insights), audites
 
     warnings: Annotated[list[str], operator.add]
     errors: Annotated[list[str], operator.add]

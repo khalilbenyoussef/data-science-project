@@ -149,8 +149,8 @@ export function plainText(text: string | null | undefined): string {
 export const METRIC_LABELS: Record<string, string> = {
   account_ownership: "Taux de détention d'un compte",
   digital_payment_rate: "Paiement numérique utilisé",
-  saving_rate: "Épargne (toute forme, provisoire)",
-  emergency_money: "Fonds d'urgence (à confirmer)",
+  saving_rate: "Épargne (toute forme)",
+  emergency_money: "Fonds d'urgence en 30 jours : possible",
   atm_per_100k: "Distributeurs automatiques",
   branch_density: "Agences bancaires",
   depositors_per_1k: "Déposants pour 1 000 adultes",
@@ -263,9 +263,9 @@ const DEFINITION_FR: Record<string, string> = {
   digital_payment_rate:
     "Part des adultes ayant effectué ou reçu un paiement numérique au cours de l'année écoulée, tous usages confondus.",
   saving_rate:
-    "Part des adultes déclarant une forme d'épargne ; le libellé exact de l'enquête et la période de référence restent à vérifier.",
+    "Part des adultes ayant épargné ou mis de côté de l'argent, pour toute raison et sous toute forme, au cours de l'année écoulée.",
   emergency_money:
-    "Part des adultes déclarant pouvoir obtenir une somme d'argent en cas d'urgence. Définition à confirmer.",
+    "Part des adultes déclarant pouvoir réunir une somme d'argent d'urgence en 30 jours.",
   atm_per_100k: "Nombre de distributeurs automatiques pour 100 000 adultes.",
   branch_density:
     "Nombre d'agences de banques commerciales pour 100 000 adultes, selon le Fonds monétaire international (FAS).",
@@ -288,8 +288,6 @@ const DEFINITION_FR: Record<string, string> = {
 };
 
 const CAVEAT_FR: Record<string, string> = {
-  emergency_money:
-    "Le libellé de cet indicateur diffère de la définition Findex 2025 (« pouvoir obtenir de l'argent en urgence »). La valeur est affichée mais signalée.",
   smig_2025:
     "Montant brut mensuel, régime de 40 heures par semaine. Vérifier le Journal officiel (JORT).",
   smig_2028:

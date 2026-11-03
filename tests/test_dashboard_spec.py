@@ -140,13 +140,21 @@ def test_catalog_values_deltas_and_review_flags(spec):
     assert account.delta.value == pytest.approx(0.93, abs=1e-9)
 
     saving = spec.metric("saving_rate")
-    assert saving.chip.requires_review is True
-    assert "provisional_definition" in saving.chip.review_reasons
+    assert saving.chip.requires_review is True  # provenance absente dans cette fixture
+    assert "provisional_definition" not in saving.chip.review_reasons  # catalogue 1.3.0 : verifie
+    assert saving.label == "Épargne (toute forme)"
+    assert saving.chip.note == "Définition catalogue v1.3.0 appliquée au warehouse."
 
     emergency = spec.metric("emergency_money")
     assert emergency.provider == "warehouse"
     assert emergency.value == pytest.approx(88.39)
-    assert "dictionary_label_mismatch" in emergency.chip.review_reasons
+    # libelle du dictionnaire corrige (glossaire Findex 2025) : plus de signalement d'ecart
+    assert emergency.label == "Fonds d'urgence en 30 jours : possible"
+    assert "dictionary_label_mismatch" not in emergency.chip.review_reasons
+    codes = {notice.code for notice in spec.notices}
+    assert "fin24aP_definition" not in codes
+    outside = next(notice for notice in spec.notices if notice.code == "warehouse_not_in_catalog")
+    assert outside.message.startswith("Les séries ATM, dépôts/crédits et fin24aP viennent du")
 
 
 def test_warehouse_series_keep_their_observed_year(spec):

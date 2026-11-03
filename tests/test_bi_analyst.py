@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from biflow.agents.bi_analyst import (
-    LIMITATIONS, BiAnalystAgent, build_findings, render_markdown,
+    LIMITATIONS, BiAnalystAgent, build_findings, limitations, render_markdown,
 )
 from biflow.tools.analysis import AnalysisService
 from test_kpi import warehouse, provenance_files
@@ -14,6 +14,22 @@ from test_kpi import warehouse, provenance_files
 @pytest.fixture
 def env(warehouse, provenance_files, tmp_path):
     _, _, write = provenance_files
+    write()
+    cfg = {"paths": {"reports": str(tmp_path / "reports")}}
+    kwargs = {
+        "cfg": cfg,
+        "warehouse_path": warehouse,
+        "lineage_path": warehouse.with_name("lineage.json"),
+        "quality_report_path": warehouse.with_name("quality_report.json"),
+    }
+    return cfg, kwargs, warehouse
+
+
+@pytest.fixture
+def review_env(warehouse, provenance_files, tmp_path):
+    """Rapport qualite non lie au run : chaque observation requiert une revue."""
+    _, quality, write = provenance_files
+    quality.pop("run_id")
     write()
     cfg = {"paths": {"reports": str(tmp_path / "reports")}}
     kwargs = {
@@ -42,7 +58,9 @@ def test_agent_writes_evidence_backed_report_and_markdown(env):
     analyst = outputs["analysis_report"]
     assert analyst["agent"] == "bi_analyst"
     assert analyst["publication_status"] == "not_evaluated"
-    assert analyst["limitations"] == LIMITATIONS
+    # aucune definition provisoire au catalogue 1.3.0 : la phrase correspondante disparait
+    assert analyst["limitations"] == limitations(dataset)
+    assert analyst["limitations"] == [t for t in LIMITATIONS if not t.startswith("Les définitions provisoires")]
     assert analyst["summary"]["selected_observations"] == 4
     assert analyst["summary"]["available"] == 3
     assert analyst["summary"]["unavailable"] == 1
@@ -96,15 +114,22 @@ def test_findings_are_deterministic_across_runs(env):
     assert first == second
 
 
-def test_unavailable_and_provisional_observations_are_flagged(env):
-    report = run_agent(env, {"iso3": ["TUN"], "kpi_ids": ["saving_rate", "borrowing_rate"]})
+def test_unavailable_and_provisional_observations_are_flagged(env, review_env):
+    report = run_agent(review_env, {"iso3": ["TUN"], "kpi_ids": ["saving_rate", "borrowing_rate"]})
     findings = report["outputs"]["analysis_report"]["findings"]
     codes = {finding["code"] for finding in findings}
     assert "requires_review" in codes
-    assert "provisional_definition" in codes
+    assert "provisional_definition" not in codes  # catalogue 1.3.0 : epargne et emprunt verifies
     review = [item for item in findings if item["code"] == "requires_review"]
     assert len(review) == 2
     assert all("revue requise" in item["statement"] for item in review)
+
+    # la regle « definition provisoire » reste appliquee si le catalogue le dit
+    dataset = json.loads(Path(report["outputs"]["analysis_dataset_path"]).read_text(encoding="utf-8"))
+    for item in dataset["scope"]["kpis"]:
+        item["verification_status"] = "provisional"
+    assert "provisional_definition" in {f["code"] for f in build_findings(dataset)}
+    assert any(t.startswith("Les définitions provisoires") for t in limitations(dataset))
 
     unavailable = run_agent(env, {"iso3": ["FRA"], "kpi_ids": ["account_ownership"]})
     findings = unavailable["outputs"]["analysis_report"]["findings"]
@@ -114,9 +139,9 @@ def test_unavailable_and_provisional_observations_are_flagged(env):
     assert finding["evidence_ids"] == ["EV-account_ownership-FRA-NA"]
 
 
-def test_top_n_truncates_per_code_and_emits_marker(env):
+def test_top_n_truncates_per_code_and_emits_marker(review_env):
     report = run_agent(
-        env, {"iso3": ["TUN"], "kpi_ids": ["saving_rate", "borrowing_rate"], "top_n": 1},
+        review_env, {"iso3": ["TUN"], "kpi_ids": ["saving_rate", "borrowing_rate"], "top_n": 1},
     )
     findings = report["outputs"]["analysis_report"]["findings"]
     assert sum(1 for item in findings if item["code"] == "requires_review") == 1
@@ -162,3 +187,12 @@ def test_agent_reuses_existing_dataset_without_rebuilding(env, monkeypatch):
     })
     assert report["status"] == "success"
     assert report["outputs"]["analysis_dataset_path"] == path
+
+
+def test_limitations_follow_the_audit_and_catalog():
+    audited = {"publication_status": "approved", "scope": {"kpis": [{"verification_status": "verified"}]}}
+    texts = limitations(audited)
+    assert not any(t.startswith("Le statut de publication reste") for t in texts)
+    assert not any(t.startswith("Les définitions provisoires") for t in texts)
+    pending = {"publication_status": "not_evaluated", "scope": {"kpis": [{"verification_status": "provisional"}]}}
+    assert limitations(pending) == LIMITATIONS

@@ -114,4 +114,33 @@ def audit_insights(insights: Iterable[Any], rows: Iterable[Mapping[str, Any]],
     return results
 
 
-__all__ = ["APPROVED", "Claim", "Insight", "audit_insights"]
+def insights_from_finova(insights_by_page: Mapping[str, Iterable[Mapping[str, Any]]] | None,
+                         facts: Iterable[Mapping[str, Any]], kpi_ids: Iterable[str],
+                         ) -> tuple[list[dict[str, Any]], list[str]]:
+    """Insights du FinOVA Analyst -> Insight a auditer.
+
+    Seuls les faits fournis par le catalogue KPI (provider semantic) deviennent des
+    claims ; un insight sans fait KPI n'est pas auditable (liste renvoyee a part).
+    """
+    by_id = {fact.get("id"): fact for fact in facts}
+    kpis = set(kpi_ids)
+    converted, not_auditable = [], []
+    for page, items in (insights_by_page or {}).items():
+        for item in items or []:
+            claims = []
+            for evidence in item.get("evidence_ids") or ():
+                fact = by_id.get(evidence) or {}
+                if (fact.get("provider") == "semantic" and fact.get("code") in kpis
+                        and fact.get("value") is not None and fact.get("year") is not None):
+                    claims.append({"kpi_id": fact["code"], "iso3": fact.get("iso3"), "year": int(fact["year"]),
+                                   "value": float(fact["value"]), "unit": fact.get("unit")})
+            identifier = f"{page}:{item.get('id')}"
+            if not claims:
+                not_auditable.append(identifier)
+                continue
+            converted.append({"insight_id": identifier, "text": item.get("statement", ""), "claims": claims,
+                              "recommendation": "", "confidence": "medium"})
+    return converted, not_auditable
+
+
+__all__ = ["APPROVED", "Claim", "Insight", "audit_insights", "insights_from_finova"]

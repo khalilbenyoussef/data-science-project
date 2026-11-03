@@ -83,7 +83,29 @@ def render_report(report: Mapping[str, Any]) -> str:
         lines += ["## Insights audites", "", "| Insight | Accepte | Raisons |", "|---|---|---|"]
         lines += [f"| {i['insight_id']} | {'oui' if i['accepted'] else 'non'} | "
                   f"{'; '.join(i['reasons']).replace('|', '/') or '-'} |" for i in report["insight_audit"]]
+    route2 = report.get("route2_insight_audit")
+    if route2:
+        lines += ["", "## Insights de la Route 2 (FinOVA Analyst)", "",
+                  f"- Run Route 2 : `{route2.get('run_id')}` ({route2.get('created_at')})",
+                  f"- Insights audites : {route2.get('audited')} ; acceptes : {route2.get('accepted')} ; "
+                  f"rejetes : {route2.get('rejected')} ; sans fait KPI (non auditables) : "
+                  f"{route2.get('not_auditable')}", ""]
+        rejected = [r for r in route2.get("results") or [] if not r.get("accepted")]
+        if rejected:
+            lines += ["| Insight | Raisons |", "|---|---|"]
+            lines += [f"| {r['insight_id']} | {'; '.join(r['reasons']).replace('|', '/')} |" for r in rejected]
     return "\n".join(lines) + "\n"
+
+
+def record_insight_audit(audit_dir: Path, block: Mapping[str, Any]) -> dict[str, str] | None:
+    """Ajoute l'audit des insights de la Route 2 au rapport d'audit existant
+    (aucun rapport : rien n'est ecrit, None)."""
+    path = Path(audit_dir) / "audit_report.json"
+    if not path.is_file():
+        return None
+    report = json.loads(path.read_text(encoding="utf-8"))
+    report["route2_insight_audit"] = dict(block)
+    return write_report(report, Path(audit_dir))
 
 
 def write_report(report: Mapping[str, Any], audit_dir: Path) -> dict[str, str]:
@@ -98,4 +120,4 @@ def write_report(report: Mapping[str, Any], audit_dir: Path) -> dict[str, str]:
     return {kind: str(path) for kind, path in paths.items()}
 
 
-__all__ = ["build_report", "render_report", "write_report"]
+__all__ = ["build_report", "record_insight_audit", "render_report", "write_report"]

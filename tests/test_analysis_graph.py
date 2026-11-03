@@ -132,7 +132,8 @@ def test_route_two_forces_llm_off_and_never_touches_route_one(env, monkeypatch):
     assert state["status"] == "success"
     assert self_cfgs and all(cfg["llm"]["enabled"] is False for cfg in self_cfgs)
     assert env["cfg"] == before
-    assert pipeline_graph.STEP_ORDER == ["collector", "profiler", "quality", "etl"]
+    assert pipeline_graph.STEP_ORDER == ["collector", "snapshot", "profiler", "quality", "etl",
+                                         "semantic_kpi", "auditor"]  # Route 1 inchangee par la Route 2
     assert set(AGENTS) == {"bi_analyst", "dashboard"}
 
 
