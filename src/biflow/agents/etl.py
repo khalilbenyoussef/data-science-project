@@ -13,10 +13,11 @@ import pandas as pd
 
 from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
+from biflow.tools.kpi_provenance import CONTENT_METHOD, CONTENT_TABLES, warehouse_content_digest
 from biflow.tools.dictionary import (
     FAS_LABELS,
-    FINDEX_LABELS,
     GDP_LABELS,
+    label_for,
     unit_for,
 )
 from biflow.utils.countries import (
@@ -26,6 +27,7 @@ from biflow.utils.countries import (
     is_country,
     normalize_iso3,
 )
+from biflow.tools.user_sources.loader import load_user_canonical
 from biflow.utils.io import load_source, save_json, write_csv
 
 YEAR_RE = re.compile(r"^(19|20)\d{2}$")
@@ -51,6 +53,8 @@ FINDEX_OPTIONAL = (
 FAS_REQUIRED = ("SERIES_CODE",)
 FAS_OPTIONAL = ("COUNTRY", "INDICATOR", "UNIT")
 GDP_REQUIRED = ("iso3", "indicator_code", "year", "value")
+# Indicateurs WDI pouvant etre negatifs (taux de croissance) : pas de rejet
+GDP_SIGNED_INDICATORS = frozenset({"NY.GDP.MKTP.KD.ZG"})
 GDP_OPTIONAL = ("country", "indicator_name")
 FACT_KEY = (
     "iso3",
@@ -341,9 +345,7 @@ def findex_long(
         }
     )
     long["source"] = "findex"
-    long["indicator_label"] = long["indicator_code"].map(FINDEX_LABELS).fillna(
-        long["indicator_code"]
-    )
+    long["indicator_label"] = long["indicator_code"].map(label_for)
     long["unit"] = long["indicator_code"].map(lambda code: unit_for(code, "fraction"))
     long["year"] = long["year"].astype(int)
     long = _resolve_duplicates(
@@ -499,7 +501,7 @@ def gdp_long(
             report,
             f"[gdp] codes ISO3 inconnus conserves : {', '.join(unknown[:10])}",
         )
-    negative = work["value"] < 0
+    negative = (work["value"] < 0) & ~work["indicator_code"].isin(GDP_SIGNED_INDICATORS)
     _reject(report, "gdp", "negative_values", int(negative.sum()))
     if negative.any():
         _warn(report, f"[gdp] {int(negative.sum())} valeurs negatives rejetees")
@@ -530,6 +532,41 @@ def gdp_long(
     )
     if report is not None:
         report.setdefault("output_rows", {})["gdp"] = int(len(work))
+    return work
+
+
+def user_long(
+    frame: pd.DataFrame,
+    name: str,
+    min_year: int,
+    max_year: int,
+    report: dict[str, Any] | None = None,
+) -> pd.DataFrame:
+    """Observations canoniques d'une source utilisateur -> lignes de fait.
+
+    source = "user:<nom>", code indicateur prefixe, unite declaree dans le mapping,
+    dimension all/all sauf colonne mappee. Valeurs inchangees (aucune conversion ici :
+    seule une conversion percent/fraction declaree a deja ete appliquee par le mapping).
+    """
+    source = f"user:{name}"
+    _add_input(report, source, len(frame))
+    in_range = frame["year"].between(min_year, max_year)
+    _reject(report, source, "year_out_of_range", int((~in_range).sum()))
+    if (~in_range).any():
+        _warn(report, f"[{source}] {int((~in_range).sum())} observation(s) hors periode {min_year}-{max_year}")
+    work = frame.loc[in_range].copy()
+    work["source"] = source
+    work["country"] = pd.NA
+    work["year"] = work["year"].astype(int)
+    work = _resolve_duplicates(
+        work[FACT_COLUMNS],
+        ("iso3", "year", "indicator_code", "dimension", "dimension_value"),
+        source,
+        report,
+        f"fait {source}",
+    )
+    if report is not None:
+        report.setdefault("output_rows", {})[source] = int(len(work))
     return work
 
 
@@ -644,14 +681,20 @@ SELECT
     min(country) AS country,
     year,
     max(CASE WHEN indicator_code = 'account_t_d' AND dimension_value = 'all' THEN value END) * 100 AS account_own,
-    max(CASE WHEN indicator_code = 'account_t_d' AND dimension_value = 'men' THEN value END) * 100 AS account_male,
-    max(CASE WHEN indicator_code = 'account_t_d' AND dimension_value = 'women' THEN value END) * 100 AS account_female,
+    max(CASE WHEN indicator_code = 'account_t_d' AND dimension = 'gender' AND dimension_value = 'men' THEN value END) * 100 AS account_male,
+    max(CASE WHEN indicator_code = 'account_t_d' AND dimension = 'gender' AND dimension_value = 'women' THEN value END) * 100 AS account_female,
+    max(CASE WHEN indicator_code = 'account_t_d' AND dimension = 'income' AND dimension_value = 'richest 60%' THEN value END) * 100 AS account_richest_60,
+    max(CASE WHEN indicator_code = 'account_t_d' AND dimension = 'income' AND dimension_value = 'poorest 40%' THEN value END) * 100 AS account_poorest_40,
+    max(CASE WHEN indicator_code = 'account_t_d' AND dimension = 'age_cat' AND dimension_value = 'age 25+' THEN value END) * 100 AS account_age_25_plus,
+    max(CASE WHEN indicator_code = 'account_t_d' AND dimension = 'age_cat' AND dimension_value = 'ages 15-24' THEN value END) * 100 AS account_age_15_24,
     max(CASE WHEN indicator_code = 'fiaccount_t_d' AND dimension_value = 'all' THEN value END) * 100 AS fi_account,
     max(CASE WHEN indicator_code = 'mobileaccount_t_d' AND dimension_value = 'all' THEN value END) * 100 AS mobile_account,
     max(CASE WHEN indicator_code = 'inactive_t_d' AND dimension_value = 'all' THEN value END) * 100 AS inactive,
     max(CASE WHEN indicator_code = 'dig_acc' AND dimension_value = 'all' THEN value END) * 100 AS digitally_enabled_account,
     max(CASE WHEN indicator_code = 'save_any_t_d' AND dimension_value = 'all' THEN value END) * 100 AS savings,
     max(CASE WHEN indicator_code = 'borrow_any_t_d' AND dimension_value = 'all' THEN value END) * 100 AS borrowing,
+    max(CASE WHEN indicator_code = 'fin17a' AND dimension_value = 'all' THEN value END) * 100 AS formal_saving,
+    max(CASE WHEN indicator_code = 'fin22a' AND dimension_value = 'all' THEN value END) * 100 AS formal_borrowing,
     max(CASE WHEN indicator_code = 'merchant_pay' AND dimension_value = 'all' THEN value END) * 100 AS merchant_payment,
     max(CASE WHEN indicator_code = 'g20_any' AND dimension_value = 'all' THEN value END) * 100 AS digital_payment,
     max(CASE WHEN indicator_code = 'branch_density' THEN value END) AS brch_per_100k,
@@ -661,33 +704,29 @@ SELECT
     max(CASE WHEN indicator_code = 'loan_accounts_per_1k' THEN value END) AS loan_accounts_per_1k,
     max(CASE WHEN indicator_code = 'deposit_accounts_per_1k' THEN value END) AS deposit_accounts_per_1k,
     max(CASE WHEN indicator_code = 'NY.GDP.PCAP.CD' THEN value END) AS gdp_pc,
-    max(CASE WHEN indicator_code = 'NY.GDP.MKTP.CD' THEN value END) AS gdp_usd
+    max(CASE WHEN indicator_code = 'NY.GDP.MKTP.CD' THEN value END) AS gdp_usd,
+    max(CASE WHEN indicator_code = 'NY.GDP.MKTP.KD.ZG' THEN value END) AS gdp_growth_pct
 FROM fact
 GROUP BY iso3, year
 """
 
 DERIVE_SQL = """
 CREATE OR REPLACE TABLE country_year_derived AS
-WITH base AS (
-    SELECT
-        *,
-        lag(gdp_usd) OVER (PARTITION BY iso3 ORDER BY year) AS prev_gdp_usd,
-        lag(year) OVER (PARTITION BY iso3 ORDER BY year) AS prev_year
-    FROM country_year_pivot
-)
 SELECT
-    * EXCLUDE (prev_gdp_usd, prev_year),
+    *,
     CASE
         WHEN account_male IS NOT NULL AND account_female IS NOT NULL
         THEN account_male - account_female
     END AS gender_gap_pp,
     CASE
-        WHEN gdp_usd IS NOT NULL AND gdp_usd > 0
-         AND prev_gdp_usd IS NOT NULL AND prev_gdp_usd > 0
-         AND prev_year = year - 1
-        THEN 100 * (gdp_usd / prev_gdp_usd - 1)
-    END AS gdp_growth_pct
-FROM base
+        WHEN account_richest_60 IS NOT NULL AND account_poorest_40 IS NOT NULL
+        THEN account_richest_60 - account_poorest_40
+    END AS income_gap_pp,
+    CASE
+        WHEN account_age_25_plus IS NOT NULL AND account_age_15_24 IS NOT NULL
+        THEN account_age_25_plus - account_age_15_24
+    END AS age_gap_pp
+FROM country_year_pivot
 """
 
 JOIN_SQL = """
@@ -712,6 +751,10 @@ def _check_country_year(df: pd.DataFrame) -> None:
         "account_own",
         "account_male",
         "account_female",
+        "account_richest_60",
+        "account_poorest_40",
+        "account_age_25_plus",
+        "account_age_15_24",
         "fi_account",
         "mobile_account",
         "inactive",
@@ -719,6 +762,8 @@ def _check_country_year(df: pd.DataFrame) -> None:
         "digital_payment",
         "savings",
         "borrowing",
+        "formal_saving",
+        "formal_borrowing",
         "merchant_payment",
         "brch_per_100k",
         "atm_per_100k",
@@ -729,6 +774,8 @@ def _check_country_year(df: pd.DataFrame) -> None:
         "gdp_pc",
         "gdp_usd",
         "gender_gap_pp",
+        "income_gap_pp",
+        "age_gap_pp",
         "gdp_growth_pct",
         "region",
         "income_group",
@@ -745,6 +792,10 @@ def _check_country_year(df: pd.DataFrame) -> None:
         "account_own",
         "account_male",
         "account_female",
+        "account_richest_60",
+        "account_poorest_40",
+        "account_age_25_plus",
+        "account_age_15_24",
         "fi_account",
         "mobile_account",
         "inactive",
@@ -752,6 +803,8 @@ def _check_country_year(df: pd.DataFrame) -> None:
         "digital_payment",
         "savings",
         "borrowing",
+        "formal_saving",
+        "formal_borrowing",
         "merchant_payment",
     ]
     for column in rate_columns:
@@ -802,7 +855,18 @@ class EtlAgent(BaseAgent):
         country_dim = build_country_dim(
             findex_raw, fas_raw, gdp_raw, report=report
         )
-        fact = pd.concat([findex, fas, gdp], ignore_index=True)
+        user_facts, user_included = [], []
+        excluded = list(ctx.get("excluded_sources") or [])
+        excluded_names = {e["source"] for e in excluded}
+        aliases = ((self.cfg.get("countries") or {}).get("name_to_iso3")) or {}
+        for name, source_cfg in sources.items():
+            if source_cfg.get("type") != "user" or name not in raw_paths or name in excluded_names:
+                continue
+            frame, _, _ = load_user_canonical(source_cfg, raw_paths[name], aliases)
+            user_facts.append(user_long(frame, name, min_year, max_year, report=report))
+            user_included.append(name)
+            self.log.info("[etl] source utilisateur %s : %d observation(s)", name, len(user_facts[-1]))
+        fact = pd.concat([findex, fas, gdp, *user_facts], ignore_index=True)
         if fact.empty:
             raise AgentError("[etl] aucun fait produit par les trois sources")
         name_map = country_dim.set_index("iso3")["country"]
@@ -892,6 +956,8 @@ class EtlAgent(BaseAgent):
             except Exception:
                 conn.execute("ROLLBACK")
                 raise
+            # Empreinte du contenu publie, verifiee en lecture seule par les KPI
+            content_sha256 = warehouse_content_digest(conn, CONTENT_TABLES)
         finally:
             conn.close()
 
@@ -911,7 +977,21 @@ class EtlAgent(BaseAgent):
             "men": "men" in findex_dimensions,
             "women": "women" in findex_dimensions,
         }
-        report["checks"]["gdp_growth_rule"] = "year-1, positive values only"
+        findex_groups = set(
+            map(tuple, fact.loc[fact["source"] == "findex", ["dimension", "dimension_value"]]
+                .drop_duplicates().to_numpy().tolist())
+        )
+        report["checks"]["findex_income_age"] = {
+            f"{dimension}/{value}": (dimension, value) in findex_groups
+            for dimension, value in (
+                ("income", "richest 60%"), ("income", "poorest 40%"),
+                ("age_cat", "age 25+"), ("age_cat", "ages 15-24"),
+            )
+        }
+        report["checks"]["gdp_growth_rule"] = (
+            "NY.GDP.MKTP.KD.ZG (WDI, % annuel, prix constants) repris tel quel ; "
+            "aucun calcul depuis le PIB en USD courants"
+        )
         report.setdefault("output_rows", {})["fact"] = int(len(fact))
         report["output_rows"]["country_year"] = int(len(country_year))
 
@@ -928,21 +1008,43 @@ class EtlAgent(BaseAgent):
         lineage = {
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "run_id": ctx.get("run_id"),
+            "snapshot_id": ctx.get("snapshot_id"),
             "period": {"min_year": min_year, "max_year": max_year},
             "inputs": {
-                name: {
-                    **(ctx.get("raw_meta") or {}).get(name, {}),
-                    "path": path_of_source(name),
-                    "rows": report["input_rows"].get(name),
-                    "rejected": report["rejected"].get(name, {}),
-                }
-                for name in ("findex", "fas", "gdp")
+                **{
+                    name: {
+                        **(ctx.get("raw_meta") or {}).get(name, {}),
+                        "path": path_of_source(name),
+                        "rows": report["input_rows"].get(name),
+                        "rejected": report["rejected"].get(name, {}),
+                    }
+                    for name in ("findex", "fas", "gdp")
+                },
+                # Sources utilisateur versionnees : incluses, ou exclues avec leur raison
+                **{
+                    name: {
+                        **(ctx.get("raw_meta") or {}).get(name, {}),
+                        "path": raw_paths[name],
+                        "user": True,
+                        "rows": report["input_rows"].get(f"user:{name}"),
+                        "rejected": report["rejected"].get(f"user:{name}", {}),
+                        "excluded": next((e["reason"] for e in excluded if e["source"] == name), None),
+                    }
+                    for name, source_cfg in sources.items()
+                    if source_cfg.get("type") == "user" and name in raw_paths
+                },
             },
+            "excluded_sources": excluded,
             "transforms": [
                 "Findex: annees -> lignes, echelles verifiees puis fractions converties en % au pivot",
                 "FAS: selection des series configurees, annees -> lignes",
-                "WDI: indicateurs PIB -> lignes",
-                "Pivot par pays x annee, croissance PIB sur annee-1 uniquement, jointure dimension pays",
+                "WDI: indicateurs PIB -> lignes ; croissance NY.GDP.MKTP.KD.ZG conservee meme negative",
+                "Sources utilisateur : mapping confirme -> observations canoniques, source user:<nom>, "
+                "code prefixe, unite declaree, valeurs inchangees",
+                "Pivot par pays x annee, croissance du PIB = NY.GDP.MKTP.KD.ZG (prix constants), "
+                "jointure dimension pays",
+                "Ecarts de detention de compte (points de %) : hommes - femmes, 60 % plus riches - "
+                "40 % plus pauvres, 25+ - 15-24 ; meme annee, NULL si un sous-groupe manque",
             ],
             "checks": report["checks"],
             "rejected": report["rejected"],
@@ -969,6 +1071,9 @@ class EtlAgent(BaseAgent):
                     "rows": int(len(population)),
                 },
                 "warehouse": str(warehouse_path),
+                "warehouse_content_sha256": content_sha256,
+                "warehouse_content_tables": list(CONTENT_TABLES),
+                "warehouse_content_method": CONTENT_METHOD,
             },
         }
         save_json(lineage, processed / "lineage.json")

@@ -1,10 +1,11 @@
 # Declarative definitions only. No calculations, publication decisions or agents execute this file.
 schema_version: 1
-catalog_version: "1.0.0"
+catalog_version: "1.3.0"
 catalog_id: biflow_core_kpis
 created_on: "2026-10-22"
+updated_on: "2026-10-29"
 status: draft
-scope: country_year_total_population
+scope: country_year_total_population_and_subgroup_gaps
 versioning:
   definition_changes: increment catalog_version and the affected definition_version
   breaking_changes: increment catalog major version; never reuse an ID for a different measure
@@ -19,10 +20,30 @@ references:
     url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
     locator: Glossary!A118:C118, g20.any
     evidence: made or received a digital payment in the past year, age 15+
+  findex_2025_glossary_save_any:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A121:C121, save.any.t.d (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Saved any money (%, age 15+): personally saving or setting aside any money for any reason and using any mode of saving in the past year"
+  findex_2025_glossary_borrow_any:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A3:C3, borrow.any.t.d (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Borrowed any money (%, age 15+): borrowing any money (alone or with someone else) for any reason and from any source in the past year"
+  findex_2025_glossary_fin17a:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A24:C24, fin17a (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Saved at a bank or similar financial institution (%, age 15+): saving or setting aside any money at a bank or similar financial institution in the past year"
+  findex_2025_glossary_fin22a:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A31:C31, fin22a (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Borrowed from a formal bank or similar financial institution (%, age 15+): borrowing any money from a bank or similar financial institution or using a credit card in the past year"
   fas_raw_metadata:
     path: data/raw/fas.csv
     locator: SERIES_CODE ending in FA26N.PHTADLT_NUM.A; INDICATOR, TYPE_OF_TRANSFORMATION, FREQUENCY, SCALE
     evidence: commercial-bank branches, per 100000 adults, annual, units
+  findex_subgroups:
+    path: data/raw/findex.csv
+    locator: "group/group2 values: gender = men / women; income = richest 60% / poorest 40%; age_cat = age 25+ / ages 15-24"
+    evidence: official Findex subgroup breakdowns of account.t.d, observed for every survey year 2011-2024
   local_dictionary:
     path: src/biflow/tools/dictionary.py
     locator: FINDEX_LABELS and UNITS
@@ -111,7 +132,13 @@ traceability_policy:
 
 publication_review_policy:
   id: review_flagged_dependencies_v1
-  implementation_status: specification_only
+  implementation_status: implemented_by_auditor
+  implementation: src/biflow/agents/auditor.py (pipeline step auditor, after semantic_kpi)
+  row_statuses:
+    approved: no failing check and no warning touches the row (a genuine NULL is published as unavailable)
+    approved_with_review_note: only warnings, caveats or KPI review reasons touch the row
+    blocked: a failing check touches the row, a run-level check fails, or an included peer row is blocked
+  snapshot_publication: a new snapshot is published only when the audit reports zero failures
   quality_gate_requirement: quality.passed must be true for the same run and source hashes
   failed_structural_gate: block_publication
   provisional_definition: block_publication_until_definition_verified
@@ -252,16 +279,17 @@ kpis:
     dependencies: []
 
   saving_rate:
-    definition_version: "1.0.0"
-    name: Any saving rate (definition pending verification)
+    definition_version: "1.1.0"
+    name: Saved any money
     business_objective: savings_deposits
-    definition: Candidate share reporting any saving; exact survey wording, reference period and cross-wave construction remain to be verified.
+    definition: Share of adults who personally saved or set aside any money, for any reason and using any mode of saving, in the past year.
     verification:
-      status: provisional
-      evidence: [local_dictionary, etl_contract]
+      status: verified
+      evidence: [findex_2025_glossary_save_any, etl_contract]
       uncertainties:
-        - Confirm the official save_any_t_d definition, denominator, recall period and cross-wave comparability before publishing.
-    source: {dataset: findex, indicator: save_any_t_d, official_indicator: null}
+        - Detailed historical questionnaire comparability has not been independently reverified.
+        - Includes informal saving; formal_saving_rate covers saving at a financial institution only.
+    source: {dataset: findex, indicator: save_any_t_d, official_indicator: save.any.t.d}
     warehouse:
       fact_table: fact
       indicator_code: save_any_t_d
@@ -274,11 +302,12 @@ kpis:
       wide_input_unit: percent
     formula: {from_fact: "100 * value", from_wide: savings}
     unit: percent
-    denominator: {population: "provisionally all surveyed adults aged 15+", basis: source_verification_required}
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
     subgroup: total_population
-    reference_period: unverified
+    reference_period: past_year
     valid_years: [2014, 2017, 2021, 2022, 2024]
     year_evidence: observed_availability
+    not_equivalent_to: [fin17a, formal_saving_rate]
     aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
     missing_data_policy: preserve_missing_v1
     aggregation_policy: compatible_denominators_v1
@@ -287,16 +316,17 @@ kpis:
     dependencies: []
 
   borrowing_rate:
-    definition_version: "1.0.0"
-    name: Any borrowing rate (definition pending verification)
+    definition_version: "1.1.0"
+    name: Borrowed any money
     business_objective: credit
-    definition: Candidate share reporting any borrowing; exact lender/instrument scope, reference period and cross-wave construction remain to be verified.
+    definition: Share of adults who borrowed any money, alone or together with someone else, for any reason and from any source in the past year.
     verification:
-      status: provisional
-      evidence: [local_dictionary, etl_contract]
+      status: verified
+      evidence: [findex_2025_glossary_borrow_any, etl_contract]
       uncertainties:
-        - Confirm the official borrow_any_t_d definition, denominator, recall period and cross-wave comparability before publishing.
-    source: {dataset: findex, indicator: borrow_any_t_d, official_indicator: null}
+        - Detailed historical questionnaire comparability has not been independently reverified.
+        - Includes informal lenders (family, friends, savings clubs); formal_borrowing_rate covers financial institutions only.
+    source: {dataset: findex, indicator: borrow_any_t_d, official_indicator: borrow.any.t.d}
     warehouse:
       fact_table: fact
       indicator_code: borrow_any_t_d
@@ -309,11 +339,12 @@ kpis:
       wide_input_unit: percent
     formula: {from_fact: "100 * value", from_wide: borrowing}
     unit: percent
-    denominator: {population: "provisionally all surveyed adults aged 15+", basis: source_verification_required}
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
     subgroup: total_population
-    reference_period: unverified
+    reference_period: past_year
     valid_years: [2014, 2017, 2021, 2022, 2024]
     year_evidence: observed_availability
+    not_equivalent_to: [fin22a, formal_borrowing_rate]
     aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
     missing_data_policy: preserve_missing_v1
     aggregation_policy: compatible_denominators_v1
@@ -355,3 +386,197 @@ kpis:
     traceability_policy: retain_input_lineage_v1
     publication_review_policy: review_flagged_dependencies_v1
     dependencies: [account_ownership]
+
+  formal_saving_rate:
+    definition_version: "1.0.0"
+    name: Saved at a financial institution
+    business_objective: savings_deposits
+    definition: Share of adults who saved or set aside any money at a bank or similar financial institution in the past year.
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin17a, etl_contract]
+      uncertainties:
+        - Detailed historical questionnaire comparability has not been independently reverified.
+        - Excludes saving with a mobile money account (fin17b) and informal saving; not the any-saving measure (saving_rate).
+    source: {dataset: findex, indicator: fin17a, official_indicator: fin17a}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin17a
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: country_year
+      wide_column: formal_saving
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: formal_saving}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    subgroup: total_population
+    reference_period: past_year
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [save_any_t_d, saving_rate, fin17a.17a1.d]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  formal_borrowing_rate:
+    definition_version: "1.0.0"
+    name: Borrowed from a financial institution
+    business_objective: credit
+    definition: Share of adults who borrowed any money from a bank or similar financial institution, or using a credit card, in the past year.
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin22a, etl_contract]
+      uncertainties:
+        - Detailed historical questionnaire comparability has not been independently reverified.
+        - The official definition includes borrowing using a credit card; it excludes mobile-money borrowing (fin22a.22a1.22g.d) and informal lenders.
+    source: {dataset: findex, indicator: fin22a, official_indicator: fin22a}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin22a
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: country_year
+      wide_column: formal_borrowing
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: formal_borrowing}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    subgroup: total_population
+    reference_period: past_year
+    valid_years: [2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [borrow_any_t_d, borrowing_rate, fin22a.22a1.22g.d]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  gender_gap:
+    definition_version: "1.0.0"
+    name: Account ownership gender gap
+    business_objective: financial_inclusion
+    definition: Account ownership of men minus account ownership of women, same country and survey year, in percentage points.
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_book, findex_subgroups, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: gender
+      dimension_value: "men"
+      subtrahend_dimension_value: "women"
+      wide_table: country_year
+      wide_column: gender_gap_pp
+      wide_input_unit: percentage_points
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: gender, dimension_value: "men"}
+      - {source: findex, indicator_code: account_t_d, dimension: gender, dimension_value: "women"}
+    formula: {from_fact: "100 * (value[men] - value[women])", from_wide: gender_gap_pp}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    subgroup: gender_men_minus_women
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  income_gap:
+    definition_version: "1.0.0"
+    name: Account ownership income gap
+    business_objective: financial_inclusion
+    definition: Account ownership of the richest 60% minus the poorest 40% of households, same country and survey year, in percentage points.
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_book, findex_subgroups, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: income
+      dimension_value: "richest 60%"
+      subtrahend_dimension_value: "poorest 40%"
+      wide_table: country_year
+      wide_column: income_gap_pp
+      wide_input_unit: percentage_points
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: income, dimension_value: "richest 60%"}
+      - {source: findex, indicator_code: account_t_d, dimension: income, dimension_value: "poorest 40%"}
+    formula: {from_fact: "100 * (value[richest 60%] - value[poorest 40%])", from_wide: income_gap_pp}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    subgroup: income_richest_60_minus_poorest_40
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  age_gap:
+    definition_version: "1.0.0"
+    name: Account ownership age gap
+    business_objective: financial_inclusion
+    definition: Account ownership of adults aged 25+ minus adults aged 15-24, same country and survey year, in percentage points.
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_book, findex_subgroups, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: age_cat
+      dimension_value: "age 25+"
+      subtrahend_dimension_value: "ages 15-24"
+      wide_table: country_year
+      wide_column: age_gap_pp
+      wide_input_unit: percentage_points
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: age_cat, dimension_value: "age 25+"}
+      - {source: findex, indicator_code: account_t_d, dimension: age_cat, dimension_value: "ages 15-24"}
+    formula: {from_fact: "100 * (value[age 25+] - value[ages 15-24])", from_wide: age_gap_pp}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    subgroup: age_25_plus_minus_15_24
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []

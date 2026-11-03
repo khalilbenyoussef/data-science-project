@@ -17,6 +17,13 @@ __pycache__/
 data/
 outputs/
 
+# Mappings des sources utilisateur (exemple suivi : docs/examples/)
+config/sources/
+config/kpi_catalog.user.yaml
+
+# Documentation suivie ; seules les sources externes telechargees sont ignorees
+docs/sources/
+
 # Artefacts
 *.duckdb
 *.parquet

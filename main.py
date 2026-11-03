@@ -34,6 +34,10 @@ def _print_state(state: dict) -> None:
                 f"lignes={meta.get('rows')}"
             )
 
+    snapshot = state.get("snapshot") or {}
+    if snapshot:
+        print(f"\nSnapshot : {snapshot.get('snapshot_id')} ({snapshot.get('status')})")
+
     profiles = state.get("profiles") or {}
     if profiles:
         print("\nProfils")
@@ -53,6 +57,22 @@ def _print_state(state: dict) -> None:
 
     if state.get("warehouse_path"):
         print(f"\nWarehouse : {state['warehouse_path']}")
+
+    audit = state.get("audit") or {}
+    if audit:
+        counts = audit.get("counts") or {}
+        print(
+            f"\nAudit : verdict={audit.get('verdict')} pass={counts.get('pass')} "
+            f"warn={counts.get('warn')} fail={counts.get('fail')} publication={audit.get('publication')}"
+        )
+
+    kpi = state.get("kpi_summary") or {}
+    if kpi:
+        print(
+            f"\nKPI : {kpi.get('rows')} valeurs ({kpi.get('kpis')} KPI, focus {kpi.get('focus')}, "
+            f"pairs {', '.join(kpi.get('peers') or [])}) - disponibles={kpi.get('available')} "
+            f"indisponibles={kpi.get('unavailable')} a_revoir={kpi.get('requires_review')}"
+        )
 
     warnings = state.get("warnings") or []
     if warnings:
@@ -158,6 +178,72 @@ def _print_analysis_state(state: dict) -> None:
             print(f"  - {error}")
 
 
+def source_command(args) -> int:
+    """add-source / remove-source ; erreurs affichees en francais, code 1."""
+    from biflow.agents.mapper import MapperAgent
+    from biflow.config import load_config
+    from biflow.tools.user_sources import UserSourceError
+    from biflow.tools.user_sources.cli import add_source, remove_source
+
+    cfg = load_config()
+    if args.command == "remove-source":
+        return 0 if remove_source(args.name, cfg) else 1
+    llm_suggest = None
+    if not args.no_llm and (cfg.get("llm") or {}).get("enabled", True):
+        llm_suggest = MapperAgent(cfg=cfg).suggester()
+    try:
+        result = add_source(args.file, args.name, mapping_file=args.mapping, dry_run=args.dry_run,
+                            assume_yes=args.yes, cfg=cfg, llm_suggest=llm_suggest, draft_path=args.draft)
+    except UserSourceError as exc:
+        print(f"Erreur : {exc}")
+        return 1
+    return 0 if result["registered"] or args.dry_run else 1
+
+
+def explain_command(args) -> int:
+    """Affiche l'explication stockee par l'Auditor (table kpi_explanations).
+
+    Lecture seule du warehouse : aucun recalcul de KPI, aucun appel reseau ni LLM.
+    """
+    import json
+
+    import duckdb
+
+    from biflow.config import load_config, resolve
+    from biflow.tools.audit_explain import explain_change
+    from biflow.tools.audit_text import render_markdown
+    from biflow.utils.countries import normalize_iso3
+
+    cfg = load_config()
+    warehouse = resolve(args.warehouse or f"{(cfg.get('paths') or {}).get('processed', 'data/processed')}/warehouse.duckdb")
+
+    def code(value):
+        return "PEERS" if str(value).strip().upper() == "PEERS" else normalize_iso3(value)
+
+    keys = [(args.kpi, code(args.iso3), args.year)]
+    if args.compare_year is not None or args.compare_iso3:
+        keys.append((args.kpi, code(args.compare_iso3 or args.iso3), args.compare_year or args.year))
+    try:
+        with duckdb.connect(str(warehouse), read_only=True) as con:
+            found = [con.execute("SELECT explanation FROM kpi_explanations WHERE kpi_id = ? AND iso3 = ? "
+                                 "AND year = ?", list(key)).fetchone() for key in keys]
+    except duckdb.Error as exc:
+        print(f"Explications indisponibles ({exc}) : lancer d'abord le pipeline avec l'etape auditor.")
+        return 1
+    missing = [key for key, row in zip(keys, found) if row is None]
+    if missing:
+        print(f"Aucune explication pour {missing}.")
+        return 1
+    record = json.loads(found[0][0])
+    other = json.loads(found[1][0]) if len(found) > 1 else None
+    change = None
+    if other is not None:
+        threshold = float((cfg.get("auditor") or {}).get("min_meaningful_change_pp", 2.0))
+        change = explain_change(other, record, threshold)
+    print(render_markdown(record, args.lang, change, other))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="BIFlow - pipeline BI multi-agents")
     sub = parser.add_subparsers(dest="command")
@@ -169,6 +255,8 @@ def main() -> int:
     run.add_argument("--objective", default=None, help="objectif metier du run")
     run.add_argument("--run-id", default=None, help="identifiant du run")
     run.add_argument("--no-llm", action="store_true", help="desactive tous les appels LLM")
+    run.add_argument("--rebuild", action="store_true",
+                     help="rejoue snapshot -> auditor sur les blobs du snapshot publie (nouveau run_id)")
 
     sub.add_parser("steps", help="liste les etapes du pipeline (Route 1)")
 
@@ -178,6 +266,26 @@ def main() -> int:
     )
     for command in (analyze, dashboard):
         _add_analysis_args(command)
+
+    add = sub.add_parser("add-source", help="ajoute un CSV utilisateur (detection, mapping, dry-run)")
+    add.add_argument("--file", required=True, help="fichier CSV a ajouter")
+    add.add_argument("--name", required=True, help="nom de la source (minuscules, chiffres, _)")
+    add.add_argument("--mapping", default=None, help="mapping YAML : mode non interactif")
+    add.add_argument("--dry-run", action="store_true", help="rapport seulement, rien n'est enregistre")
+    add.add_argument("--yes", action="store_true", help="aucune question (echoue si une reponse manque)")
+    add.add_argument("--draft", default=None, help="ecrit le brouillon de mapping a completer")
+    add.add_argument("--no-llm", action="store_true", help="aucune suggestion LLM des roles de colonnes")
+    remove = sub.add_parser("remove-source", help="retire une source utilisateur")
+    remove.add_argument("--name", required=True)
+
+    explain = sub.add_parser("explain", help="explique une valeur KPI (lecture seule, sans reseau)")
+    explain.add_argument("--kpi", required=True, help="identifiant du KPI (ex. account_ownership)")
+    explain.add_argument("--iso3", required=True, help="pays ISO3 ou PEERS")
+    explain.add_argument("--year", required=True, type=int)
+    explain.add_argument("--compare-year", type=int, default=None, help="annee de comparaison")
+    explain.add_argument("--compare-iso3", default=None, help="pays de comparaison (ex. PEERS)")
+    explain.add_argument("--lang", choices=("fr", "en"), default="fr")
+    explain.add_argument("--warehouse", default=None, help="warehouse DuckDB (defaut : config)")
 
     args = parser.parse_args()
     if args.command == "steps":
@@ -196,6 +304,10 @@ def main() -> int:
         )
         _print_analysis_state(state)
         return 0 if state.get("status") == "success" else 2
+    if args.command == "explain":
+        return explain_command(args)
+    if args.command in ("add-source", "remove-source"):
+        return source_command(args)
     if args.command != "run":
         parser.print_help()
         return 1
@@ -207,9 +319,10 @@ def main() -> int:
         stop=args.stop,
         run_id=args.run_id,
         use_llm=not args.no_llm,
+        rebuild=args.rebuild,
     )
     _print_state(state)
-    return 0 if state.get("status") == "success" else 2
+    return 0 if state.get("status") in ("success", "no_change") else 2
 
 
 if __name__ == "__main__":

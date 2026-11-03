@@ -4,11 +4,59 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 
+import duckdb
+
 from biflow.config import load_config, resolve
 from biflow.utils.countries import normalize_iso3
+from biflow.utils.io import cached_sha256_file, file_stat
+
+# Empreinte du contenu (et non du fichier .duckdb) : ecrire d'autres tables,
+# comme kpi_values, ne change pas la liaison au warehouse produit par l'ETL.
+# country_dim : le calculateur y lit is_country / is_aggregate pour chaque lookup.
+CONTENT_TABLES = ("fact", "country_year", "country_dim")
+CONTENT_METHOD = "sha256 over tables in order: JSON [table, columns] then one JSON row per line, ORDER BY ALL"
+_CONTENT_CACHE: dict[tuple, str] = {}
+_FAS_SERIES_CACHE: dict[tuple, dict[str, str]] = {}
+
+
+def _fas_series() -> dict[str, str]:
+    """sources.fas.series de config.yaml, relu seulement si le fichier change."""
+    path = resolve(os.getenv("BIFLOW_CONFIG", "config/config.yaml"))
+    stat = file_stat(path)
+    key = (str(path), stat["size_bytes"], stat["mtime_ns"])
+    if key not in _FAS_SERIES_CACHE:
+        series = load_config(path).get("sources", {}).get("fas", {}).get("series", {})
+        _FAS_SERIES_CACHE[key] = dict(series or {})
+    return dict(_FAS_SERIES_CACHE[key])
+
+
+def warehouse_content_digest(con, tables=CONTENT_TABLES) -> str:
+    """SHA-256 deterministe des lignes triees des tables (export canonique)."""
+    digest = hashlib.sha256()
+    for table in tables:
+        if not re.fullmatch(r"[a-z_]+", table):
+            raise ValueError(f"invalid table name: {table!r}")
+        cursor = con.execute(f"SELECT * FROM {table} ORDER BY ALL")
+        columns = [column[0] for column in cursor.description]
+        digest.update(json.dumps([table, columns]).encode("utf-8") + b"\n")
+        while rows := cursor.fetchmany(10_000):
+            for row in rows:
+                digest.update(json.dumps(row, default=str, separators=(",", ":")).encode("utf-8") + b"\n")
+    return digest.hexdigest()
+
+
+def cached_warehouse_content_digest(path: Path, tables=CONTENT_TABLES) -> str:
+    """Empreinte du contenu, lecture seule, une fois par etat du fichier."""
+    stat = file_stat(path)
+    key = (str(Path(path).resolve()), stat["size_bytes"], stat["mtime_ns"], tuple(tables))
+    if key not in _CONTENT_CACHE:
+        with duckdb.connect(str(path), read_only=True) as con:
+            _CONTENT_CACHE[key] = warehouse_content_digest(con, tables)
+    return _CONTENT_CACHE[key]
 
 
 @dataclass(frozen=True)
@@ -40,6 +88,7 @@ class KpiProvenance:
     quality_gate_passed: bool | None
     quality_association_status: str
     issues: tuple[str, ...]
+    warehouse_content_sha256: str | None = None
 
 
 def _read_json(path, label, issues):
@@ -80,15 +129,19 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
              dimension: str, dimension_value: str):
     """Return recorded provenance, exact input warnings and source-wide notices.
 
-    Existing Quality Agent reports lack run/hash binding. Optional run_id/inputs
-    metadata can establish agreement with lineage, but is never manufactured.
-    Matching a warning does not establish that its report belongs to this data.
+    Quality reports record run_id and inputs.<source>.sha256. When both agree
+    with lineage, association is matches_lineage and no binding review reason is
+    added; a disagreement adds quality_provenance_mismatch, and an older report
+    without that metadata adds quality_provenance_unverified. Binding is never
+    manufactured. Matching a warning does not by itself certify the data.
     """
     issues = []
     lineage, lineage_hash = _read_json(lineage_path, "lineage", issues)
     quality, quality_hash = _read_json(quality_path, "quality_report", issues)
     inputs = lineage.get("inputs")
-    meta = inputs.get(source) if isinstance(inputs, dict) else None
+    # Source utilisateur : faits "user:<nom>", entrees du lineage et du rapport qualite sous "<nom>"
+    input_key = source.split(":", 1)[1] if source.startswith("user:") else source
+    meta = inputs.get(input_key) if isinstance(inputs, dict) else None
     if not isinstance(meta, dict):
         meta = {}
         issues.append("source_metadata_missing")
@@ -103,7 +156,7 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
     observed_raw_hash = None
     if raw_path:
         try:
-            observed_raw_hash = hashlib.sha256(resolve(raw_path).read_bytes()).hexdigest()
+            observed_raw_hash = cached_sha256_file(resolve(raw_path))
         except (OSError, ValueError):
             issues.append("raw_source_unavailable")
         if raw_hash and observed_raw_hash and raw_hash != observed_raw_hash:
@@ -118,15 +171,28 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
                 issues.append("lineage_warehouse_path_mismatch")
         except (OSError, ValueError):
             issues.append("lineage_warehouse_path_invalid")
-    warehouse_hash = hashlib.sha256(warehouse.read_bytes()).hexdigest()
-    # Current ETL records a path, not a warehouse content digest.
-    recorded_hash = _digest(outputs.get("warehouse_sha256")) if isinstance(outputs, dict) else None
-    if recorded_hash is None:
+    warehouse_hash = cached_sha256_file(warehouse)
+    outputs = outputs if isinstance(outputs, dict) else {}
+    # The ETL records a digest of the fact/country_year/country_dim contents (tables
+    # listed in lineage, so older lineages keep their own list); a file-level
+    # warehouse_sha256 (older lineage) remains supported as a fallback.
+    recorded_content = _digest(outputs.get("warehouse_content_sha256"))
+    recorded_hash = _digest(outputs.get("warehouse_sha256"))
+    observed_content = None
+    if recorded_content is not None:
+        tables = outputs.get("warehouse_content_tables") or list(CONTENT_TABLES)
+        try:
+            observed_content = cached_warehouse_content_digest(warehouse, tuple(tables))
+        except (duckdb.Error, ValueError, TypeError):
+            issues.append("warehouse_content_unreadable")
+        if observed_content is not None and observed_content != recorded_content:
+            issues.append("warehouse_content_mismatch")
+    elif recorded_hash is None:
         issues.append("warehouse_content_binding_unverified")
     elif recorded_hash != warehouse_hash:
         issues.append("warehouse_hash_mismatch")
     qinputs = quality.get("inputs")
-    qmeta = qinputs.get(source) if isinstance(qinputs, dict) else None
+    qmeta = qinputs.get(input_key) if isinstance(qinputs, dict) else None
     qhash = _digest(qmeta.get("sha256")) if isinstance(qmeta, dict) else None
     qrun = _text(quality.get("run_id"))
     association = "unverified"
@@ -144,7 +210,7 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
 
     warnings, notices = [], []
     # Resolve both canonical FAS IDs and the raw annual series identity.
-    fas_series = load_config().get("sources", {}).get("fas", {}).get("series", {})
+    fas_series = _fas_series()
     reverse = {v: k for k, v in fas_series.items()}
     for collection in ("diagnostics", "issues"):
         records = quality.get(collection)
@@ -199,6 +265,6 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
         observed_raw_sha256=observed_raw_hash, warehouse_sha256=warehouse_hash,
         quality_report_path=str(quality_path), quality_report_sha256=quality_hash,
         quality_gate_passed=passed, quality_association_status=association,
-        issues=tuple(dict.fromkeys(issues)),
+        issues=tuple(dict.fromkeys(issues)), warehouse_content_sha256=observed_content,
     )
     return provenance, tuple(warnings), tuple(notices)

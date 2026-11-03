@@ -25,6 +25,15 @@ def warehouse(tmp_path):
             ("TUN", 2024, "findex", "dig_acc", "all", "all", .99, "fraction"),
             ("TUN", 2024, "findex", "save_any_t_d", "all", "all", .23, "fraction"),
             ("TUN", 2024, "findex", "borrow_any_t_d", "all", "all", .31, "fraction"),
+            ("TUN", 2024, "findex", "fin17a", "all", "all", .21, "fraction"),
+            ("TUN", 2024, "findex", "fin22a", "all", "all", .04, "fraction"),
+            ("TUN", 2024, "findex", "fin17a", "gender", "men", .29, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "gender", "men", .55, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "gender", "women", .30, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "income", "richest 60%", .50, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "income", "poorest 40%", .20, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "age_cat", "age 25+", .48, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "age_cat", "ages 15-24", .12, "fraction"),
             ("TUN", 2024, "findex", "save_any_t_d", "gender", "female", .91, "fraction"),
             ("TUN", 2024, "findex", "borrow_any_t_d", "gender", "male", .92, "fraction"),
             ("TUN", 2024, "fas", "branch_density", "bank_type", "commercial_banks", 12.5, "per_100k_adults"),
@@ -54,7 +63,7 @@ def test_verified_values_subgroups_units_and_metadata(warehouse, kpi, expected, 
     assert result.iso3 == "TUN" and result.observation_year == 2024
     assert result.availability_status == "available" and result.reason is None
     assert result.definition == load_catalog()["kpis"][kpi]["definition"]
-    assert result.catalog_version == result.definition_version == "1.0.0"
+    assert result.catalog_version == "1.3.0" and result.definition_version == "1.0.0"
     assert len(result.catalog_sha256) == 64
     assert result.publication_status == "not_evaluated"
     with pytest.raises(FrozenInstanceError):
@@ -164,7 +173,7 @@ def test_unknown_and_out_of_scope_kpis_rejected(warehouse, kpi):
     lambda c: c["kpis"]["branch_density"].update(valid_years=[True]),
     lambda c: c["missing_data_policy"].update(zero_fill=True),
     lambda c: c["kpis"]["account_ownership"].update(missing_data_policy="unknown"),
-    lambda c: c["kpis"]["saving_rate"]["verification"].update(status="verified"),
+    lambda c: c["kpis"]["saving_rate"]["verification"].update(status="provisional"),
     lambda c: c["kpis"]["borrowing_rate"]["warehouse"].update(dimension_value="female"),
     lambda c: c["kpis"]["unbanked_share"].update(dependencies=[]),
     lambda c: c["kpis"]["unbanked_share"].update(dependencies=["unbanked_share"]),
@@ -221,9 +230,11 @@ def test_database_schema_errors_are_not_disguised_as_missing_data(tmp_path):
 
 
 NEW_KPIS = [
-    ("saving_rate", "save_any_t_d", 23, "provisional"),
-    ("borrowing_rate", "borrow_any_t_d", 31, "provisional"),
+    ("saving_rate", "save_any_t_d", 23, "verified"),
+    ("borrowing_rate", "borrow_any_t_d", 31, "verified"),
     ("unbanked_share", "account_t_d", 58, "derived_verified"),
+    ("formal_saving_rate", "fin17a", 21, "verified"),
+    ("formal_borrowing_rate", "fin22a", 4, "verified"),
 ]
 
 
@@ -391,9 +402,12 @@ def test_provenance_for_all_six_kpis(warehouse, provenance_files, kpi):
     assert not p.issues and not r.quality_warnings
     assert r.requires_review == (r.verification_status == "provisional")
     assert r.review_reasons == (("provisional_definition",) if r.requires_review else ())
-    assert r.input_fact_key == ("TUN", 2024, r.source, r.indicator_code,
-                                "bank_type" if r.source == "fas" else "all",
-                                "commercial_banks" if r.source == "fas" else "all")
+    if kpi in GAPS:
+        assert r.input_fact_key is None and len(r.component_inputs) == 2
+    else:
+        assert r.input_fact_key == ("TUN", 2024, r.source, r.indicator_code,
+                                    "bank_type" if r.source == "fas" else "all",
+                                    "commercial_banks" if r.source == "fas" else "all")
     assert r.formula == load_catalog()["kpis"][kpi]["formula"]["from_fact"]
     assert r.publication_status == "not_evaluated"
 
@@ -541,3 +555,66 @@ def test_current_report_format_is_explicitly_unverified(provenance_files):
     assert r.provenance.quality_gate_passed is True
     assert r.quality_warnings[0].association_status == "unverified"
     assert r.requires_review and r.publication_status == "not_evaluated"
+
+
+GAPS = {
+    "gender_gap": ("gender", "men", "women", 25),
+    "income_gap": ("income", "richest 60%", "poorest 40%", 30),
+    "age_gap": ("age_cat", "age 25+", "ages 15-24", 36),
+}
+
+
+@pytest.mark.parametrize("kpi", GAPS)
+def test_gap_is_same_year_subgroup_difference_in_points(warehouse, kpi):
+    dimension, first, second, expected = GAPS[kpi]
+    r = KpiCalculator(warehouse).calculate("TUN", 2024, kpi)
+    assert r.value == pytest.approx(expected)
+    assert r.unit == "percentage_points" and r.availability_status == "available"
+    assert r.verification_status == "derived_verified" and r.input_unit == "fraction"
+    keys = [key for key, _ in r.component_inputs]
+    assert keys == [("TUN", 2024, "findex", "account_t_d", dimension, first),
+                    ("TUN", 2024, "findex", "account_t_d", dimension, second)]
+    assert r.input_value is None and r.input_fact_key is None
+
+
+@pytest.mark.parametrize("kpi", GAPS)
+@pytest.mark.parametrize("missing", [0, 1])
+def test_gap_missing_subgroup_is_unavailable_never_zero(warehouse, kpi, missing):
+    dimension, first, second, _ = GAPS[kpi]
+    value = (first, second)[missing]
+    change(warehouse, "DELETE FROM fact WHERE indicator_code='account_t_d' AND dimension=? "
+           "AND dimension_value=?", [dimension, value])
+    r = KpiCalculator(warehouse).calculate("TUN", 2024, kpi)
+    assert r.value is None and r.availability_status == "unavailable"
+    assert r.reason == "missing_observation" and not r.component_inputs
+
+
+@pytest.mark.parametrize("kpi", GAPS)
+def test_gap_never_mixes_years(warehouse, kpi):
+    dimension, first, _, _ = GAPS[kpi]
+    # Le premier sous-groupe en 2021 ne doit pas etre combine avec l'autre en 2024
+    change(warehouse, "UPDATE fact SET year=2021 WHERE indicator_code='account_t_d' AND dimension=? "
+           "AND dimension_value=?", [dimension, first])
+    calc = KpiCalculator(warehouse)
+    for year in (2021, 2024):
+        r = calc.calculate("TUN", year, kpi)
+        assert r.value is None and r.reason == "missing_observation"
+
+
+@pytest.mark.parametrize("kpi", GAPS)
+def test_gap_bad_subgroup_input_requires_review(warehouse, kpi):
+    dimension, _, second, _ = GAPS[kpi]
+    change(warehouse, "UPDATE fact SET value=1.5 WHERE indicator_code='account_t_d' AND dimension=? "
+           "AND dimension_value=?", [dimension, second])
+    r = KpiCalculator(warehouse).calculate("TUN", 2024, kpi)
+    assert r.value is None and r.availability_status == "requires_review"
+    assert "out_of_range_input" in r.review_reasons
+
+
+def test_gap_catalog_dependencies_must_match_subgroup_facts(tmp_path, warehouse):
+    catalog = load_catalog()
+    catalog["kpis"]["income_gap"]["fact_dependencies"][1]["dimension_value"] = "poorest 20%"
+    path = tmp_path / "bad.yaml"
+    path.write_text(yaml.safe_dump(catalog), encoding="utf-8")
+    with pytest.raises(CatalogError):
+        load_catalog(path)

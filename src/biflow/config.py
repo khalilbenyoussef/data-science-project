@@ -35,7 +35,34 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         cfg = yaml.safe_load(f) or {}
     if not isinstance(cfg, dict):
         raise ConfigError(f"Configuration invalide (objet attendu) : {cfg_path}")
+    register_user_sources(cfg)
     return cfg
+
+
+def register_user_sources(cfg: dict[str, Any]) -> list[str]:
+    """Ajoute a cfg["sources"] chaque mapping confirme de config/sources/*.yaml
+    (type: user). Une source deja declaree (officielle) n'est jamais remplacee ;
+    la validite du mapping est verifiee par le collector. config.yaml n'est
+    jamais reecrit."""
+    folder = resolve(os.getenv("BIFLOW_SOURCES_DIR")
+                     or (cfg.get("uploads") or {}).get("mappings_dir", "config/sources"))
+    if not folder.is_dir():
+        return []
+    sources = cfg.setdefault("sources", {})
+    added = []
+    for path in sorted(folder.glob("*.yaml")):
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            data = {}
+        name = data.get("name") if isinstance(data, dict) else None
+        name = name or path.stem
+        if name in sources:
+            continue
+        sources[name] = {"type": "user", "path": data.get("file") if isinstance(data, dict) else None,
+                         "mapping": str(path)}
+        added.append(name)
+    return added
 
 
 def path_of(cfg: dict[str, Any], key: str) -> Path:
