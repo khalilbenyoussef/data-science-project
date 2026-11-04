@@ -752,6 +752,13 @@ données utilisateur n'entrent ni dans les cartes KPI officielles ni dans les
 réponses d'Ask Finova. Les CSV exportés (rapports qualité, profils) préfixent
 d'une apostrophe les cellules texte commençant par `=`, `+`, `-` ou `@` (S6).
 
+Démonstration : `docs/examples/user_source_example.csv` contient des **données
+fictives** (« exemple fictif » dans chaque libellé, ligne de commentaire en tête),
+à déposer sur la page « Mes données » : années en colonnes, point-virgule,
+virgule décimale, noms de pays en français, une valeur « n.d. », une cellule vide
+et un pays à rattacher à la main (Mauritanie → MRT). Unités à choisir : nombre
+pour les clients, % pour le taux de pénétration. Ces valeurs ne sont pas réelles.
+
 ### 4. Tests
 
 ```powershell
