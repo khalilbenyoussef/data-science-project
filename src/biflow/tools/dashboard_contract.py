@@ -41,7 +41,7 @@ def build_dashboard_data(
         country = countries[observation["iso3"]]
         card = {
             "kpi_id": observation["kpi_id"],
-            "kpi_name": kpi["name"],
+            "kpi_name": kpi.get("name_fr") or kpi["name"],
             "iso3": observation["iso3"],
             "country_name": country["name"],
             "region": country["region"],

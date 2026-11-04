@@ -144,3 +144,13 @@ def test_poverty_page_is_out_of_scope_by_design_outside_tunisia(warehouse, tmp_p
         "à la Tunisie ; aucune valeur n'est affichée pour ce pays (Algérie).")
     # une annee sans enquete avec vague anterieure n'est jamais « non disponible »
     assert spec.page("inclusion").available and spec.page("exclusion").available
+
+
+def test_account_history_stops_at_the_wave_used(warehouse, tmp_path):
+    for year, last, refs in ((2012, 2011, 0), (2023, 2021, 0)):
+        spec = _spec(warehouse, tmp_path, "DZA", year)
+        history = next(c for c in spec.page("overview").charts if c.id == "account_ownership_history")
+        years = [point.year for point in history.series[0].points]
+        assert years and max(years) == last, (year, years)
+        assert all(e.endswith(tuple(f"-{y}" for y in range(2000, last + 1))) for e in history.series[0].evidence_ids)
+        assert len(history.reference_lines) == refs and "postérieurs à l'enquête" in history.notes[0]

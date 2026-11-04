@@ -1,11 +1,31 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import type { Bar, Chart, GapPoint, ReferenceLine, Series } from "./types";
 import { fmtNumber, fmtPct, fmtSigned, fmtUnit, unitLabel } from "./format";
 import {
   CHART_TITLES, HEATMAP_ROW_LABELS, STEP_LABELS, chipLabel, chipNeedsReview, chipTitle, plainText,
 } from "./copy";
 
-const W = 760;
+const BASE_W = 760;
+const MIN_W = 260;
 const PAD = { left: 62, right: 28, top: 26, bottom: 52 };
+
+/* Largeur reelle du graphique (ResizeObserver) : le viewBox suit les pixels affiches,
+   donc une unite SVG = un pixel et les tailles de police CSS restent fixes. Sous
+   MIN_W, le graphique garde MIN_W pixels et son conteneur defile horizontalement. */
+function useChartWidth(): [React.RefObject<HTMLDivElement>, number] {
+  const box = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(BASE_W);
+  useLayoutEffect(() => {
+    const element = box.current;
+    if (!element) return;
+    const update = () => setWidth(Math.max(MIN_W, Math.round(element.clientWidth)));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return [box, width];
+}
 
 function clip(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
@@ -95,6 +115,9 @@ function Legend({ series }: { series: Series[] }) {
 }
 
 function LineChart({ chart }: { chart: Chart }) {
+  const [box, W] = useChartWidth();
+  // hauteur proportionnelle a la largeur (meme rendu qu'avant), texte de taille fixe
+  const H = Math.max(220, Math.round((320 * W) / BASE_W));
   const series = chart.series;
   const refs = chart.reference_lines;
   const years = Array.from(
@@ -118,7 +141,7 @@ function LineChart({ chart }: { chart: Chart }) {
 
   const x0 = PAD.left;
   const x1 = W - PAD.right;
-  const y0 = 320 - PAD.bottom;
+  const y0 = H - PAD.bottom;
   const y1 = PAD.top;
   const xSpan = Math.max(1, years[years.length - 1] - years[0]);
   const sx = (year: number) =>
@@ -133,9 +156,9 @@ function LineChart({ chart }: { chart: Chart }) {
   const colors = ["var(--series)", "var(--accent)", "var(--green)"];
 
   return (
-    <>
+    <div ref={box} className="chart-measure">
       <Legend series={series} />
-      <svg className="chart-svg" viewBox={`0 0 ${W} 320`} role="img" aria-label={plainText(chart.title)}>
+      <svg className="chart-svg" style={{ width: W }} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={plainText(chart.title)}>
         {yTicks.map((tick) => (
           <g key={tick}>
             <line x1={x0} x2={x1} y1={sy(tick)} y2={sy(tick)} className="grid" />
@@ -203,7 +226,7 @@ function LineChart({ chart }: { chart: Chart }) {
           );
         })}
         {chart.x_label && (
-          <text x={(x0 + x1) / 2} y={310} textAnchor="middle" className="axis-label">
+          <text x={(x0 + x1) / 2} y={H - 10} textAnchor="middle" className="axis-label">
             {chart.x_label}
           </text>
         )}
@@ -222,21 +245,26 @@ function LineChart({ chart }: { chart: Chart }) {
         {unitLabel(chart.unit) ? ` (${unitNote(unitLabel(chart.unit))})` : ""} ; aucune valeur
         estimée.
       </p>
-    </>
+    </div>
   );
 }
 
 function BarChart({ chart }: { chart: Chart }) {
+  const [box, W] = useChartWidth();
   const bars = chart.bars;
   if (bars.length === 0) return <p className="empty">Aucune valeur.</p>;
   const max = niceMax(Math.max(...bars.map((bar) => bar.value ?? 0)) * 1.15);
-  const labelW = 132;
+  // colonne des libelles a la taille du plus long (13 px, ~7 px par caractere), plafonnee
+  const longest = Math.max(...bars.map((bar) => plainText(bar.label).length));
+  const labelW = Math.min(Math.round(W * 0.45), Math.max(100, longest * 7 + 18));
+  const labelChars = Math.max(8, Math.floor((labelW - 18) / 7));
   const chartW = W - labelW - 96;
   const height = Math.max(190, bars.length * 42 + 26);
   const x0 = labelW;
   const refToX = (value: number) => x0 + (value / max) * chartW;
   return (
-    <svg className="chart-svg" viewBox={`0 0 ${W} ${height}`} role="img" aria-label={plainText(chart.title)}>
+    <div ref={box} className="chart-measure">
+    <svg className="chart-svg" style={{ width: W }} viewBox={`0 0 ${W} ${height}`} role="img" aria-label={plainText(chart.title)}>
       {chart.reference_lines.map((ref, index) => (
         <g key={`${ref.label}-${index}`}>
           <line x1={refToX(ref.value)} x2={refToX(ref.value)} y1={6} y2={height - 8} className="ref-line" />
@@ -252,7 +280,7 @@ function BarChart({ chart }: { chart: Chart }) {
         return (
           <g key={bar.id}>
             <text x={labelW - 12} y={y + 18} textAnchor="end" className="bar-label">
-              {clip(plainText(bar.label), 22)}
+              {clip(plainText(bar.label), labelChars)}
             </text>
             <rect x={x0} y={y + 3} width={chartW} height={22} rx={6} className="bar-track" />
             <rect x={x0} y={y + 3} width={width} height={22} rx={6} fill={fill}>
@@ -271,6 +299,7 @@ function BarChart({ chart }: { chart: Chart }) {
         </text>
       )}
     </svg>
+    </div>
   );
 }
 
@@ -392,19 +421,21 @@ function DumbbellChart({ chart }: { chart: Chart }) {
 }
 
 function GapChart({ chart }: { chart: Chart }) {
+  const [box, W] = useChartWidth();
   const points = chart.gap_points;
   if (points.length === 0) return <p className="empty">Aucun écart.</p>;
   const changes = points.map((point) => point.change_pp);
   const min = Math.min(0, ...changes);
   const max = Math.max(0, ...changes);
   const span = Math.max(1, max - min);
-  const left = 160;
-  const width = W - left - 80;
+  const left = Math.min(160, Math.max(130, Math.round(W * 0.42))); // libelles a 13 px
+  const width = W - left - 100; // marge droite : valeur « +28,3 points » a 12 px
   const zero = left + ((0 - min) / span) * width;
   const height = Math.max(200, points.length * 54 + 30);
   const scale = (value: number) => left + ((value - min) / span) * width;
   return (
-    <svg className="chart-svg" viewBox={`0 0 ${W} ${height}`} role="img" aria-label={plainText(chart.title)}>
+    <div ref={box} className="chart-measure">
+    <svg className="chart-svg" style={{ width: W }} viewBox={`0 0 ${W} ${height}`} role="img" aria-label={plainText(chart.title)}>
       <line x1={zero} x2={zero} y1={14} y2={height - 20} className="axis" />
       {points.map((point: GapPoint, index) => {
         const y = 22 + index * 54;
@@ -436,6 +467,7 @@ function GapChart({ chart }: { chart: Chart }) {
         </text>
       )}
     </svg>
+    </div>
   );
 }
 

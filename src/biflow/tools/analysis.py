@@ -391,6 +391,7 @@ class AnalysisService:
         return {
             "kpi_id": kpi_id,
             "name": summary.name,
+            "name_fr": getattr(summary, "name_fr", None) or summary.name,
             "unit": summary.unit,
             "subgroup": summary.subgroup,
             "verification_status": summary.verification_status,

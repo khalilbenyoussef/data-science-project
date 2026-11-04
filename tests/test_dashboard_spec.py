@@ -156,7 +156,7 @@ def test_catalog_values_deltas_and_review_flags(spec):
     assert saving.chip.requires_review is True  # provenance absente dans cette fixture
     assert "provisional_definition" not in saving.chip.review_reasons  # catalogue 1.3.0 : verifie
     assert saving.label == "Épargne (toute forme)"
-    assert saving.chip.note == "Définition catalogue v1.6.0 appliquée au warehouse."
+    assert saving.chip.note == "Définition catalogue v1.7.0 appliquée au warehouse."
 
     emergency = spec.metric("emergency_money")
     # catalogue 1.4.0 : KPI emergency_funds (fin24aP), identifiant du widget inchange
@@ -363,3 +363,18 @@ def test_unknown_fact_reference_fails_closed(spec):
 ])
 def test_format_value(value, unit, expected):
     assert format_value(value, unit) == expected
+
+
+def test_no_english_catalog_name_reaches_the_spec(spec):
+    """Catalogue 1.7.0 : chaque KPI a un libelle francais ; aucun nom anglais dans l'UI."""
+    from biflow.tools.kpi import load_catalog
+
+    kpis = load_catalog()["kpis"]
+    assert all(kpi.get("name_fr") for kpi in kpis.values())
+    english = {kpi["name"] for kpi in kpis.values() if kpi["name"] != kpi["name_fr"]}
+    labels = [fact.label for fact in spec.facts]
+    labels += [metric.label for page in spec.pages for metric in page.metrics]
+    labels += [bar.label for page in spec.pages for chart in page.charts for bar in chart.bars]
+    leaked = sorted({label for label in labels if label in english
+                     or any(label.endswith(name) for name in english)})
+    assert leaked == []

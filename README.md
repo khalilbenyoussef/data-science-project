@@ -64,7 +64,7 @@ src/biflow/
                    user_sources ; analysis, dashboard_contract, dashboard_spec (Route 2)
   utils/           io, logger, pays (ISO3)
 config/config.yaml     chemins, LLM, orchestrateur, KPI, sources, seuils, analyst, dashboard
-config/kpi_catalog.v1.yaml  definitions declaratives des KPI (version 1.6.0)
+config/kpi_catalog.v1.yaml  definitions declaratives des KPI (version 1.7.0, libelles francais name_fr)
 data/                  raw, snapshots, staging, processed, profiles, quality, audit
 dashboard/             front React + Vite + ECharts (donnees JSON)
 outputs/               reports, profiles, logs, cache LLM

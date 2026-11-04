@@ -76,7 +76,7 @@ def build_explanations(
         w = kpi.get("warehouse") or {}
         formula = (kpi.get("formula") or {}).get("from_fact", "")
         record: dict[str, Any] = {
-            "kpi_id": kpi_id, "kpi_name": kpi.get("name"), "iso3": iso3,
+            "kpi_id": kpi_id, "kpi_name": kpi.get("name_fr") or kpi.get("name"), "kpi_name_en": kpi.get("name"), "iso3": iso3,
             "country": "Moyenne des pairs" if iso3 == PEERS_ISO3 else country_names.get(iso3, iso3),
             "year": year, "value": row["value"], "unit": row["unit"],
             "availability_status": row.get("availability_status"), "reason": row.get("reason"),

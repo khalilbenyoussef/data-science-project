@@ -87,7 +87,7 @@ def test_verified_values_subgroups_units_and_metadata(warehouse, kpi, expected, 
     assert result.iso3 == "TUN" and result.observation_year == 2024
     assert result.availability_status == "available" and result.reason is None
     assert result.definition == load_catalog()["kpis"][kpi]["definition"]
-    assert result.catalog_version == "1.6.0" and result.definition_version == "1.0.0"
+    assert result.catalog_version == "1.7.0" and result.definition_version == "1.0.0"
     assert len(result.catalog_sha256) == 64
     assert result.publication_status == "not_evaluated"
     with pytest.raises(FrozenInstanceError):

@@ -638,12 +638,12 @@ code,
 
 .chart-svg .tick {
   fill: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .chart-svg .axis-label {
   fill: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.02em;
 }
 
@@ -656,12 +656,12 @@ code,
 
 .chart-svg .ref-label {
   fill: var(--accent-ink);
-  font-size: 9.5px;
+  font-size: 11px;
 }
 
 .chart-svg .point-label {
   fill: var(--text);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -671,12 +671,12 @@ code,
 
 .chart-svg .bar-label {
   fill: var(--text);
-  font-size: 11.5px;
+  font-size: 13px;
 }
 
 .chart-svg .bar-value {
   fill: var(--text);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -2820,4 +2820,14 @@ select {
   .audit-checks td:nth-child(4) {
     display: none;
   }
+}
+
+/* graphiques SVG a texte de taille fixe : largeur mesuree, defilement sous 260 px */
+.chart-measure {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.chart-measure .chart-svg {
+  max-width: none;
 }

@@ -1,6 +1,6 @@
 # Declarative definitions only. No calculations, publication decisions or agents execute this file.
 schema_version: 1
-catalog_version: "1.6.0"
+catalog_version: "1.7.0"
 catalog_id: biflow_core_kpis
 created_on: "2026-10-22"
 updated_on: "2026-11-04"
@@ -259,6 +259,7 @@ kpis:
   account_ownership:
     definition_version: "1.0.0"
     name: Account ownership rate
+    name_fr: "Taux de détention d'un compte"
     business_objective: financial_inclusion
     definition: Share of adults owning a bank or similar financial-institution account or a mobile-money account.
     verification:
@@ -293,6 +294,7 @@ kpis:
   branch_density:
     definition_version: "1.0.0"
     name: Commercial-bank branch density
+    name_fr: "Densité des agences des banques commerciales"
     business_objective: banking_infrastructure
     definition: Number of commercial-bank branches per 100000 adults, as reported by IMF FAS.
     verification:
@@ -328,6 +330,7 @@ kpis:
   digital_payment_rate:
     definition_version: "1.0.0"
     name: Made or received a digital payment
+    name_fr: "Paiement numérique effectué ou reçu"
     business_objective: digital_finance
     definition: Share of adults who made or received a digital payment in the past year, across the payment purposes included by Findex.
     verification:
@@ -363,6 +366,7 @@ kpis:
   saving_rate:
     definition_version: "1.1.0"
     name: Saved any money
+    name_fr: "Épargne (toute forme)"
     business_objective: savings_deposits
     definition: Share of adults who personally saved or set aside any money, for any reason and using any mode of saving, in the past year.
     verification:
@@ -400,6 +404,7 @@ kpis:
   borrowing_rate:
     definition_version: "1.1.0"
     name: Borrowed any money
+    name_fr: "Emprunt (toute forme)"
     business_objective: credit
     definition: Share of adults who borrowed any money, alone or together with someone else, for any reason and from any source in the past year.
     verification:
@@ -437,6 +442,7 @@ kpis:
   unbanked_share:
     definition_version: "1.0.0"
     name: Adults without an account
+    name_fr: "Adultes sans compte"
     business_objective: financial_exclusion_vulnerability
     definition: Complement of account ownership in the same population and year; includes adults with neither a bank/similar account nor mobile money.
     verification:
@@ -472,6 +478,7 @@ kpis:
   formal_saving_rate:
     definition_version: "1.0.0"
     name: Saved at a financial institution
+    name_fr: "Épargne auprès d'une institution financière"
     business_objective: savings_deposits
     definition: Share of adults who saved or set aside any money at a bank or similar financial institution in the past year.
     verification:
@@ -509,6 +516,7 @@ kpis:
   formal_borrowing_rate:
     definition_version: "1.0.0"
     name: Borrowed from a financial institution
+    name_fr: "Emprunt auprès d'une institution financière"
     business_objective: credit
     definition: Share of adults who borrowed any money from a bank or similar financial institution, or using a credit card, in the past year.
     verification:
@@ -546,6 +554,7 @@ kpis:
   gender_gap:
     definition_version: "1.0.0"
     name: Account ownership gender gap
+    name_fr: "Écart femmes-hommes de détention d'un compte"
     business_objective: financial_inclusion
     definition: Account ownership of men minus account ownership of women, same country and survey year, in percentage points.
     verification:
@@ -586,6 +595,7 @@ kpis:
   income_gap:
     definition_version: "1.0.0"
     name: Account ownership income gap
+    name_fr: "Écart de revenu de détention d'un compte"
     business_objective: financial_inclusion
     definition: Account ownership of the richest 60% minus the poorest 40% of households, same country and survey year, in percentage points.
     verification:
@@ -626,6 +636,7 @@ kpis:
   age_gap:
     definition_version: "1.0.0"
     name: Account ownership age gap
+    name_fr: "Écart d'âge de détention d'un compte"
     business_objective: financial_inclusion
     definition: Account ownership of adults aged 25+ minus adults aged 15-24, same country and survey year, in percentage points.
     verification:
@@ -666,6 +677,7 @@ kpis:
   atm_density:
     definition_version: "1.0.0"
     name: "Automated teller machine density"
+    name_fr: "Densité des distributeurs automatiques"
     business_objective: banking_infrastructure
     definition: "Number of automated teller machines (ATMs) per 100000 adults, as reported by IMF FAS."
     verification:
@@ -702,6 +714,7 @@ kpis:
   depositors_per_1k:
     definition_version: "1.0.0"
     name: "Depositors with commercial banks"
+    name_fr: "Déposants des banques commerciales"
     business_objective: savings_deposits
     definition: "Number of depositors with commercial banks per 1000 adults, as reported by IMF FAS."
     verification:
@@ -737,6 +750,7 @@ kpis:
   borrowers_per_1k:
     definition_version: "1.0.0"
     name: "Borrowers from commercial banks"
+    name_fr: "Emprunteurs des banques commerciales"
     business_objective: credit
     definition: "Number of borrowers from commercial banks per 1000 adults, as reported by IMF FAS."
     verification:
@@ -772,6 +786,7 @@ kpis:
   deposit_accounts_per_1k:
     definition_version: "1.0.0"
     name: "Deposit accounts with commercial banks"
+    name_fr: "Comptes de dépôt des banques commerciales"
     business_objective: savings_deposits
     definition: "Number of deposit accounts with commercial banks per 1000 adults, as reported by IMF FAS."
     verification:
@@ -807,6 +822,7 @@ kpis:
   loan_accounts_per_1k:
     definition_version: "1.0.0"
     name: "Loan accounts with commercial banks"
+    name_fr: "Comptes de prêt des banques commerciales"
     business_objective: credit
     definition: "Number of loan accounts with commercial banks per 1000 adults, as reported by IMF FAS."
     verification:
@@ -842,6 +858,7 @@ kpis:
   deposits_pct_gdp:
     definition_version: "1.0.0"
     name: "Outstanding deposits with commercial banks"
+    name_fr: "Encours des dépôts des banques commerciales"
     business_objective: savings_deposits
     definition: "Outstanding deposits with commercial banks as a percentage of GDP, as published by IMF FAS (ratio not recomputed)."
     verification:
@@ -878,6 +895,7 @@ kpis:
   loans_pct_gdp:
     definition_version: "1.0.0"
     name: "Outstanding loans from commercial banks"
+    name_fr: "Encours des prêts des banques commerciales"
     business_objective: credit
     definition: "Outstanding loans from commercial banks as a percentage of GDP, as published by IMF FAS (ratio not recomputed)."
     verification:
@@ -914,6 +932,7 @@ kpis:
   emergency_funds:
     definition_version: "1.0.0"
     name: "Could come up with emergency funds in 30 days"
+    name_fr: "Fonds d'urgence mobilisables en 30 jours"
     business_objective: financial_resilience
     definition: "Share of adults who say it is possible (difficult, somewhat difficult or not very difficult) for them to come up with emergency funds within 30 days."
     verification:
@@ -951,6 +970,7 @@ kpis:
   emergency_source_savings:
     definition_version: "1.0.0"
     name: "Main source of emergency funds: savings"
+    name_fr: "Source principale des fonds d'urgence : épargne"
     business_objective: financial_resilience
     definition: "Share of all adults who say they could come up with emergency funds in 30 days and name savings as their main source."
     verification:
@@ -988,6 +1008,7 @@ kpis:
   emergency_source_borrowing:
     definition_version: "1.0.0"
     name: "Main source of emergency funds: loan from a bank, employer or private lender"
+    name_fr: "Source principale des fonds d'urgence : prêt (banque, employeur ou prêteur privé)"
     business_objective: financial_resilience
     definition: "Share of all adults who say they could come up with emergency funds in 30 days and name a loan from a bank, employer or private lender as their main source."
     verification:
@@ -1025,6 +1046,7 @@ kpis:
   mobile_money_account:
     definition_version: "1.0.0"
     name: "Mobile money account"
+    name_fr: "Compte de monnaie mobile"
     business_objective: digital_finance
     definition: "Share of adults who report personally using a mobile money service in the past year."
     verification:
@@ -1062,6 +1084,7 @@ kpis:
   inactive_accounts:
     definition_version: "1.0.0"
     name: "Has an inactive account"
+    name_fr: "Compte inactif"
     business_objective: financial_inclusion
     definition: "Share of all adults who have an account but report neither a deposit into nor a withdrawal from it (including any digital payment) in the past year."
     verification:
@@ -1099,6 +1122,7 @@ kpis:
   account_ownership_women:
     definition_version: "1.0.0"
     name: "Account ownership - women"
+    name_fr: "Détention d'un compte - femmes"
     business_objective: financial_inclusion
     definition: "Share of women who own a bank or similar financial-institution account or a mobile-money account."
     verification:
@@ -1135,6 +1159,7 @@ kpis:
   account_ownership_men:
     definition_version: "1.0.0"
     name: "Account ownership - men"
+    name_fr: "Détention d'un compte - hommes"
     business_objective: financial_inclusion
     definition: "Share of men who own a bank or similar financial-institution account or a mobile-money account."
     verification:
@@ -1171,6 +1196,7 @@ kpis:
   account_ownership_poorest_40:
     definition_version: "1.0.0"
     name: "Account ownership - the poorest 40% of households"
+    name_fr: "Détention d'un compte - 40 % des ménages les plus pauvres"
     business_objective: financial_inclusion
     definition: "Share of the poorest 40% of households who own a bank or similar financial-institution account or a mobile-money account."
     verification:
@@ -1207,6 +1233,7 @@ kpis:
   account_ownership_richest_60:
     definition_version: "1.0.0"
     name: "Account ownership - the richest 60% of households"
+    name_fr: "Détention d'un compte - 60 % des ménages les plus riches"
     business_objective: financial_inclusion
     definition: "Share of the richest 60% of households who own a bank or similar financial-institution account or a mobile-money account."
     verification:
@@ -1243,6 +1270,7 @@ kpis:
   account_ownership_age_15_24:
     definition_version: "1.0.0"
     name: "Account ownership - adults aged 15-24"
+    name_fr: "Détention d'un compte - adultes de 15 à 24 ans"
     business_objective: financial_inclusion
     definition: "Share of adults aged 15-24 who own a bank or similar financial-institution account or a mobile-money account."
     verification:
@@ -1279,6 +1307,7 @@ kpis:
   account_ownership_age_25_plus:
     definition_version: "1.0.0"
     name: "Account ownership - adults aged 25+"
+    name_fr: "Détention d'un compte - adultes de 25 ans et plus"
     business_objective: financial_inclusion
     definition: "Share of adults aged 25+ who own a bank or similar financial-institution account or a mobile-money account."
     verification:
@@ -1315,6 +1344,7 @@ kpis:
   account_ownership_primary_or_less:
     definition_version: "1.0.0"
     name: "Account ownership - adults with primary education or less"
+    name_fr: "Détention d'un compte - niveau primaire ou moins"
     business_objective: financial_inclusion
     definition: "Share of adults with primary education or less who own a bank or similar financial-institution account or a mobile-money account."
     verification:
@@ -1351,6 +1381,7 @@ kpis:
   account_ownership_secondary_or_more:
     definition_version: "1.0.0"
     name: "Account ownership - adults with secondary education or more"
+    name_fr: "Détention d'un compte - niveau secondaire ou plus"
     business_objective: financial_inclusion
     definition: "Share of adults with secondary education or more who own a bank or similar financial-institution account or a mobile-money account."
     verification:
@@ -1387,6 +1418,7 @@ kpis:
   account_ownership_out_of_laborforce:
     definition_version: "1.0.0"
     name: "Account ownership - adults out of the labor force"
+    name_fr: "Détention d'un compte - hors population active"
     business_objective: financial_inclusion
     definition: "Share of adults out of the labor force who own a bank or similar financial-institution account or a mobile-money account."
     verification:
@@ -1423,6 +1455,7 @@ kpis:
   account_ownership_in_laborforce:
     definition_version: "1.0.0"
     name: "Account ownership - adults in the labor force"
+    name_fr: "Détention d'un compte - population active"
     business_objective: financial_inclusion
     definition: "Share of adults in the labor force who own a bank or similar financial-institution account or a mobile-money account."
     verification:
@@ -1459,6 +1492,7 @@ kpis:
   account_ownership_rural:
     definition_version: "1.0.0"
     name: "Account ownership - adults living in rural areas"
+    name_fr: "Détention d'un compte - milieu rural"
     business_objective: financial_inclusion
     definition: "Share of adults living in rural areas who own a bank or similar financial-institution account or a mobile-money account."
     verification:
@@ -1495,6 +1529,7 @@ kpis:
   account_ownership_urban:
     definition_version: "1.0.0"
     name: "Account ownership - adults living in urban areas"
+    name_fr: "Détention d'un compte - milieu urbain"
     business_objective: financial_inclusion
     definition: "Share of adults living in urban areas who own a bank or similar financial-institution account or a mobile-money account."
     verification:
@@ -1531,6 +1566,7 @@ kpis:
   barrier_too_far:
     definition_version: "1.0.0"
     name: "No bank account because financial institutions are too far away"
+    name_fr: "Pas de compte : institutions financières trop éloignées"
     business_objective: financial_exclusion_vulnerability
     definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because financial institutions are too far away. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
     verification:
@@ -1569,6 +1605,7 @@ kpis:
   barrier_too_expensive:
     definition_version: "1.0.0"
     name: "No bank account because financial services are too expensive"
+    name_fr: "Pas de compte : services financiers trop chers"
     business_objective: financial_exclusion_vulnerability
     definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because financial services are too expensive. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
     verification:
@@ -1607,6 +1644,7 @@ kpis:
   barrier_no_documents:
     definition_version: "1.0.0"
     name: "No bank account because they lack the documentation needed to open one"
+    name_fr: "Pas de compte : documents requis manquants"
     business_objective: financial_exclusion_vulnerability
     definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because they lack the documentation needed to open one. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
     verification:
@@ -1645,6 +1683,7 @@ kpis:
   barrier_insufficient_funds:
     definition_version: "1.0.0"
     name: "No bank account because they do not have enough money to use one"
+    name_fr: "Pas de compte : pas assez d'argent"
     business_objective: financial_exclusion_vulnerability
     definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because they do not have enough money to use one. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
     verification:
@@ -1683,6 +1722,7 @@ kpis:
   barrier_family_has_account:
     definition_version: "1.0.0"
     name: "No bank account because someone else in their family already has one"
+    name_fr: "Pas de compte : un membre de la famille en a déjà un"
     business_objective: financial_exclusion_vulnerability
     definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because someone else in their family already has one. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
     verification:
@@ -1721,6 +1761,7 @@ kpis:
   barrier_no_trust:
     definition_version: "1.0.0"
     name: "No bank account because they do not trust financial institutions"
+    name_fr: "Pas de compte : manque de confiance dans les institutions financières"
     business_objective: financial_exclusion_vulnerability
     definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because they do not trust financial institutions. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
     verification:
@@ -1759,6 +1800,7 @@ kpis:
   education_gap:
     definition_version: "1.0.0"
     name: Account ownership education gap
+    name_fr: "Écart d'éducation de détention d'un compte"
     business_objective: financial_inclusion
     definition: Account ownership of adults with secondary education or more minus adults with primary education or less, same country and survey year, in percentage points.
     verification:
@@ -1799,6 +1841,7 @@ kpis:
   laborforce_gap:
     definition_version: "1.0.0"
     name: Account ownership labor force gap
+    name_fr: "Écart d'activité de détention d'un compte"
     business_objective: financial_inclusion
     definition: Account ownership of adults in the labor force minus adults out of the labor force, same country and survey year, in percentage points.
     verification:
@@ -1839,6 +1882,7 @@ kpis:
   urban_gap:
     definition_version: "1.0.0"
     name: Account ownership urban-rural gap
+    name_fr: "Écart urbain-rural de détention d'un compte"
     business_objective: financial_inclusion
     definition: Account ownership of urban adults minus rural adults, same country and survey year, in percentage points.
     verification:

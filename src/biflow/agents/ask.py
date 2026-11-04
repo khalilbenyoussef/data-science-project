@@ -667,8 +667,16 @@ def llm_answer(request: ChatRequest, llm: Any, tools: FactTools, *, lang: str,
         if numbers & set(extract_numbers(str(fact.get("display")))):
             used.append(fact)
             seen.add(fact["fact_id"])
-    return _base(request.question, answer, lang=lang, mode="llm", intent="conversation",
-                 facts=used, caveat=ASSOCIATION_CAVEAT if used else None)
+    result = _base(request.question, answer, lang=lang, mode="llm", intent="conversation",
+                   facts=used, caveat=ASSOCIATION_CAVEAT if used else None)
+    # badge du perimetre reellement repondu (comme en mode simple) : un seul pays et une
+    # seule annee cites -> ce perimetre, s'il differe de celui du tableau de bord
+    scopes = {(fact.get("iso3"), fact.get("year")) for fact in used}
+    if len(scopes) == 1:
+        iso3, year = next(iter(scopes))
+        if iso3 and year and (iso3, year) != (tools.iso3, tools.year):
+            result["resolved"] = {"iso3": iso3, "year": int(year), "followup": True, "question": None}
+    return result
 
 
 def answer_chat(request: ChatRequest, view: ViewProvider, *, iso3: str, year: int,

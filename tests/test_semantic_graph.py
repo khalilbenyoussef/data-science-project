@@ -68,11 +68,11 @@ def test_six_actions_graph_and_fallback_exactly_once(setup_route, payload):
     response = result["semantic_kpi_response"]
     assert response["action"] == payload["action"]
     RESPONSE_ADAPTER.validate_python(response)
-    agent_report = json.loads((Path(cfg["paths"]["reports"]) / "query/semantic_kpi.json").read_text())
+    agent_report = json.loads((Path(cfg["paths"]["reports"]) / "query/semantic_kpi.json").read_text(encoding="utf-8"))
     assert response == agent_report["outputs"]["semantic_kpi_response"]
     assert result["warnings"] == agent_report["outputs"]["warnings"]
     assert len(result["warnings"]) == len(set(result["warnings"]))
-    summary = json.loads((Path(cfg["paths"]["reports"]) / "query/run.json").read_text())
+    summary = json.loads((Path(cfg["paths"]["reports"]) / "query/run.json").read_text(encoding="utf-8"))
     assert summary["semantic_kpi_response"] == response
     assert summary["semantic_kpi_request"] == payload
     assert result["profiles"] == result["raw_paths"] == result["sources"] == {}

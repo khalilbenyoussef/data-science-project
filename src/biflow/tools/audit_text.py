@@ -62,7 +62,8 @@ def _unit(record: Mapping[str, Any], lang: str) -> str:
 def template_text(record: Mapping[str, Any], lang: str = "fr") -> str:
     """Phrase deterministe d'une ligne KPI (valeur, origine, calcul, statut)."""
     fr = lang == "fr"
-    name = record.get("kpi_name") or record["kpi_id"]
+    name = (record.get("kpi_name") if fr else record.get("kpi_name_en") or record.get("kpi_name")) \
+        or record["kpi_id"]
     head = f"{name} - {_country(record, lang)} ({record['iso3']}), {record['year']}"
     status = STATUS_LABELS[lang].get(record.get("publication_status"), record.get("publication_status"))
     if record["value"] is None:
@@ -110,7 +111,8 @@ def change_text(change: Mapping[str, Any], left: Mapping[str, Any], right: Mappi
                 lang: str = "fr") -> str:
     """Phrase deterministe d'une variation (annees ou pays) et de sa decomposition."""
     fr = lang == "fr"
-    name = right.get("kpi_name") or right["kpi_id"]
+    name = (right.get("kpi_name") if fr else right.get("kpi_name_en") or right.get("kpi_name")) \
+        or right["kpi_id"]
     unit = _unit(right, lang)
     delta_unit = "pts" if change["delta_unit"] == "percentage_points" else unit
     side = lambda r: f"{_country(r, lang)} {r['year']}"  # noqa: E731

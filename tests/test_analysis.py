@@ -225,7 +225,7 @@ def test_review_notices_and_provenance_are_never_upgraded(service):
     assert provenance["quality_gate_passed"] is True
     assert provenance["content_binding"] == "recorded_and_verified"
     assert provenance["sources"] and all(item["hash_match"] for item in provenance["sources"])
-    assert dataset["catalog"]["version"] == "1.6.0"
+    assert dataset["catalog"]["version"] == "1.7.0"
 
 
 def test_review_notice_still_emitted_when_provenance_is_unbound(warehouse, provenance_files):

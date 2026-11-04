@@ -94,6 +94,7 @@ REQUEST_ADAPTER = TypeAdapter(SemanticKpiRequest)
 class KpiSummary(Contract):
     kpi_id: str
     name: str
+    name_fr: str | None = None  # libelle francais affiche (catalogue 1.7.0)
     unit: str
     verification_status: str
     subgroup: str
@@ -185,7 +186,7 @@ class SemanticKpiTools:
         ListKpisRequest.model_validate(request)
         return ListKpisResponse(
             catalog_version=self._catalog["catalog_version"], catalog_sha256=self._catalog_hash,
-            kpis=tuple(KpiSummary(kpi_id=key, name=k["name"], unit=k["unit"],
+            kpis=tuple(KpiSummary(kpi_id=key, name=k["name"], name_fr=k.get("name_fr"), unit=k["unit"],
                                   verification_status=k["verification"]["status"], subgroup=k["subgroup"],
                                   valid_years=tuple(k["valid_years"]), dependencies=tuple(k["dependencies"]))
                        for key, k in self._catalog["kpis"].items()),

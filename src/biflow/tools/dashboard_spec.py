@@ -747,7 +747,7 @@ class _Data:
         available = observation["availability_status"] == "available" and observation["value"] is not None
         metric = {
             "id": metric_id or kpi_id,
-            "label": label or meta["name"],
+            "label": label or meta.get("name_fr") or meta["name"],
             "value": float(observation["value"]) if available else None,
             "display": format_value(observation["value"] if available else None, unit),
             "unit": unit,
@@ -1091,7 +1091,8 @@ def _build_blocks(
             "emergency_funds", metric_id="emergency_money", upto=True, label=label_for("fin24aP")),
     ]
     account_metric = overview_metrics[0]
-    account_points = data.kpi_points("account_ownership")
+    # historique coupe a la vague lue : jamais une vague posterieure a l'annee choisie
+    account_points = [p for p in data.kpi_points("account_ownership") if p["year"] <= survey_year]
     account_chart = {
         "id": "account_ownership_history",
         "kind": "line",
@@ -1108,7 +1109,8 @@ def _build_blocks(
             "provider": "semantic",
             "chip": account_metric["chip"],
             "evidence_ids": tuple(p["evidence_id"] for p in
-                                  data.series[(iso3, "account_ownership")]["points"]),
+                                  data.series[(iso3, "account_ownership")]["points"]
+                                  if int(p["year"]) <= survey_year),
         }],
         "reference_lines": [],
         "notes": [
@@ -1120,6 +1122,8 @@ def _build_blocks(
     for entry_id, color in (("benchmark_mena", None), ("benchmark_lmic", None),
                             ("benchmark_world", None)):
         entry = data.reference.by_id(entry_id)
+        if entry.year is not None and entry.year > survey_year:
+            continue  # repere d'une vague posterieure a l'enquete lue : non affiche
         account_chart["reference_lines"].append({
             "label": entry.label,
             "value": entry.value,
@@ -1129,6 +1133,11 @@ def _build_blocks(
             "source_url": entry.source_url,
             "chip": _reference_chip(entry),
         })
+
+    if not account_chart["reference_lines"]:
+        account_chart["notes"] = [
+            f"Repères régionaux Findex 2025 (vague 2024) non affichés : postérieurs à l'enquête {survey_year}.",
+        ]
 
     peers = data.peer_bars("account_ownership")
     observed = [bar for bar in peers if bar["value"] is not None]

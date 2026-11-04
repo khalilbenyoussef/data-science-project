@@ -180,3 +180,14 @@ def test_user_sources_are_never_used_in_answers():
     result = ask("Utilise mes données importées : combien de clients ?", llm=llm)
     assert result["intent"] == "user_source" and llm.calls == 0
     assert "n'est pas utilisée dans les réponses" in result["answer"] and result["facts"] == []
+
+
+def test_llm_answer_badge_follows_the_scope_actually_answered():
+    llm = FakeLLM(tool_call("get_kpi", kpi_id="account_ownership", iso3="MAR", year=2024),
+                  AIMessage("Au Maroc, 54,6 % des adultes ont un compte en 2024."))
+    result = ask("et le Maroc ?", llm=llm)
+    assert result["mode"] == "llm" and result["resolved"]["iso3"] == "MAR" and result["resolved"]["year"] == 2024
+    same = ask("Combien d'adultes ont un compte ?", llm=FakeLLM(
+        tool_call("get_kpi", kpi_id="account_ownership"), AIMessage("En 2024, 37,8 % ont un compte.")))
+    assert "resolved" not in same  # meme perimetre que le tableau de bord : badge inchange
+

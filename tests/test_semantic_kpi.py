@@ -41,7 +41,7 @@ def test_catalog_discovery_needs_no_warehouse_or_duckdb(tmp_path, monkeypatch):
     tools = SemanticKpiTools(tmp_path / "absent.duckdb")
     response = tools.list_kpis(ListKpisRequest())
     catalog = load_catalog()
-    assert response.catalog_version == "1.6.0"
+    assert response.catalog_version == "1.7.0"
     assert {k.kpi_id for k in response.kpis} == set(catalog["kpis"])
     for summary in response.kpis:
         entry = catalog["kpis"][summary.kpi_id]
@@ -161,7 +161,7 @@ def test_base_agent_reports_serializable_typed_outputs(agent, input_request):
     assert report["status"] == "success" and report["llm_usage"] == {}
     response = report["outputs"]["semantic_kpi_response"]
     RESPONSE_ADAPTER.validate_python(response)
-    assert json.loads(agent.report_path().read_text())["outputs"] == report["outputs"]
+    assert json.loads(agent.report_path().read_text(encoding="utf-8"))["outputs"] == report["outputs"]
 
 
 def test_base_agent_failed_requests_preserve_error_reporting(agent):
