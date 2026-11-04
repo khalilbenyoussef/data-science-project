@@ -142,6 +142,38 @@ SPOKEN_UNITS = {
 }
 
 
+# Groupe nomme dans les constats d'ecart, traduit du nom du KPI de sous-groupe du
+# catalogue (« Account ownership - women ») ; chiffres des noms ecrits en lettres.
+GROUP_PHRASES = {
+    "account_ownership_women": "des femmes",
+    "account_ownership_men": "des hommes",
+    "account_ownership_poorest_40": "des quarante pour cent des ménages les plus pauvres",
+    "account_ownership_richest_60": "des soixante pour cent des ménages les plus riches",
+    "account_ownership_age_15_24": "des adultes de quinze à vingt-quatre ans",
+    "account_ownership_age_25_plus": "des adultes de vingt-cinq ans et plus",
+    "account_ownership_primary_or_less": "des adultes de niveau primaire ou moins",
+    "account_ownership_secondary_or_more": "des adultes de niveau secondaire ou plus",
+    "account_ownership_out_of_laborforce": "des adultes hors population active",
+    "account_ownership_in_laborforce": "des adultes de la population active",
+    "account_ownership_rural": "des adultes ruraux",
+    "account_ownership_urban": "des adultes urbains",
+}
+# Constat d'ecart : (dimension, titre, fait gauche, fait droit, KPI gauche, KPI droit)
+GAP_INSIGHTS = (
+    ("gender", "femmes-hommes", "gender_femmes", "gender_hommes",
+     "account_ownership_women", "account_ownership_men"),
+    ("income", "de revenu", "income_40-les-plus-pauvres", "income_60-les-plus-riches",
+     "account_ownership_poorest_40", "account_ownership_richest_60"),
+    ("education", "d'éducation", "education_primaire-ou-moins", "education_secondaire-ou-plus",
+     "account_ownership_primary_or_less", "account_ownership_secondary_or_more"),
+    ("laborforce", "de marché du travail", "laborforce_hors-population-active",
+     "laborforce_population-active", "account_ownership_out_of_laborforce",
+     "account_ownership_in_laborforce"),
+    ("urbanicity", "entre milieux", "urbanicity_rural", "urbanicity_urbain",
+     "account_ownership_rural", "account_ownership_urban"),
+)
+
+
 def _spoken(fact: Mapping[str, Any]) -> str:
     """Valeur affichee du fait, unite chiffree remplacee par sa forme en lettres."""
     display = str(fact["display"])
@@ -267,34 +299,17 @@ def build_insights(
             severity="info", kind="auto", cited=cited,
             facts=facts, warnings=warnings,
         ))
-    for dimension, title in (("gender", "femmes-hommes"),
-                             ("income", "de revenu"),
-                             ("education", "d'éducation"),
-                             ("laborforce", "de marché du travail"),
-                             ("urbanicity", "entre milieux")):
+    for dimension, title, left_code, right_code, left_kpi, right_kpi in GAP_INSIGHTS:
         gap = pick(index, f"gap_{dimension}")
         if gap is None:
             continue
         change = pick(index, f"gap_change_{dimension}")
-        if dimension == "gender":
-            left, right = (pick(index, "gender_femmes"), pick(index, "gender_hommes"))
-        elif dimension == "income":
-            left = pick(index, "income_40-les-plus-pauvres")
-            right = pick(index, "income_60-les-plus-riches")
-        elif dimension == "education":
-            left = pick(index, "education_primaire-ou-moins")
-            right = pick(index, "education_secondaire-ou-plus")
-        elif dimension == "laborforce":
-            left = pick(index, "laborforce_hors-population-active")
-            right = pick(index, "laborforce_population-active")
-        else:
-            left = pick(index, "urbanicity_rural")
-            right = pick(index, "urbanicity_urbain")
+        left, right = pick(index, left_code), pick(index, right_code)
         if left is None or right is None:
             continue
         statement = (
-            f"Écart {title} en {gap['year']} : {left['display']} pour le premier "
-            f"groupe contre {right['display']} pour le second, soit {gap['display']}."
+            f"Écart {title} en {gap['year']} : {left['display']} {GROUP_PHRASES[left_kpi]} "
+            f"contre {right['display']} {GROUP_PHRASES[right_kpi]}, soit {gap['display']}."
         )
         if change is not None:
             statement += f" Variation depuis l'année antérieure observée : {change['display']}."

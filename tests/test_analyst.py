@@ -161,6 +161,25 @@ def test_gap_insights_cover_education_labour_force_and_place(facts):
         assert f"F-gap_{dimension}-TUN-2024" in item["evidence_ids"]
 
 
+def test_gap_insights_name_both_groups(facts):
+    from biflow.agents.analyst import GROUP_PHRASES
+    from biflow.tools.kpi import SUBGROUP_KPIS
+
+    assert set(GROUP_PHRASES) == set(SUBGROUP_KPIS)  # chaque sous-groupe du catalogue
+    assert all(not any(char.isdigit() for char in phrase) for phrase in GROUP_PHRASES.values())
+    insights, warnings = build_insights(facts, "Tunisie")
+    assert warnings == []
+    inclusion = {item["id"]: item for item in insights["inclusion"]}
+    assert inclusion["INS-inclusion-gap-gender"]["statement"] == (
+        "Écart femmes-hommes en 2024 : 26.6 % des femmes contre 49.6 % des hommes, "
+        "soit +23.0 pt. Variation depuis l'année antérieure observée : +6.6 pt.")
+    assert inclusion["INS-inclusion-gap-income"]["statement"].startswith(
+        "Écart de revenu en 2024 : 28.0 % des quarante pour cent des ménages les plus pauvres "
+        "contre 44.0 % des soixante pour cent des ménages les plus riches")
+    for item in inclusion.values():
+        assert "premier groupe" not in item["statement"]
+
+
 def test_review_wording_returns_when_the_backend_says_so(facts, monkeypatch):
     import biflow.agents.analyst as analyst
 

@@ -376,17 +376,36 @@ const LOGIN_VIDEOS = [
 
 function LoginBackdrop() {
   const [index, setIndex] = useState(0);
+  // Videos non versionnees (*.mp4 ignore) : une video introuvable est sautee ; si
+  // aucune ne se charge, seul le fond statique de .login / .login-media reste.
+  const [failed, setFailed] = useState<ReadonlySet<number>>(() => new Set());
+  const next = (from: number, skip: ReadonlySet<number>) => {
+    for (let step = 1; step <= LOGIN_VIDEOS.length; step += 1) {
+      const candidate = (from + step) % LOGIN_VIDEOS.length;
+      if (!skip.has(candidate)) return candidate;
+    }
+    return null;
+  };
+  const playable = failed.size < LOGIN_VIDEOS.length && !failed.has(index);
   return (
     <div className="login-media" aria-hidden="true">
-      <video
-        key={LOGIN_VIDEOS[index]}
-        src={LOGIN_VIDEOS[index]}
-        autoPlay
-        muted
-        playsInline
-        preload="auto"
-        onEnded={() => setIndex((current) => (current + 1) % LOGIN_VIDEOS.length)}
-      />
+      {playable && (
+        <video
+          key={LOGIN_VIDEOS[index]}
+          src={LOGIN_VIDEOS[index]}
+          autoPlay
+          muted
+          playsInline
+          preload="auto"
+          onEnded={() => setIndex((current) => next(current, failed) ?? current)}
+          onError={() => {
+            const skip = new Set(failed).add(index);
+            setFailed(skip);
+            const candidate = next(index, skip);
+            if (candidate !== null) setIndex(candidate);
+          }}
+        />
+      )}
     </div>
   );
 }
