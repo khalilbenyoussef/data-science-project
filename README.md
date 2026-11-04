@@ -683,8 +683,10 @@ python -m uvicorn dashboard_app.api.app:app --host 127.0.0.1 --port 8000
 ```
 
 Les vues générées à la demande sont mises en cache dans
-`outputs/dashboard/generated/` (une entrée par pays, année et empreinte du
-warehouse) : la première ouverture d'un pays prend 20 à 40 secondes, les
+`outputs/dashboard/generated/` (une entrée par pays et année ; la clé réunit la
+date du warehouse, l'empreinte du catalogue et celle du code qui construit la vue
+et ses insights, modifications non commitées comprises : une vue périmée n'est
+jamais servie, les anciens fichiers sont simplement ignorés) : la première ouverture d'un pays prend 20 à 40 secondes, les
 suivantes sont immédiates, y compris après redémarrage du serveur.
 
 Développement front avec proxy `/api` vers le port 8000 :

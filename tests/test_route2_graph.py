@@ -145,7 +145,7 @@ def test_route2_pregenerates_peer_views_into_the_api_cache(tmp_path, finova_ware
                                                             monkeypatch):
     from fastapi.testclient import TestClient
 
-    from biflow.tools.spec_cache import WarehouseSpecBuilder, generated_path, warehouse_stamp
+    from biflow.tools.spec_cache import WarehouseSpecBuilder, cache_key, generated_path
     from dashboard_app.api.app import create_app
 
     config["dashboard"].update({"pregenerate_peers": True,
@@ -156,9 +156,9 @@ def test_route2_pregenerates_peer_views_into_the_api_cache(tmp_path, finova_ware
     done = state["route2_pregenerated"]
     assert [(item["iso3"], item["year"], item["status"]) for item in done] == [
         (code, 2024, "generated") for code in ("DZA", "EGY", "JOR", "MAR")]
-    stamp = warehouse_stamp(finova_warehouse)
+    key = cache_key(finova_warehouse)
     for code in ("DZA", "EGY", "JOR", "MAR"):
-        assert generated_path(tmp_path / "generated", code, 2024, stamp).is_file()
+        assert generated_path(tmp_path / "generated", code, 2024, key).is_file()
     run = json.loads((tmp_path / "reports" / "route2_warm" / "run.json").read_text(encoding="utf-8"))
     assert run["pregenerated"] == done
 

@@ -285,6 +285,7 @@ def run_route2(
         state["route2_pregenerated"] = pregenerate(
             builder, resolve(dashboard_cfg.get("generated_dir", DEFAULT_GENERATED_DIR)),
             warehouse, [(code, published["year"]) for code in peers],
+            catalog_path=catalog_path,
         )
 
     summary = pipeline_graph._summary(state)

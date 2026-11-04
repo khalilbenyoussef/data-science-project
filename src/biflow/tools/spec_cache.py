@@ -7,6 +7,7 @@ carries the warehouse modification time: a rebuild invalidates every entry.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -20,7 +21,8 @@ from biflow.tools.analysis import DEFAULT_KPIS, AnalysisRequest, AnalysisService
 from biflow.tools.dashboard_spec import (
     DashboardSpec, PEERS, build_finova_spec, load_pipeline_info, load_reference,
 )
-from biflow.tools.kpi import DEFAULT_CATALOG
+from biflow.config import resolve
+from biflow.tools.kpi import DEFAULT_CATALOG, user_catalog_path
 from biflow.tools.warehouse_reader import WarehouseReader
 
 SpecBuilder = Callable[[str, int], dict[str, Any]]
@@ -48,8 +50,52 @@ def warehouse_stamp(warehouse: Path) -> float:
         return 0.0
 
 
-def generated_path(root: Path, iso3: str, year: int, stamp: float) -> Path:
-    return root / f"{iso3}_{year}_{int(stamp)}.json"
+# Fichiers qui construisent la vue et ses insights : leur contenu entre dans la cle.
+_TOOLS = Path(__file__).resolve().parent
+CODE_FILES = (
+    _TOOLS / "analysis.py", _TOOLS / "dashboard_spec.py", _TOOLS / "insights.py",
+    _TOOLS / "spec_cache.py", _TOOLS / "warehouse_reader.py",
+    _TOOLS.parent / "agents" / "analyst.py",
+)
+_DIGESTS: dict[tuple[str, int, int], str] = {}
+
+
+def _file_digest(path: Path) -> str:
+    try:
+        stat = path.stat()
+    except OSError:
+        return "missing"
+    key = (str(path), stat.st_size, stat.st_mtime_ns)
+    if key not in _DIGESTS:
+        _DIGESTS[key] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return _DIGESTS[key]
+
+
+def code_sha256(files: Iterable[Path] = CODE_FILES) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(files, key=str):
+        digest.update(f"{path.name}:{_file_digest(path)};".encode())
+    return digest.hexdigest()
+
+
+def catalog_sha256(catalog_path: str | Path = DEFAULT_CATALOG) -> str:
+    """Empreinte du catalogue officiel et du catalogue utilisateur s'il existe."""
+    digest = hashlib.sha256()
+    for path in (resolve(catalog_path), user_catalog_path()):
+        digest.update(f"{_file_digest(Path(path))};".encode())
+    return digest.hexdigest()
+
+
+def cache_key(warehouse: Path, catalog_path: str | Path = DEFAULT_CATALOG, *,
+              catalog_hash: str | None = None, code_hash: str | None = None) -> str:
+    """Cle d'une vue generee : warehouse, catalogue et code (8 caracteres chacun)."""
+    catalog = catalog_hash if catalog_hash is not None else catalog_sha256(catalog_path)
+    code = code_hash if code_hash is not None else code_sha256()
+    return f"{int(warehouse_stamp(warehouse))}_{catalog[:8]}_{code[:8]}"
+
+
+def generated_path(root: Path, iso3: str, year: int, key: str) -> Path:
+    return root / f"{iso3}_{year}_{key}.json"
 
 
 def store_generated(path: Path, payload: Mapping[str, Any]) -> None:
@@ -142,13 +188,14 @@ class WarehouseSpecBuilder:
 
 
 def pregenerate(builder: SpecBuilder, root: Path, warehouse: Path,
-                scopes: Iterable[tuple[str, int]]) -> list[dict[str, Any]]:
+                scopes: Iterable[tuple[str, int]],
+                catalog_path: str | Path = DEFAULT_CATALOG) -> list[dict[str, Any]]:
     """Ecrit dans le cache disque chaque scope absent ; un echec n'arrete pas les
     autres. Renvoie {iso3, year, status, seconds, path} par scope."""
-    stamp = warehouse_stamp(warehouse)
+    key = cache_key(warehouse, catalog_path)
     results = []
     for iso3, year in scopes:
-        path = generated_path(root, iso3, year, stamp)
+        path = generated_path(root, iso3, year, key)
         started = time.perf_counter()
         if path.is_file():
             status = "cached"
@@ -164,6 +211,6 @@ def pregenerate(builder: SpecBuilder, root: Path, warehouse: Path,
 
 
 __all__ = [
-    "DEFAULT_GENERATED_DIR", "SpecBuilder", "WarehouseSpecBuilder", "attach_analysis",
-    "generated_path", "pregenerate", "store_generated", "warehouse_stamp",
+    "CODE_FILES", "DEFAULT_GENERATED_DIR", "SpecBuilder", "WarehouseSpecBuilder",
+    "attach_analysis", "cache_key", "catalog_sha256", "code_sha256", "generated_path", "pregenerate", "store_generated", "warehouse_stamp",
 ]

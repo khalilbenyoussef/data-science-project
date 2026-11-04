@@ -24,9 +24,10 @@ from pydantic import ValidationError
 from biflow.agents.analyst import AskRequest, answer_question
 from biflow.config import ROOT, load_config, resolve
 from biflow.tools.dashboard_spec import PEERS, REFERENCE_PATH
+from biflow.tools.kpi import DEFAULT_CATALOG
 from biflow.tools.spec_cache import (
-    DEFAULT_GENERATED_DIR, SpecBuilder, WarehouseSpecBuilder, generated_path,
-    store_generated,
+    DEFAULT_GENERATED_DIR, SpecBuilder, WarehouseSpecBuilder, cache_key,
+    generated_path, store_generated,
 )
 from biflow.utils.io import load_json
 
@@ -101,6 +102,7 @@ def create_app(
         reference=reference, reports=reports, history_dir=history,
     )
     persist = generated_root if spec_builder is None else None
+    catalog_path = getattr(builder, "catalog_path", DEFAULT_CATALOG)
 
     app = FastAPI(
         title="Finova Dashboard API",
@@ -176,7 +178,7 @@ def create_app(
             if hit is not None and hit.get("_stamp") == stamp:
                 return hit["payload"]
         cached_file = (
-            generated_path(generated_root, iso3, year, stamp)
+            generated_path(generated_root, iso3, year, cache_key(warehouse, catalog_path))
             if persist is not None else None
         )
         if cached_file is not None and cached_file.is_file():
