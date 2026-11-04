@@ -1,11 +1,13 @@
 """KPI calculations use temporary databases only; no production writes or network."""
 from dataclasses import FrozenInstanceError
 import hashlib
+import os
 import json
 
 import duckdb
 import pytest
 import yaml
+from pathlib import Path
 
 from biflow.tools.kpi import CatalogError, KpiCalculator, load_catalog
 
@@ -675,3 +677,30 @@ def test_pct_gdp_plausibility_flag_reviews_only_the_flagged_row(provenance_files
     for other in ("deposits_pct_gdp", "branch_density", "atm_density"):  # aucune revue par association
         result = calc.calculate("TUN", 2024, other)
         assert not result.quality_warnings and not result.requires_review, other
+
+
+# --------------------------------------------------------------- S7 : chemins de lineage
+@pytest.mark.parametrize("outside", [
+    lambda root: str(root.parent / "ailleurs" / "source.csv"),            # hors du projet
+    lambda root: str(root / ".." / "ailleurs" / "source.csv"),            # remontee ..
+    lambda root: "C:/Windows/win.ini" if os.name == "nt" else "/etc/passwd",
+])
+def test_lineage_paths_outside_the_project_are_never_read(warehouse, provenance_files, monkeypatch, outside):
+    from biflow import config
+    from biflow.tools import kpi_provenance
+
+    monkeypatch.setenv("BIFLOW_ALLOWED_ROOTS", str(warehouse.parent))  # racine des fixtures uniquement
+    read = []
+    original = kpi_provenance.cached_sha256_file
+    monkeypatch.setattr(kpi_provenance, "cached_sha256_file", lambda p: read.append(Path(p)) or original(p))
+    lineage, _, calculator = provenance_files
+    target = outside(config.ROOT)
+    for source in lineage["inputs"].values():
+        source["path"] = target
+    lineage["outputs"]["warehouse"] = target
+    p = calculator().calculate("TUN", 2024, "account_ownership").provenance
+    assert "raw_source_path_outside_project" in p.issues and "lineage_warehouse_path_invalid" in p.issues
+    assert p.observed_raw_sha256 is None
+    assert all(Path(item).resolve() != Path(config.resolve(target)).resolve() for item in read)
+    with pytest.raises(config.PathOutsideProject, match="hors du projet"):
+        config.within_project(target)

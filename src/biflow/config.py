@@ -26,6 +26,25 @@ def resolve(path: str | Path) -> Path:
     return p if p.is_absolute() else ROOT / p
 
 
+class PathOutsideProject(ValueError):
+    """Chemin lu depuis un artefact (lineage) hors des racines autorisees (S7)."""
+
+
+def allowed_roots() -> list[Path]:
+    """Racine du projet, plus les racines de BIFLOW_ALLOWED_ROOTS (tests : dossier temporaire)."""
+    extra = [Path(item) for item in os.getenv("BIFLOW_ALLOWED_ROOTS", "").split(os.pathsep) if item.strip()]
+    return [ROOT.resolve(), *(root.resolve() for root in extra)]
+
+
+def within_project(path: str | Path) -> Path:
+    """Chemin resolu s'il reste sous une racine autorisee ; sinon PathOutsideProject
+    (le fichier n'est alors ni lu ni empreinte)."""
+    target = resolve(path).resolve()
+    if not any(target == root or root in target.parents for root in allowed_roots()):
+        raise PathOutsideProject(f"Chemin hors du projet refusé : {path}")
+    return target
+
+
 def load_config(path: str | Path | None = None) -> dict[str, Any]:
     """Charge config/config.yaml (ou le chemin fourni)."""
     cfg_path = resolve(path or os.getenv("BIFLOW_CONFIG", "config/config.yaml"))

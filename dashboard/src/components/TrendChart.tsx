@@ -3,6 +3,7 @@ import { useECharts } from "../useECharts";
 import type { EChartsOption } from "../useECharts";
 import type { DashboardData } from "../types";
 import { formatValue, reasonLabel, statusLabel } from "../format";
+import { escapeHtml } from "../escape";
 
 interface Props {
   data: DashboardData;
@@ -37,7 +38,8 @@ export function TrendChart({ data, kpiId }: Props) {
         trigger: "axis",
         formatter: (params: unknown) => {
           const items = (params as AxisPoint[]) ?? [];
-          const lines = [`<strong>${items[0]?.axisValue ?? ""}</strong>`];
+          // S4 : infobulle HTML, chaque libelle issu des donnees est echappe
+          const lines = [`<strong>${escapeHtml(items[0]?.axisValue)}</strong>`];
           for (const item of items) {
             const source = series.find(
               (candidate) => (names.get(candidate.iso3) ?? candidate.iso3) === item.seriesName,
@@ -47,12 +49,12 @@ export function TrendChart({ data, kpiId }: Props) {
             );
             if (!point || !kpi) continue;
             lines.push(
-              `${item.seriesName} : ${formatValue(point.value, kpi.unit)} — ` +
-                `${statusLabel(point.availability_status)}${
+              `${escapeHtml(item.seriesName)} : ${escapeHtml(formatValue(point.value, kpi.unit))} — ` +
+                `${escapeHtml(statusLabel(point.availability_status))}${
                   point.requires_review ? " — revue requise" : ""
                 }`,
             );
-            if (point.reason) lines.push(`&nbsp;&nbsp;motif : ${reasonLabel(point.reason)}`);
+            if (point.reason) lines.push(`&nbsp;&nbsp;motif : ${escapeHtml(reasonLabel(point.reason))}`);
           }
           return lines.join("<br/>");
         },

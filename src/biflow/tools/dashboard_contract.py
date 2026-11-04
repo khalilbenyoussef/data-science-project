@@ -98,6 +98,60 @@ def build_dashboard_data(
     return validate_dashboard_data(data)
 
 
+def _number(value: Any, where: str, field: str = "value") -> float | None:
+    """Finite number or null (a boolean is never a number)."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{where}: {field} must be a number or null")
+    if not math.isfinite(value):
+        raise ValueError(f"{where}: {field} must be finite or null")
+    return float(value)
+
+
+def _observation(item: Any, where: str, status_key: str = "availability_status") -> None:
+    """Availability and value must agree: available -> number, otherwise null."""
+    if not isinstance(item, dict):
+        raise ValueError(f"{where} must be an object")
+    value = _number(item.get("value"), where)
+    if item.get(status_key) == "available" and value is None:
+        raise ValueError(f"{where}: available observation without a numeric value")
+    if item.get(status_key) != "available" and value is not None:
+        raise ValueError(f"{where}: unavailable observation must keep a null value")
+
+
+def _nested(data: dict[str, Any]) -> None:
+    """S5 : series, rankings, comparisons and table checked value by value."""
+    for index, row in enumerate(data["table"]):
+        _observation(row, f"table[{index}]")
+    for index, series in enumerate(data["series"]):
+        if not isinstance(series, dict) or not isinstance(series.get("points"), list):
+            raise ValueError(f"series[{index}] must be an object with a points list")
+        for position, point in enumerate(series["points"]):
+            _observation(point, f"series[{index}].points[{position}]")
+    for index, ranking in enumerate(data["rankings"]):
+        if not isinstance(ranking, dict) or not isinstance(ranking.get("rows"), list):
+            raise ValueError(f"rankings[{index}] must be an object with a rows list")
+        for position, row in enumerate(ranking["rows"]):
+            where = f"rankings[{index}].rows[{position}]"
+            _observation(row, where)
+            rank = row.get("rank")
+            if rank is not None and (isinstance(rank, bool) or not isinstance(rank, int)):
+                raise ValueError(f"{where}: rank must be an integer or null")
+    for index, comparison in enumerate(data["comparisons"]):
+        if not isinstance(comparison, dict) or not isinstance(comparison.get("rows"), list):
+            raise ValueError(f"comparisons[{index}] must be an object with a rows list")
+        for position, row in enumerate(comparison["rows"]):
+            where = f"comparisons[{index}].rows[{position}]"
+            if not isinstance(row, dict):
+                raise ValueError(f"{where} must be an object")
+            values = [_number(row.get(key), where, key) for key in ("value", "reference_value", "difference")]
+            if row.get("comparison_status") == "complete" and None in values:
+                raise ValueError(f"{where}: complete comparison without value, reference and difference")
+            if row.get("comparison_status") != "complete" and values[2] is not None:
+                raise ValueError(f"{where}: incomplete comparison must keep a null difference")
+
+
 def validate_dashboard_data(data: Any) -> dict[str, Any]:
     """Fail fast on a contract violation; never repair or coerce values."""
     if not isinstance(data, dict):
@@ -111,18 +165,11 @@ def validate_dashboard_data(data: Any) -> dict[str, Any]:
     for card in data["cards"]:
         if not isinstance(card, dict):
             raise ValueError("dashboard card must be an object")
-        if card.get("availability_status") == "available" and not isinstance(
-            card.get("value"), (int, float)
-        ):
-            raise ValueError("available card without a numeric value")
-        value = card.get("value")
-        if value is not None and not math.isfinite(value):
-            raise ValueError("dashboard value must be finite or null")
-        if card.get("availability_status") != "available" and value is not None:
-            raise ValueError("unavailable card must keep a null value")
+        _observation(card, f"card {card.get('evidence_id')}")
         evidence.append(card["evidence_id"])
     if len(evidence) != len(set(evidence)):
         raise ValueError("duplicate evidence_id in dashboard cards")
+    _nested(data)
     return data
 
 

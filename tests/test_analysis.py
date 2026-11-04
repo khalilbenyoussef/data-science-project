@@ -258,13 +258,24 @@ def test_audited_publication_status_comes_from_kpi_values(warehouse, provenance_
 
 def test_provenance_discloses_recorded_path_mismatch(warehouse, provenance_files):
     lineage, _, write = provenance_files
-    lineage["outputs"]["warehouse"] = "C:/elsewhere/warehouse.duckdb"
+    other = str(warehouse.with_name("autre_warehouse.duckdb"))  # sous une racine autorisee
+    lineage["outputs"]["warehouse"] = other
     write()
     dataset = service_for(warehouse).build(
         request(iso3=("TUN",), kpi_ids=("account_ownership",)))
     provenance = dataset["provenance"]
-    assert provenance["recorded_warehouse_path"] == "C:/elsewhere/warehouse.duckdb"
+    assert provenance["recorded_warehouse_path"] == other
     assert "lineage_warehouse_path_mismatch" in provenance["issues"]
+    assert dataset["publication_status"] == "not_evaluated"
+
+
+def test_provenance_rejects_a_recorded_path_outside_the_project(warehouse, provenance_files):
+    lineage, _, write = provenance_files
+    lineage["outputs"]["warehouse"] = "C:/elsewhere/warehouse.duckdb"  # S7 : hors des racines
+    write()
+    dataset = service_for(warehouse).build(
+        request(iso3=("TUN",), kpi_ids=("account_ownership",)))
+    assert "lineage_warehouse_path_invalid" in dataset["provenance"]["issues"]
     assert dataset["publication_status"] == "not_evaluated"
 
 

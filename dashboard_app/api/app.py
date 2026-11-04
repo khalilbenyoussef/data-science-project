@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 import duckdb
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -36,6 +36,26 @@ from biflow.tools.spec_cache import (
     generated_path, store_generated,
 )
 from biflow.utils.io import load_json
+
+
+# S8 : politique de securite du contenu stricte. Le front ne charge que ses propres
+# fichiers, la police Inter (Google Fonts), une icone SVG en data: et la video locale
+# de la page de connexion ; aucun script ni style en ligne.
+CONTENT_SECURITY_POLICY = "; ".join((
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data:",
+    "media-src 'self'",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+))
+# Pages de documentation FastAPI (developpement) : scripts et styles du CDN Swagger/ReDoc
+CSP_EXEMPT = ("/docs", "/redoc")
 
 
 def _current_year(payload: Mapping[str, Any]) -> int:
@@ -118,6 +138,14 @@ def create_app(
         version="1.0.0",
         description="Contrat Route 2 en lecture seule, réponses chiffrées vérifiées.",
     )
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        if not request.url.path.startswith(CSP_EXEMPT):
+            response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        return response
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[

@@ -3,6 +3,7 @@ import { useECharts } from "../useECharts";
 import type { EChartsOption } from "../useECharts";
 import type { DashboardData } from "../types";
 import { formatValue, reasonLabel, statusLabel } from "../format";
+import { escapeHtml } from "../escape";
 
 interface Props {
   data: DashboardData;
@@ -34,12 +35,13 @@ export function BarComparison({ data, kpiId }: Props) {
           const { dataIndex } = params as { dataIndex: number };
           const row = rows[dataIndex];
           if (!row) return "";
+          // S4 : infobulle HTML, chaque libelle issu des donnees est echappe
           return [
-            `<strong>${names.get(row.iso3) ?? row.iso3}</strong>`,
-            formatValue(row.value, row.unit),
-            `Rang ${row.rank ?? "—"} — ${statusLabel(row.availability_status)}`,
+            `<strong>${escapeHtml(names.get(row.iso3) ?? row.iso3)}</strong>`,
+            escapeHtml(formatValue(row.value, row.unit)),
+            `Rang ${escapeHtml(row.rank ?? "—")} — ${escapeHtml(statusLabel(row.availability_status))}`,
             row.requires_review ? "Revue requise" : "",
-            row.reason ? `Motif : ${reasonLabel(row.reason)}` : "",
+            row.reason ? `Motif : ${escapeHtml(reasonLabel(row.reason))}` : "",
           ]
             .filter(Boolean)
             .join("<br/>");

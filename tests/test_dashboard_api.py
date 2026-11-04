@@ -192,3 +192,16 @@ def test_runs_lists_reports(client, tmp_path: Path):
     runs = response.json()["runs"]
     assert runs[0]["run_id"] == "route2_test"
     assert runs[0]["spec"] is True
+
+
+def test_strict_content_security_policy_on_api_and_ui(client):
+    from dashboard_app.api.app import CONTENT_SECURITY_POLICY
+
+    for path in ("/api/spec", "/api/health", "/"):
+        response = client.get(path)
+        csp = response.headers.get("Content-Security-Policy")
+        assert csp == CONTENT_SECURITY_POLICY, path
+        assert response.headers.get("X-Content-Type-Options") == "nosniff"
+    assert "'unsafe-inline'" not in CONTENT_SECURITY_POLICY and "'unsafe-eval'" not in CONTENT_SECURITY_POLICY
+    assert "default-src 'self'" in CONTENT_SECURITY_POLICY and "frame-ancestors 'none'" in CONTENT_SECURITY_POLICY
+    assert "Content-Security-Policy" not in client.get("/docs").headers  # documentation de developpement

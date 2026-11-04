@@ -10,7 +10,7 @@ import re
 
 import duckdb
 
-from biflow.config import load_config, resolve
+from biflow.config import PathOutsideProject, load_config, resolve, within_project
 from biflow.utils.countries import normalize_iso3
 from biflow.utils.io import cached_sha256_file, file_stat
 
@@ -156,7 +156,10 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
     observed_raw_hash = None
     if raw_path:
         try:
-            observed_raw_hash = cached_sha256_file(resolve(raw_path))
+            # S7 : un chemin de lineage hors du projet n'est jamais lu ni empreinte
+            observed_raw_hash = cached_sha256_file(within_project(raw_path))
+        except PathOutsideProject:
+            issues.append("raw_source_path_outside_project")
         except (OSError, ValueError):
             issues.append("raw_source_unavailable")
         if raw_hash and observed_raw_hash and raw_hash != observed_raw_hash:
@@ -167,9 +170,9 @@ def evidence(warehouse: Path, lineage_path: Path, quality_path: Path, *,
         issues.append("lineage_warehouse_path_missing")
     else:
         try:
-            if resolve(recorded_warehouse).resolve() != warehouse:
+            if within_project(recorded_warehouse) != warehouse:
                 issues.append("lineage_warehouse_path_mismatch")
-        except (OSError, ValueError):
+        except (OSError, ValueError):  # PathOutsideProject compris
             issues.append("lineage_warehouse_path_invalid")
     warehouse_hash = cached_sha256_file(warehouse)
     outputs = outputs if isinstance(outputs, dict) else {}

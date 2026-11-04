@@ -18,6 +18,61 @@ function fail(message: string): never {
   throw new Error(message);
 }
 
+function isNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+// Nombre fini ou null ; jamais de chaine, de booleen ni d'infini.
+function checkNumber(value: unknown, where: string, field = "value"): number | null {
+  if (value === null || value === undefined) return null;
+  if (!isNumber(value)) fail(`${where} : ${field} doit être un nombre fini ou null.`);
+  return value;
+}
+
+// Disponibilité et valeur cohérentes : disponible -> nombre, sinon null.
+function checkObservation(item: unknown, where: string): void {
+  if (!isRecord(item)) fail(`${where} : objet attendu.`);
+  const value = checkNumber(item.value, where);
+  if (item.availability_status === "available" && value === null) {
+    fail(`${where} : valeur disponible non numérique.`);
+  }
+  if (item.availability_status !== "available" && item.value !== null && item.value !== undefined) {
+    fail(`${where} : valeur non nulle pour une observation indisponible.`);
+  }
+}
+
+// S5 : séries, classements, comparaisons et table vérifiés valeur par valeur.
+function checkNested(raw: Record<string, unknown>): void {
+  (raw.table as unknown[]).forEach((row, index) => checkObservation(row, `table[${index}]`));
+  (raw.series as unknown[]).forEach((series, index) => {
+    if (!isRecord(series) || !Array.isArray(series.points)) fail(`series[${index}] : points requis.`);
+    series.points.forEach((point, position) => checkObservation(point, `series[${index}].points[${position}]`));
+  });
+  (raw.rankings as unknown[]).forEach((ranking, index) => {
+    if (!isRecord(ranking) || !Array.isArray(ranking.rows)) fail(`rankings[${index}] : rows requis.`);
+    ranking.rows.forEach((row, position) => {
+      const where = `rankings[${index}].rows[${position}]`;
+      checkObservation(row, where);
+      const rank = (row as Record<string, unknown>).rank;
+      if (rank !== null && rank !== undefined && !Number.isInteger(rank)) fail(`${where} : rang entier attendu.`);
+    });
+  });
+  (raw.comparisons as unknown[]).forEach((comparison, index) => {
+    if (!isRecord(comparison) || !Array.isArray(comparison.rows)) fail(`comparisons[${index}] : rows requis.`);
+    comparison.rows.forEach((row, position) => {
+      const where = `comparisons[${index}].rows[${position}]`;
+      if (!isRecord(row)) fail(`${where} : objet attendu.`);
+      const values = (["value", "reference_value", "difference"] as const).map((key) => checkNumber(row[key], where, key));
+      if (row.comparison_status === "complete" && values.includes(null)) {
+        fail(`${where} : comparaison complète sans valeur, référence et écart.`);
+      }
+      if (row.comparison_status !== "complete" && values[2] !== null) {
+        fail(`${where} : comparaison incomplète avec un écart non nul.`);
+      }
+    });
+  });
+}
+
 /**
  * Fail closed on a contract violation. The React app must never repair,
  * coerce or zero-fill a value: a missing observation stays null.
@@ -65,5 +120,6 @@ export function validateDashboardData(raw: unknown): DashboardData {
       fail(`Valeur non nulle pour une observation indisponible : ${card.evidence_id}.`);
     }
   }
+  checkNested(raw);
   return raw as unknown as DashboardData;
 }

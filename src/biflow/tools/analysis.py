@@ -14,7 +14,7 @@ from typing import Any, Literal
 import duckdb
 from pydantic import Field, StrictBool, StrictInt, StrictStr, field_validator, model_validator
 
-from biflow.config import resolve
+from biflow.config import resolve, within_project
 from biflow.tools.kpi import CONTRACTS, DEFAULT_CATALOG, KpiResult
 from biflow.tools.semantic_kpi import (
     CalculateKpiRequest, CompareCountriesRequest, Contract, LatestAvailableKpiRequest,
@@ -35,6 +35,10 @@ ISSUE_MESSAGES = {
     "raw_source_unavailable": (
         "La source brute enregistrée dans la lineage est inaccessible : aucune "
         "vérification d'empreinte n'a pu être effectuée."
+    ),
+    "raw_source_path_outside_project": (
+        "Le chemin de la source brute enregistré dans la lineage est hors du projet : "
+        "il n'est ni lu ni empreinté."
     ),
     "raw_source_hash_mismatch": (
         "L'empreinte de la source brute diffère de celle enregistrée dans la lineage."
@@ -881,8 +885,8 @@ class AnalysisService:
             raw_path = _text(meta.get("path"))
             observed = None
             if raw_path is not None:
-                try:
-                    observed = sha256_file(resolve(raw_path))
+                try:  # S7 : jamais de lecture hors du projet
+                    observed = sha256_file(within_project(raw_path))
                 except (OSError, ValueError):
                     observed = None
             recorded = _text(meta.get("sha256"))

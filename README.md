@@ -768,6 +768,31 @@ par injection de fautes n'est jamais lancée par l'API : elle est lue dans
 `data/audit/evaluation.json` (`python scripts/evaluate_auditor.py`), avec sa date ;
 si elle est antérieure au dernier audit, la page l'indique.
 
+### Installation reproductible (dépendances verrouillées)
+
+`requirements.txt` reste la liste lisible des dépendances. `requirements.lock`
+fixe chaque paquet (dépendances transitives comprises) avec ses empreintes
+SHA-256 : pip refuse tout fichier dont l'empreinte diffère.
+
+```powershell
+python -m pip install --require-hashes -r requirements.lock
+```
+
+Le verrou a été généré **sous Windows avec Python 3.10**, aux versions
+installées et testées. Sur un autre système ou une autre version de Python,
+le régénérer avec la même commande (outil `uv`, voir `requirements-dev.txt`) en
+adaptant `--python-platform` / `--python-version` :
+
+```powershell
+python -m uv pip compile requirements.txt --generate-hashes --python-version 3.10 --python-platform windows -o requirements.lock
+```
+
+Sécurité de l'interface : l'API envoie une politique `Content-Security-Policy`
+stricte (`default-src 'self'`, aucun script ni style en ligne ; seules exceptions :
+la police Inter de Google Fonts et une icône SVG en `data:`). Le cache LLM est
+stocké en JSON (`outputs/llm_cache/*.json`) ; les anciens fichiers `.pkl` ne sont
+jamais relus. Les chemins lus dans `lineage.json` doivent rester dans le projet.
+
 ### 4. Tests
 
 ```powershell

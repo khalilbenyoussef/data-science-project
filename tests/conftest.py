@@ -10,5 +10,7 @@ import tempfile
 _EMPTY = Path(tempfile.gettempdir()) / "biflow_tests_no_user_sources"
 os.environ["BIFLOW_SOURCES_DIR"] = str(_EMPTY / "sources")
 os.environ["BIFLOW_USER_CATALOG"] = str(_EMPTY / "kpi_catalog.user.yaml")
+# S7 : les artefacts des tests (lineage, sources) vivent dans le dossier temporaire
+os.environ["BIFLOW_ALLOWED_ROOTS"] = tempfile.gettempdir()
 for _key in ("GROQ_API_KEY", "GOOGLE_API_KEY"):
     os.environ[_key] = ""
