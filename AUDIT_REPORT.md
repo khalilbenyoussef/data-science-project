@@ -1,213 +1,181 @@
-# Rapport d'audit — BIFlow Route 1 + Route 2
+# Rapport d'audit — BIFlow (Route 1, Route 2, FinOVA, « Mes données »)
 
-- **Date** : 2026-10-26
-- **Périmètre** : code Python, configuration, données traitées, agents Route 2, dashboard React, tests
-- **Méthode** : revue statique ciblée, exécution réelle sur `data/`, suite de tests complète, validation navigateur desktop/mobile, inspection des artefacts de provenance
-- **Verdict global** : **Route 2 conforme au cadrage et utilisable**, avec des réserves de gouvernance des données et quelques points de sécurité/reproductibilité à traiter avant toute publication. Aucun secret exposé, aucune vulnérabilité critique détectée.
+- **Date** : 2026-11-04 (mesures prises entre 12 h 57 et 13 h 15)
+- **Version auditée** : branche `el-final`, commit `dee7f1f` (+ commit de ce rapport)
+- **Périmètre** : pipeline Route 1 (collecte → audit), Route 2 (analyse, spec FinOVA, constats), API et
+  interface FinOVA (9 pages dont « Mes données » et « Audit et confiance »), Ask Finova, dashboard
+  historique `dashboard/`, dépendances.
+- **Méthode** : reconstruction réelle du pipeline, Route 2 et audit des constats, évaluation de
+  l'Auditor par injection de fautes, sondes de sécurité, suite de tests complète, `npm audit`,
+  vérification navigateur (Playwright). Tous les nombres ci-dessous proviennent des commandes
+  listées en annexe, exécutées pendant cette session ; aucun chiffre n'est repris de l'ancien rapport.
+- **Verdict global** : **conforme et publiable en local**. Audit des données `pass_with_warnings`
+  (17 réussis, 2 avertissements, 0 échec), 0 valeur bloquée, 15/15 constats acceptés, 9/9 fautes
+  injectées détectées. Les 9 constats de sécurité de l'audit précédent sont corrigés. Un nouveau
+  constat modéré (ECharts du dashboard historique) reste ouvert.
 
 ---
 
-## 1. Synthèse exécutive
+## 1. Synthèse
 
-La Route 2 demandée (warehouse → Semantic & KPI → BI Analyst → Dashboard) est livrée et fonctionne sur les données réelles :
-
-| Indicateur de run (`route2_final`) | Valeur |
+| Indicateur | Valeur |
 |---|---|
-| Statut | `success` |
-| Observations | 18 / 18 disponibles |
-| Observations en revue | 18 |
-| Constats | 50 (12 revue, 0 alerte, 38 info) |
-| Publication | `not_evaluated` (non approuvée) |
-| Erreurs | 0 |
-
-- **BI Analyst** : 100 % déterministe, aucun LLM, constats rattachés à des preuves (`EV-…`, `TR-…`, `CMP-…`).
-- **Dashboard** : React 18 + Vite 5 + ECharts 5, contrat JSON validé, aucun calcul de valeur côté front.
-- **Route 1** : aucun agent modifié ; seules des extensions additives ont été faites (`state.py`, exports, sous-commandes CLI, sections de configuration).
-- **Absence de données** : jamais remplacée par zéro, jamais interpolée ; statut `unavailable` et motif conservés.
-- **Tests** : 70 nouveaux tests Route 2 ; suite complète **575 réussis, 1 échec environnemental** (`langchain_google_genai` absent de l'environnement, sans lien avec la Route 2).
-
-**Réserves principales** : chaîne de provenance incomplète (lineage non portable, warehouse non empreinté, rapport qualité non rattaché), absence de dépôt Git, dépendances Python non verrouillées, cache LLM en pickle.
+| Run audité | `part_d_audit_report` (snapshot `v5`, catalogue 1.7.0) |
+| Lignes KPI auditées (`kpi_values`) | 1 620 |
+| Verdict d'audit | `pass_with_warnings` — 17 réussis, 2 avertissements, 0 échec |
+| Publication | 1 509 approuvées, 111 approuvées avec réserve, 0 bloquée |
+| Constats (Route 2) | 15 audités, 15 acceptés, 0 rejeté, 2 non auditables |
+| Injection de fautes | 9 / 9 détectées |
+| Tests | 1 248 réussis, 0 échec |
+| Constats de sécurité S1–S9 | 9 corrigés, 0 ouvert |
+| Nouveaux constats | 1 modéré ouvert (N1), 3 informatifs |
 
 ---
 
-## 2. Périmètre et éléments examinés
+## 2. Périmètre examiné
 
 | Élément | Volume / état |
 |---|---|
-| Code Python | 47 fichiers, ≈ 6 340 lignes dans `src/` |
-| Tests Python | ≈ 3 682 lignes, 576 cas |
-| Front | 12 fichiers TypeScript/TSX + CSS, build Vite |
-| Warehouse | 79 251 faits, 3 592 lignes pays-année, 268 pays, 106 indicateurs |
-| Sources brutes | `findex.csv` (2,6 Mo), `fas.csv` (129 Mo), `gdp.csv` (1,0 Mo) |
-| Artefacts Route 2 | `analysis_dataset.json` 98 Ko, `bi_analyst.md` 21 Ko, `dashboard_data.json` 112 Ko |
-
-Hors périmètre : audit d'intrusion externe, certification des définitions Findex/FAS, exécution des providers LLM (aucune clé fournie), audit de l'hébergement.
+| Code Python (`src/`) | 53 fichiers suivis, 17 130 lignes |
+| Tests Python | 53 fichiers `tests/test_*.py`, 1 248 cas |
+| Front FinOVA (`dashboard_app/web/src`) | 12 fichiers, build Vite réussi |
+| Warehouse | 90 732 faits (Findex 64 328, FAS 15 753, PIB 10 651), 219 pays, 0 fait utilisateur |
+| Dépendances Python | 81 paquets verrouillés, 1 594 empreintes SHA-256 (`requirements.lock`) |
 
 ---
 
-## 3. Conformité aux exigences
+## 3. Audit des données (run `part_d_audit_report`)
 
-| Exigence | Statut | Preuve |
+Reconstruction `python main.py run --rebuild --no-llm` sur les blobs du snapshot publié `v5`
+(Findex `35f3fa934adf…`, FAS `f60b4d1b3de6…`, PIB `b746f41a1c59…`), durée 18,6 s.
+
+| Contrôle | Résultat | Lignes concernées |
 |---|---|---|
-| Ne pas modifier la logique des autres agents | **Conforme** | Agents Route 1 inchangés ; tests d'isolation ; `STEP_ORDER` et `AGENT_CLASSES` inchangés |
-| Implémenter BI Analyst + Dashboard selon l'architecture | **Conforme** | `bi_analyst.py`, `dashboard.py`, `analysis_graph.py`, `tools/analysis.py`, `tools/dashboard_contract.py` |
-| Narration déterministe, sans LLM | **Conforme** | `get_llm()` neutralisé, `cfg.llm.enabled=False` forcé, `build_agent_llm` interdit dans les tests |
-| Aucune valeur inventée | **Conforme** | `value=None` + `availability_status="unavailable"` + motif ; pas d'interpolation |
-| Comparaisons = droite − gauche | **Conforme** | `difference_formula="right.value - left.value"`, `percentage_points` pour les pourcentages |
-| Revue et publication préservées | **Conforme** | `publication_status="not_evaluated"`, `requires_review`, badges et notices |
-| Front React + ECharts + Vite + JSON | **Conforme** | `dashboard/`, contrat `1.0`, export `dashboard/public/data/dashboard.json` |
-| Arborescence et démarche du projet | **Conforme** | Agents dans `src/biflow/agents`, outils dans `src/biflow/tools`, CLI `main.py`, config `config.yaml`, tests `tests/`, rapports `outputs/reports/` |
-| Validation sur `data/` | **Conforme** | Run `route2_final` sur `TUN, MAR, DZA` |
+| A1 à A6 (recalcul, nullité, pairs, complétude, brut → fait, sources utilisateur) | réussis | 0 |
+| B1 à B9 (unités, bornes, entités, pairs, identifiants, empreintes, contenu, catalogue, qualité) | réussis | 0 |
+| C1 vague d'enquête partielle | réussi | 0 |
+| C2 moyenne des pairs incomplète | **avertissement** | 84 |
+| C3 constats qualité sur une entrée | réussi | 0 |
+| C4 variation dans le bruit d'enquête | **avertissement** | 101 |
 
----
+Publication : 1 509 approuvées, 111 approuvées avec réserve, 0 bloquée. Motifs des réserves :
+`partial_peer_coverage` 84, `no_peer_observation` 27. Les deux avertissements sont des réserves de
+lecture (couverture des pairs, bruit d'enquête), pas des erreurs de calcul.
 
-## 4. Architecture livrée
+Catalogue 1.7.0 : seule nouveauté, un libellé français `name_fr` pour les 44 KPI. Après
+reconstruction, les valeurs `kpi_values` (KPI, pays, année, valeur, statut), les faits officiels, le
+verdict et les 17 textes de constats sont identiques à ceux du catalogue 1.6.0.
 
-```
-Warehouse DuckDB (lecture seule)
-        │  SemanticKpiTools (6 KPI, 6 actions)
-        ▼
-AnalysisService ──► analysis_dataset.json
-        │
-        ├──► BiAnalystAgent ──► bi_analyst.{json,md} (constats + preuves)
-        │
-        └──► DashboardAgent ──► dashboard_data.json
-                                   └──► dashboard/public/data/dashboard.json
-                                              └──► React / ECharts
-```
+## 4. Audit des constats (Route 2)
 
-Contrôles structurants :
-
-- contrats Pydantic stricts (`AnalysisRequest`, réponses KPI) ;
-- validation du contrat dashboard **fail-closed** : nombre fini, cohérence disponibilité/valeur, identifiants de preuve uniques ;
-- écritures JSON atomiques (temporaire + remplacement) ;
-- DuckDB ouvert en `read_only=True`, requêtes paramétrées ;
-- orchestration LangGraph **et** repli séquentiel testés à parité.
-
----
-
-## 5. Sécurité
-
-### Points positifs vérifiés
-
-- **Aucun secret en dur** dans le code, la configuration ou les logs ; `.env` absent, `.env.example` neutre.
-- **Aucun** `eval`, `exec`, `shell=True`, `os.system`, `yaml.load` non sûr, `verify=False`.
-- **Injection SQL** : requêtes KPI paramétrées ; aucune concaténation de valeurs dans le SQL.
-- **Front** : aucun `dangerouslySetInnerHTML`, aucun `innerHTML`, aucun lien externe ; React échappe les textes.
-- **Réseau** : seul le Collector appelle l'API World Bank (HTTPS, certificats par défaut) ; la Route 2 n'a aucun chemin réseau.
-- **Écritures** : validation avant export, temporaires et repli d'écriture en cas de verrou Windows.
-
-### Constats
-
-| # | Sévérité | Constat | Impact | Recommandation |
+| Vue | Audités | Acceptés | Rejetés | Non auditables |
 |---|---|---|---|---|
-| S1 | **Moyenne** | Cache LLM désérialisé avec `pickle.load` (`src/biflow/llm.py:121`) | Un fichier `.pkl` altéré dans `outputs/llm_cache` peut exécuter du code au prochain run | Remplacer par un format de données (JSON/MessagePack) ou signer les entrées (HMAC) et restreindre les permissions du dossier |
-| S2 | **Moyenne** | Dépendances Python non verrouillées (`>=` uniquement, pas de lock/hashes) | Builds non reproductibles, dérive de versions, surface supply-chain | Générer un lock (`uv`/`pip-compile`) avec hashes ; conserver `package-lock.json` côté front |
-| S3 | **Moyenne** | Aucun dépôt Git dans le projet | Pas d'historique, de revue de diff ni de retour arrière fiable | Initialiser Git, protéger la branche principale, signer les releases |
-| S4 | **Faible** | Tooltips ECharts construits en HTML avec des libellés issus des données (`BarComparison.tsx:38`, `TrendChart.tsx:40`) | Un nom de pays HTML malveillant dans le warehouse pourrait injecter du balisage dans l'infobulle | Échapper les libellés ou utiliser `renderMode: "richText"` |
-| S5 | **Faible** | Validation du contrat limitée aux cartes ; les tableaux `series`, `rankings`, `comparisons`, `table` ne sont pas vérifiés valeur par valeur | Un JSON altéré peut atteindre les graphiques avec des types inattendus | Étendre `validate_dashboard_data` et `validate.ts` aux valeurs imbriquées |
-| S6 | **Faible** | Export CSV sans neutralisation des préfixes de formule (`=`, `+`, `-`, `@`) | Risque d'injection de formule à l'ouverture dans Excel | Préfixer d'une apostrophe les cellules texte commençant par ces caractères |
-| S7 | **Faible** | Chemins de provenance lus depuis `lineage.json` et empreintés sans restriction de racine | Un lineage altéré peut faire lire/hacher un fichier arbitraire accessible au processus | Restreindre les chemins à la racine projet ou à un allowlist |
-| S8 | **Info** | Pas de Content-Security-Policy sur le dashboard | Défense en profondeur limitée si le front est exposé au-delà de localhost | Ajouter une CSP stricte au déploiement |
-| S9 | **Info** | `docs/` est ignoré par `.gitignore` | La documentation de handoff n'est pas versionnée | Versionner `docs/` ou documenter explicitement son exclusion |
+| Vue publiée (Tunisie 2024, run `route2_20261104T125802503588`) | 15 | 15 | 0 | 2 (`poverty:INS-poverty-smig`, `poverty:INS-poverty-rate`) |
+| Vue générée Algérie 2012 (année sans enquête) | 9 | 9 | 0 | 0 |
 
-Aucun constat **critique** ou **élevé** de sécurité.
+Les deux constats non auditables citent des références statiques (SMIG, pauvreté INS) qui ne sont pas
+des KPI du catalogue. Pour Algérie 2012, les années citées sont 2011 (vague Findex lue) et 2012
+(indicateurs FAS), jamais une année postérieure.
 
----
+## 5. Évaluation de l'Auditor par injection de fautes
 
-## 6. Gouvernance des données et provenance
+`python scripts/evaluate_auditor.py --out data/audit` (copie isolée des données, 48,9 s),
+évaluation datée du 2026-11-04 12:59:47, run de référence `part_d_audit_report` ; référence sans
+faute : `pass_with_warnings` (17 / 2 / 0).
 
-### Constats factuels
-
-1. **Lineage non portable** : `data/processed/lineage.json` référence des chemins absolus d'une autre machine (`C:\Mohamed ali Jabri\…`). Le run enregistré est `p5_audit_check` du 2026-10-22.
-2. **Sources brutes** : les chemins enregistrés sont inaccessibles ici, d'où `raw_source_unavailable`. **Cependant**, les empreintes locales correspondent aux empreintes enregistrées :
-
-   | Source | SHA-256 enregistré | SHA-256 local | Correspondance |
-   |---|---|---|---|
-   | findex | `35f3fa934adf…` | `35f3fa934adf…` | oui |
-   | fas | `f60b4d1b3de6…` | `f60b4d1b3de6…` | oui |
-   | gdp | `bc388c7bb5d8…` | `bc388c7bb5d8…` | oui |
-
-3. **Liaison de contenu non vérifiée** : le lineage ne contient pas d'empreinte du warehouse. Le SHA-256 observé localement est `fa461c098b68…`.
-4. **Rapport qualité non rattaché** : `quality_report.json` n'a ni `run_id` ni `inputs` ; il ne contient pas la clé `diagnostics`. Le score `0,9282` et le gate `PASS` ne peuvent donc pas être reliés au run de lineage.
-
-### Conséquence
-
-La Route 2 applique correctement le principe **fail-closed** : les 18 observations sont marquées « revue requise » et la publication reste `not_evaluated`. Il ne s'agit pas d'une corruption des valeurs, mais d'une **chaîne de preuve incomplète**.
-
-### Recommandations (propriétaire Route 1)
-
-- écrire des chemins **relatifs/portables** dans `lineage.json` ;
-- ajouter `warehouse_sha256` aux sorties du lineage ;
-- ajouter `run_id`, `inputs` et `diagnostics` (même vide) au rapport qualité ;
-- régénérer lineage et rapport qualité sur la machine cible ;
-- conserver `not_evaluated` jusqu'à revue humaine et signature des 18 observations.
-
----
-
-## 7. Robustesse et exploitation
-
-| Sujet | Constat |
-|---|---|
-| Verrou fichier Windows | Rencontré pendant la validation : le serveur Vite conservait `dashboard.json` sans partage de suppression. **Corrigé** dans le module Route 2 : 4 tentatives puis repli en écriture sur place, sans échec du run. |
-| Parité d'orchestration | LangGraph et repli séquentiel testés pour chaque étape (`analyst`, `dashboard`, `all`). |
-| Requête invalide | Échoue **avant** tout agent ; aucun fallback vers la Route 1, aucune reprise. |
-| Échec d'agent | Run `failed`, erreur persistée dans `run.json`, pas de dashboard partiel exporté. |
-| Lecture des données | DuckDB `read_only` ; empreinte du warehouse inchangée après les tests. |
-| Front | Build TypeScript strict réussi (675,34 Ko JS / 223,69 Ko gzip ; CSS 12,42 Ko / 3,38 Ko gzip). |
-| UX | Vérifié en 1440 px (6 cartes sur une ligne) et 515 px (1 colonne), sans débordement horizontal. |
-| Accessibilité | `aria-label`, `aria-pressed`, `role="status"`, `role="alert"`, graphiques `role="img"` ; animations réduites respectées. |
-
----
-
-## 8. Tests et validation
-
-### Nouveaux tests (70 cas)
-
-| Fichier | Couverture |
-|---|---|
-| `tests/test_analysis.py` | Contrats de requête, disponibilité, séries, tendances, classements, comparaisons, provenance, lecture seule, sérialisation |
-| `tests/test_bi_analyst.py` | Constats déterministes, preuves, top-N, indisponibilité, absence de LLM, réutilisation du dataset, échec propre |
-| `tests/test_dashboard.py` | Copie des valeurs, validation fail-closed, export atomique + verrou, agent, réutilisation, requête invalide |
-| `tests/test_analysis_graph.py` | Parité LangGraph/séquentiel, étages, isolation Route 1, LLM forcé off, échecs sans reprise, artefacts |
-
-### Suite complète
-
-```text
-1 failed, 575 passed in 207.81s
-FAILED tests/test_llm.py::test_build_agent_llm_skips_wrong_key_format
-```
-
-L'échec est **environnemental** : `langchain_google_genai` n'est pas installé dans `.venv-audit`, donc le test ne peut pas construire le provider Gemini factice. Il est sans lien avec la Route 2 et n'indique pas une régression.
-
-### Validation réelle
-
-- `python main.py dashboard --country TUN,MAR,DZA --mode latest --run-id route2_final` → `success`.
-- Valeurs TUN 2024 : compte 37,84 %, agences 22,37 / 100k adultes, paiement numérique 23,68 %, épargne 48,25 %, emprunt 43,51 %, sans compte 62,16 %.
-- Classement compte 2024 : MAR 44,39 % > TUN 37,84 % > DZA 35,29 %.
-- Aucun zéro de remplissage ; 18 observations en revue avec motifs.
-
----
-
-## 9. Risques résiduels et priorités
-
-| Priorité | Action | Responsable suggéré |
+| Faute injectée | Contrôle attendu | Détectée |
 |---|---|---|
-| **P1** | Compléter le schéma lineage/qualité (chemins portables, hash warehouse, run_id/inputs/diagnostics) | Équipe Route 1 |
-| **P1** | Remplacer/signer le cache pickle | Équipe plateforme |
-| **P1** | Verrouiller les dépendances Python et initialiser Git | Équipe projet |
-| **P2** | Échapper les libellés des tooltips ECharts | Équipe front |
-| **P2** | Étendre la validation aux tableaux imbriqués | Équipe Route 2 |
-| **P2** | Neutraliser les formules dans les exports CSV | Équipe ETL |
-| **P3** | CSP, revue des permissions de `outputs/`, versionnement de `docs/` | Équipe projet |
+| Valeur KPI modifiée (+0,05) | A1 | oui |
+| Mauvaise unité (densité en %) | B1 | oui |
+| Ligne agrégat WLD dans `kpi_values` | B3 | oui |
+| Zéro au lieu de NULL | A2 | oui |
+| `snapshot_id` incohérent | B5 | oui |
+| Empreinte source modifiée | B6 | oui |
+| KPI provisoire dans le catalogue | B8 | oui |
+| Constat citant un mauvais chiffre | F1 | oui |
+| Constat avec un nombre non cité | F1 | oui |
+
+**9 / 9 fautes détectées.** Le résultat est affiché sur la page « Audit et confiance » avec sa date ;
+la page signale un résultat antérieur au dernier audit.
 
 ---
 
-## 10. Verdict
+## 6. Sécurité — statut des constats S1 à S9
 
-- **Route 2 : acceptée techniquement.** Elle respecte l'architecture, le déterminisme, l'absence de LLM, la lecture seule et les règles de non-invention des valeurs.
-- **Publication des données : non approuvée.** Le statut `not_evaluated` est conservé ; 18 observations exigent une revue humaine, et la chaîne de provenance doit être réparée côté Route 1.
-- **Sécurité : aucun risque critique.** Les points S1–S3 doivent être traités avant une mise en production ou un partage large.
-- **Traçabilité du code : insuffisante** tant que le projet n'est pas versionné dans Git.
+| ID | Constat (audit du 2026-10-26) | Statut | Commit | Vérification dans cette session |
+|---|---|---|---|---|
+| S1 | Cache LLM désérialisé avec `pickle.load` | **Corrigé** | `e64e45f` | Aucune occurrence de `pickle` dans `src/` ; cache JSON (`dumpd` / `load` avec liste explicite de classes) ; test : un `.pkl` piégé n'est jamais lu, un JSON pointant vers `os.system` est refusé |
+| S2 | Dépendances non verrouillées | **Corrigé** | `e64e45f` | `requirements.lock` : 81 paquets, 1 594 empreintes ; installation `--require-hashes` testée dans un environnement neuf ; généré sous Windows / Python 3.10 (régénération documentée) |
+| S3 | Aucun dépôt Git | **Corrigé** | `bb4e681` (2026-09-26) | Dépôt Git, 59 commits sur `el-final` au commit `dee7f1f` |
+| S4 | Infobulles ECharts en HTML avec libellés de données | **Corrigé** | `e64e45f` | `escapeHtml` sur chaque libellé ; tests Node (libellé `<img onerror>`) et contrôle source des formateurs |
+| S5 | Validation du contrat limitée aux cartes | **Corrigé** | `e64e45f` | Séries, classements, comparaisons et table vérifiés valeur par valeur (Python et `validate.ts`) ; 19 contrats altérés refusés côté Python (cartes et tableaux imbriqués), 8 tests Node |
+| S6 | Export CSV sans neutralisation des formules | **Corrigé** | `9cf4898` | Cellules texte commençant par `=`, `+`, `-`, `@` préfixées d'une apostrophe (en-têtes et index compris), nombres inchangés |
+| S7 | Chemins de lineage sans restriction de racine | **Corrigé** | `e64e45f` | Chemin hors du projet (ou via `..`) : ni lu ni empreinté, motif `raw_source_path_outside_project` / `lineage_warehouse_path_invalid` |
+| S8 | Pas de Content-Security-Policy | **Corrigé** | `e64e45f` | En-tête `Content-Security-Policy` (`default-src 'self'`, aucun script ni style en ligne) et `X-Content-Type-Options: nosniff` ; navigateur : 0 violation CSP sur la connexion, les 9 pages et le panneau Ask Finova, à 1 440 et 768 px |
+| S9 | `docs/` ignoré par Git | **Corrigé** | `a654c8d` | `.gitignore` n'exclut plus que `docs/sources/` (sources téléchargées) |
 
-Ce rapport ne constitue pas une certification des définitions Findex/FAS ni une approbation de publication.
+## 7. Nouveaux constats
+
+| ID | Sévérité | Constat | Statut / recommandation |
+|---|---|---|---|
+| N1 | **Modérée** | `npm audit` (dashboard historique `dashboard/`) : ECharts < 6.1.0, avis XSS GHSA-fgmj-fm8m-jvvx. Correctif = passage majeur à ECharts 6.1 (rupture). Le front FinOVA n'utilise pas ECharts (`npm audit` : 0 vulnérabilité). | **Ouvert.** Atténué par S4 (libellés échappés). Mettre à jour ECharts ou retirer le dashboard historique s'il n'est plus servi. |
+| N2 | Info | La CSP autorise Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`) : requête tierce à chaque visite. Les pages de développement `/docs` et `/redoc` sont exemptées de CSP (scripts du CDN Swagger). | Héberger la police Inter localement ; désactiver `/docs` hors développement. |
+| N3 | Info | Ask Finova en mode IA envoie la question et les faits officiels du tableau de bord au fournisseur LLM (Groq, puis Gemini). Aucune source utilisateur, aucun chemin ni clé n'est transmis ; budget d'appels par session. | À mentionner aux utilisateurs ; mode sans clé disponible. |
+| N4 | Info | `requirements.lock` est propre à Windows / Python 3.10. | Régénérer par plateforme (commande documentée dans le README). |
+
+## 8. Page « Mes données » (API de dépôt CSV)
+
+| Point | Constat vérifié |
+|---|---|
+| S6 | Corrigé (`9cf4898`) : exports CSV neutralisés ; la copie du dépôt dans `data/uploads/` et le blob du snapshot restent identiques à l'octet près (contrôle brut → fait de l'Auditor). |
+| Limites de dépôt | `uploads.max_file_mb` = 200 (HTTP 413 au-delà) ; extension `.csv` uniquement ; types MIME texte/CSV uniquement (HTTP 415 sinon) ; contenu binaire refusé ; nom de source `^[a-z][a-z0-9_]{1,40}$`, jamais une source officielle ; identifiant de dépôt UUID (aucun chemin libre) ; zone d'attente `outputs/uploads_pending/` nettoyée après 24 h. Fichiers jamais exécutés ni ouverts par un tableur. |
+| Sources officielles hors ligne | Le recalcul lance `main.py run --no-llm --offline-official` : Findex, FAS et PIB sont repris du snapshot publié, sans réseau. Test : le nouveau snapshot ne diffère que par la source utilisateur, les empreintes officielles sont identiques, tout appel réseau fait échouer le test. Démonstration du 2026-11-04 : ajout puis retrait, valeurs Tunisie 2024 et verdict identiques avant et après. |
+| Isolation des recalculs | Un seul recalcul à la fois (HTTP 409) ; processus séparé de l'API ; état sur disque `outputs/jobs/<id>.json` (relu après redémarrage) ; délai `uploads.job_timeout_min` = 15 min puis erreur claire ; job orphelin (API redémarrée) clos en erreur ; sous-processus tué si le job s'interrompt ; écritures du fichier d'état sérialisées (accès concurrent sous Windows). |
+| Séparation des données | Les faits utilisateur (`source = user:<nom>`) ne sont ni dans les cartes KPI officielles, ni dans les décomptes de la page « Audit et confiance », ni dans les réponses d'Ask Finova (test dédié). |
+
+---
+
+## 9. Tests et validation
+
+| Vérification | Résultat |
+|---|---|
+| Suite complète `pytest` | **1 248 réussis**, 0 échec (1 avertissement : fonction `load` de langchain en bêta) |
+| Tests ciblés sécurité / dépôt / audit | 61 réussis |
+| Build FinOVA (`npm run build`) | réussi |
+| `npm audit --omit=dev` | FinOVA : 0 vulnérabilité ; dashboard historique : 1 modérée (N1) |
+| Navigateur (Playwright, 1 440 et 768 px) | 0 violation CSP ; erreurs console uniquement sur la page de connexion : 404 des vidéos de fond non versionnées (repli sur le fond statique) |
+
+## 10. Risques résiduels et priorités
+
+1. **N1** — mettre à jour ECharts du dashboard historique ou le retirer.
+2. Vidéos de la page de connexion absentes du dépôt (404, repli statique) : les héberger ou retirer la référence.
+3. **N2** — héberger la police localement pour une CSP sans origine tierce.
+4. Réserves de données C2 / C4 : présentées comme telles dans l'interface (« approuvé avec réserve », variations dans le bruit d'enquête).
+
+## 11. Verdict
+
+Le pipeline, la Route 2 et l'interface FinOVA sont conformes : 0 échec d'audit, 0 valeur bloquée,
+15/15 constats acceptés, 9/9 fautes détectées, 1 248 tests réussis. Les constats de sécurité S1–S9
+sont tous corrigés ; le seul point ouvert de sévérité modérée (N1) concerne le dashboard historique,
+pas l'interface FinOVA.
+
+---
+
+## Annexe — commandes exécutées (session du 2026-11-04)
+
+| # | Commande | Résultat utilisé |
+|---|---|---|
+| 1 | `date "+%Y-%m-%d %H:%M"` ; `git rev-parse --short HEAD` | date, commit `dee7f1f` |
+| 2 | `python main.py run --rebuild --no-llm --run-id part_d_audit_report` | verdict, contrôles, publication, empreintes des sources, durée |
+| 3 | Route 2 (`run_route2`) puis audit des constats (`insights_from_finova` + `audit_insights`) sur la vue publiée et la vue générée DZA 2012 | §4 |
+| 4 | `python scripts/evaluate_auditor.py --out data/audit` | §5 |
+| 5 | Requête DuckDB en lecture seule sur `kpi_values`, `fact`, `country_dim` et lecture de `data/audit/audit_report.json` | lignes, motifs de réserve, faits, pays |
+| 6 | `grep -rn "import pickle\|pickle\.load" src/` | S1 |
+| 7 | `grep -c` des paquets et empreintes de `requirements.lock` ; `uv venv` + `uv pip install --require-hashes -r requirements.lock` | S2 |
+| 8 | `git log --reverse` ; `git rev-list --count HEAD` ; `git log -p -- .gitignore` | S3, S9 |
+| 9 | `curl -sI http://127.0.0.1:8000/api/health` | S8 (en-têtes) |
+| 10 | Playwright : connexion, 9 pages et panneau Ask Finova à 1 440 et 768 px (écouteur `securitypolicyviolation`) | S8 (navigateur), §9 |
+| 11 | `pytest` ciblé (`test_llm`, `test_legacy_dashboard_escape`, `test_dashboard`, `test_kpi`, `test_analysis`, `test_dashboard_api`, `test_sources_api`, `test_user_integration`, `test_audit_api`) | S1, S4–S8, §8 |
+| 12 | `npm audit --omit=dev` dans `dashboard_app/web` et `dashboard` | N1 |
+| 13 | `git ls-files` + `wc -l` (fichiers et lignes) | §2 |
+| 14 | `npm run build` puis `pytest -q` (suite complète) | §9 |

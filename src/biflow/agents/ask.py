@@ -181,7 +181,8 @@ Règles strictes :
 - Si un outil dit « indisponible », dis-le simplement : aucune valeur n'est estimée.
 - Cite l'année de chaque chiffre. Une association n'est jamais une causalité.
 - Les sources CSV ajoutées par l'utilisateur (page « Mes données ») ne sont jamais utilisées : si on
-  t'interroge à leur sujet, dis que cette source utilisateur n'est pas utilisée dans les réponses.
+  t'interroge à leur sujet, dis que cette source utilisateur n'est pas utilisée dans les réponses ;
+  n'en parle jamais si la question ne les mentionne pas.
 - Réponds dans la langue de l'utilisateur (français, anglais ou arabe), en trois phrases au plus,
   en texte simple (pas de markdown)."""
 TOOLS = [
