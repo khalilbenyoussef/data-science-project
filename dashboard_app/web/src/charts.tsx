@@ -39,7 +39,11 @@ function valueLabel(value: number, unit: string | null): string {
 }
 
 function ChartShell({ chart, children }: { chart: Chart; children: React.ReactNode }) {
-  const title = CHART_TITLES[chart.id] ?? plainText(chart.title);
+  // les annees de l'evolution des ecarts suivent les vagues lues (jamais une vague posterieure)
+  const span = chart.id === "gap_change" ? chart.gap_points[0] : undefined;
+  const title = span
+    ? `Évolution des écarts entre ${span.from_year} et ${span.to_year}`
+    : CHART_TITLES[chart.id] ?? plainText(chart.title);
   return (
     <section className="chart-card">
       <header className="card-head">

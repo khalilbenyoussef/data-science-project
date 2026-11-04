@@ -536,6 +536,13 @@ d'un run précédent).
 
 - Findex : vagues 2011, 2014, 2017, 2021, 2022 (partielle), 2024 ; les agrégats
   régionaux sont conservés mais signalés comme non-pays.
+- Année sans enquête Findex (ex. Algérie 2012) : les cartes, graphiques et
+  insights Findex lisent la dernière vague au plus tard à l'année choisie (2011),
+  jamais une vague postérieure ; chaque valeur porte `year` (année utilisée) et
+  `year_requested`, la vue porte `findex_wave` et le tableau de bord affiche un
+  bandeau. Les indicateurs FAS et WDI gardent l'année choisie. Sans vague
+  antérieure (Tunisie avant 2014, Maroc avant 2017), les valeurs Findex restent
+  indisponibles.
 - FAS : séries `FA26N.PHTADLT_NUM`, `FA18N.PHTADLT_NUM`,
   `FA29N_COMBANK.PTADLT_NUM`, `FA21N_COMBANK.PTADLT_NUM`,
   `LOANACCN_COMBANK.PTADLT_NUM`, `FA30N_COMBANK.PTADLT_NUM` ; 2025 exclue car

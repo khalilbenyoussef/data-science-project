@@ -15,6 +15,9 @@ const NAV = [
   { id: "pipeline", label: "Sources et qualité", icon: "M4 6h16M4 12h16M4 18h16M8 4v4M16 10v4M10 16v4" },
 ];
 
+// pages Findex : bandeau quand la vue reprend une enquete anterieure
+const WAVE_PAGES = new Set(["overview", "inclusion", "exclusion"]);
+
 const COUNTRIES = [
   { iso3: "TUN", name: "Tunisie" },
   { iso3: "DZA", name: "Algérie" },
@@ -52,6 +55,14 @@ export function App() {
   const cache = useRef(new Map<string, { spec: Spec; source: string }>());
 
   const key = `${iso3}-${year}`;
+  // vagues du pays selectionne seulement (TUN sans 2011, MAR a partir de 2017)
+  const surveyYears = spec?.country.iso3 === iso3 ? spec.survey_years ?? [] : [];
+  const wave =
+    spec?.findex_wave &&
+    spec.findex_wave.year_used !== null &&
+    spec.findex_wave.year_used !== spec.findex_wave.year_requested
+      ? spec.findex_wave
+      : null;
 
   useEffect(() => {
     if (!loading) {
@@ -232,7 +243,7 @@ export function App() {
               >
                 {(years.length ? years : [2017, 2021, 2024]).map((item) => (
                   <option key={item} value={item}>
-                    {item}
+                    {surveyYears.includes(item) ? `${item} · enquête` : item}
                   </option>
                 ))}
               </select>
@@ -299,9 +310,15 @@ export function App() {
               {(spec.survey_years?.length ?? 0) > 0 && (
                 <p className="survey-hint">
                   Années d'enquête Findex pour {spec.country.name} :{" "}
-                  {spec.survey_years!.join(", ")}. Les autres années ne contiennent que
-                  les indicateurs bancaires annuels.
+                  {spec.survey_years!.join(", ")}. Les autres années reprennent la dernière
+                  enquête antérieure ; les indicateurs bancaires restent ceux de l'année.
                 </p>
+              )}
+              {wave && WAVE_PAGES.has(page.id) && (
+                <div className="generated-banner wave-banner" role="status">
+                  Pas d'enquête Findex en {wave.year_requested} : les chiffres viennent de
+                  l'enquête {wave.year_used}.
+                </div>
               )}
               {source === "generated" && (
                 <div className="generated-banner">

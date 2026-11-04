@@ -31,7 +31,10 @@ export interface Metric {
   value: number | null;
   display: string;
   unit: string;
-  year: number;
+  year: number | null;
+  // annee demandee ; year_basis dit pourquoi year (annee utilisee) peut differer
+  year_requested?: number | null;
+  year_basis?: "selected" | "survey_wave" | "latest_observed";
   status: string;
   provider: string;
   iso3: string;
@@ -321,6 +324,12 @@ export interface Fact {
   evidence_ids: string[];
 }
 
+export interface FindexWave {
+  year_requested: number;
+  year_used: number | null;
+  survey_years: number[];
+}
+
 export interface Spec {
   schema_version: string;
   generated_at: string;
@@ -329,6 +338,7 @@ export interface Spec {
   year: number;
   years: number[];
   survey_years?: number[];
+  findex_wave?: FindexWave | null;
   countries_available: CountryRef[];
   pages: Page[];
   facts: Fact[];

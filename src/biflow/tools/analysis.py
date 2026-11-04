@@ -220,6 +220,64 @@ def aggregate_publication_status(statuses) -> str:
     return next((status for status in PUBLICATION_ORDER if status in found), "not_evaluated")
 
 
+def findex_survey_years(dataset: dict[str, Any], iso3: str) -> list[int]:
+    """Vagues Findex observees pour un pays : annees ou un KPI Findex a une valeur."""
+    findex = {row["kpi_id"] for row in dataset.get("observations") or []
+              if row.get("source") == "findex"}
+    return sorted({
+        int(point["year"])
+        for row in dataset.get("series") or []
+        if row.get("iso3") == iso3 and row.get("kpi_id") in findex
+        for point in row.get("points") or []
+        if point.get("availability_status") == "available" and point.get("value") is not None
+    })
+
+
+def findex_wave(survey_years: list[int], year: int) -> int | None:
+    """Derniere vague au plus tard a l'annee demandee ; jamais une vague posterieure."""
+    earlier = [wave for wave in survey_years if wave <= year]
+    return max(earlier) if earlier else None
+
+
+def build_with_findex_wave(service: "AnalysisService",
+                           request: "AnalysisRequest | dict[str, Any]") -> dict[str, Any]:
+    """Dataset en mode annee : les KPI Findex sont lus a la derniere vague au plus tard
+    a l'annee demandee (pays principal), les autres KPI (FAS) a l'annee demandee.
+
+    ``scope.findex_wave`` = {year_requested, year_used, survey_years} ; year_used vaut
+    None sans vague anterieure (les KPI Findex restent alors indisponibles)."""
+    request = AnalysisRequest.model_validate(request)
+    dataset = service.build(request)
+    if request.mode != "year":
+        return dataset
+    years = findex_survey_years(dataset, request.iso3[0])
+    wave = findex_wave(years, request.year)
+    dataset["scope"]["findex_wave"] = {
+        "year_requested": request.year, "year_used": wave, "survey_years": years,
+    }
+    if wave is None or wave == request.year:
+        return dataset
+    at_wave = service.build(request.model_copy(update={"year": wave}))
+    findex = {row["kpi_id"] for row in at_wave["observations"] if row.get("source") == "findex"}
+    wave_rows = {(row["iso3"], row["kpi_id"]): row for row in at_wave["observations"]}
+    dataset["observations"] = [
+        wave_rows.get((row["iso3"], row["kpi_id"]), row) if row["kpi_id"] in findex else row
+        for row in dataset["observations"]
+    ]
+    for key in ("coverage", "rankings"):
+        wave_items = {item.get("kpi_id"): item for item in at_wave.get(key) or []}
+        dataset[key] = [
+            wave_items.get(item.get("kpi_id"), item) if item.get("kpi_id") in findex else item
+            for item in dataset.get(key) or []
+        ]
+    seen = {(notice.get("code"), notice.get("message")) for notice in dataset["notices"]}
+    dataset["notices"] += [notice for notice in at_wave.get("notices") or []
+                           if (notice.get("code"), notice.get("message")) not in seen]
+    dataset["publication_status"] = aggregate_publication_status(
+        row["publication_status"] for row in dataset["observations"])
+    return dataset
+
+
 class AnalysisService:
     """Read-only analysis dataset; semantic contracts remain the only data path.
 
@@ -880,7 +938,10 @@ __all__ = [
     "PERCENTAGE_POINTS",
     "RANKING_RULE",
     "SCHEMA_VERSION",
+    "build_with_findex_wave",
     "comparison_id",
     "evidence_id",
+    "findex_survey_years",
+    "findex_wave",
     "trend_id",
 ]

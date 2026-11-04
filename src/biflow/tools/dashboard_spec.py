@@ -138,6 +138,10 @@ class Metric(FinModel):
     provider: Literal["semantic", "warehouse", "reference", "placeholder", "derived"]
     iso3: str | None
     chip: Chip
+    # year = annee utilisee ; year_basis : annee choisie, vague Findex anterieure
+    # (annee sans enquete) ou derniere observation d'une serie arretee
+    year_requested: int | None = None
+    year_basis: Literal["selected", "survey_wave", "latest_observed"] = "selected"
     delta: Delta | None = None
     evidence_ids: tuple[str, ...] = ()
     why: WhyInfo
@@ -198,6 +202,7 @@ class Bar(FinModel):
     display: str
     status: Literal["available", "unavailable", "placeholder"]
     year: int | None
+    year_requested: int | None = None
     highlight: bool = False
     provider: Literal["semantic", "warehouse", "reference", "placeholder", "derived"]
     chip: Chip
@@ -242,6 +247,7 @@ class DumbbellRow(FinModel):
     gap_pp: float | None
     status: Literal["available", "partial", "unavailable"]
     year: int
+    year_requested: int | None = None
     provider: Literal["warehouse", "semantic"] = "warehouse"
     chip: Chip
     evidence_ids: tuple[str, ...] = ()
@@ -332,6 +338,7 @@ class Fact(FinModel):
     provider: Literal["semantic", "warehouse", "reference", "derived"]
     display: str
     evidence_ids: tuple[str, ...] = ()
+    year_requested: int | None = None
 
 
 class Insight(FinModel):
@@ -430,6 +437,13 @@ class CountryRef(FinModel):
     income_group: str | None = None
 
 
+class FindexWave(FinModel):
+    """Annee demandee et vague Findex lue (None : aucune vague anterieure)."""
+    year_requested: int
+    year_used: int | None
+    survey_years: tuple[int, ...] = ()
+
+
 class DashboardSpec(FinModel):
     schema_version: Literal["2.0"] = SCHEMA_VERSION
     generated_at: str
@@ -437,6 +451,7 @@ class DashboardSpec(FinModel):
     country: CountryRef
     year: int
     years: tuple[int, ...]
+    findex_wave: FindexWave | None = None
     countries_available: tuple[CountryRef, ...]
     pages: tuple[Page, ...]
     facts: tuple[Fact, ...]
@@ -691,6 +706,11 @@ class _Data:
         self.catalog = catalog
         self.iso3 = iso3
         self.year = year
+        wave = (dataset.get("scope") or {}).get("findex_wave") or {}
+        # annee des KPI Findex : vague lue (annee sans enquete), sinon l'annee choisie
+        self.findex_wave = wave or None
+        self.findex_year = wave.get("year_used") or year
+        self.survey_years = tuple(wave.get("survey_years") or ())
         self.observations = {
             (row["iso3"], row["kpi_id"]): row for row in dataset["observations"]
         }
@@ -731,12 +751,19 @@ class _Data:
             "value": float(observation["value"]) if available else None,
             "display": format_value(observation["value"] if available else None, unit),
             "unit": unit,
-            "year": observation["year"],
+            # une valeur indisponible sans annee affiche l'annee demandee
+            "year": observation["year"] if observation["year"] is not None else self.year,
             "status": "available" if available else "unavailable",
             "provider": "semantic",
             "iso3": code,
             "chip": _semantic_chip(meta["verification_status"], observation, self.catalog.get("catalog_version")),
             "delta": _delta(self.kpi_points(kpi_id, code), observation["year"], unit) if previous else None,
+            "year_requested": self.year,
+            "year_basis": (
+                "survey_wave" if observation.get("source") == "findex"
+                and self.findex_year != self.year and observation["year"] == self.findex_year
+                else "latest_observed" if available and observation["year"] != self.year
+                else "selected"),
             "evidence_ids": (observation["evidence_id"],),
             "why": {
                 "definition": definition.get("definition"),
@@ -840,6 +867,8 @@ class _Data:
             "iso3": code,
             "chip": _warehouse_chip(spec.note, spec.extra_review),
             "delta": delta,
+            "year_requested": self.year,
+            "year_basis": "latest_observed" if value is not None and year != self.year else "selected",
             "evidence_ids": (
                 (f"WH-{series_id}-{code}-{year}",) if year is not None else ()
             ),
@@ -1047,6 +1076,7 @@ def _build_blocks(
     pipeline: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     iso3, year = data.iso3, data.year
+    survey_year = data.findex_year  # vague Findex lue ; les indicateurs FAS gardent year
     country = data.countries.get(iso3) or {"iso3": iso3, "name": iso3,
                                            "region": None, "income_group": None}
     pages: list[dict[str, Any]] = []
@@ -1102,7 +1132,9 @@ def _build_blocks(
 
     peers = data.peer_bars("account_ownership")
     observed = [bar for bar in peers if bar["value"] is not None]
-    peer_notes = ["Comparaison des détentions de compte à l'année sélectionnée."]
+    peer_notes = ["Comparaison des détentions de compte à l'année sélectionnée." if survey_year == year
+                  else f"Comparaison des détentions de compte à l'enquête {survey_year} "
+                  f"(pas d'enquête Findex en {year})."]
     morocco = next((bar for bar in peers if bar["iso3"] == "MAR"), None)
     subject = next((bar for bar in peers if bar["iso3"] == iso3 and bar["iso3"] != "MAR"), None)
     if morocco and subject and morocco["value"] is not None and subject["value"] is not None:
@@ -1200,7 +1232,7 @@ def _build_blocks(
         "id": "inclusion_funnel",
         "kind": "funnel",
         "title": "Du compte à l'usage formel",
-        "subtitle": f"Chaque marche est une question Findex distincte, année {year}.",
+        "subtitle": f"Chaque marche est une question Findex distincte, année {survey_year}.",
         "x_label": None,
         "y_label": "Part des adultes (%)",
         "unit": "percent",
@@ -1270,7 +1302,8 @@ def _build_blocks(
     dumbbell_groups = []
     for dimension, title, left_key, right_key, left_label, right_label in DIMENSION_SPECS:
         rows = []
-        left_value, right_value, gap, evidence = group_gap(dimension, left_key, right_key, year)
+        left_value, right_value, gap, evidence = group_gap(dimension, left_key, right_key,
+                                                           survey_year)
         status = ("available" if gap is not None else
                   "partial" if left_value is not None or right_value is not None
                   else "unavailable")
@@ -1285,7 +1318,8 @@ def _build_blocks(
                       "status": "available" if right_value is not None else "unavailable"},
             "gap_pp": gap,
             "status": status,
-            "year": year,
+            "year": survey_year,
+            "year_requested": year,
             "provider": "semantic",
             "chip": _semantic_chip(
                 data.kpi_meta[SUBGROUP_KPI[(dimension, left_key)]]["verification_status"],
@@ -1304,7 +1338,7 @@ def _build_blocks(
         "id": "account_ownership_groups",
         "kind": "dumbbell",
         "title": "Détention d'un compte par groupe",
-        "subtitle": f"Écart en points de pourcentage, année observée {year}.",
+        "subtitle": f"Écart en points de pourcentage, année observée {survey_year}.",
         "x_label": "Part des adultes (%)",
         "y_label": None,
         "unit": "percent",
@@ -1316,8 +1350,15 @@ def _build_blocks(
         "formula": "gap_pp = valeur(groupe avantagé) − valeur(groupe désavantagé)",
     }
 
+    # Deux dernieres vagues au plus tard a la vague lue : jamais une vague posterieure.
+    # Sans vagues connues (dataset hors build_with_findex_wave) : 2021 -> 2024.
+    if data.findex_wave is None:
+        gap_pair: tuple[int, int] | None = (2021, 2024)
+    else:
+        earlier = [wave for wave in data.survey_years if wave <= survey_year]
+        gap_pair = (earlier[-2], earlier[-1]) if len(earlier) >= 2 else None
     gap_points = []
-    for dimension, title, left_key, right_key in (
+    for dimension, title, left_key, right_key in () if gap_pair is None else (
         ("gender", "Genre", "women", "men"),
         ("income", "Revenu", "poorest 40%", "richest 60%"),
         ("education", "Éducation", "prim edu or less", "secondary edu or more"),
@@ -1325,19 +1366,20 @@ def _build_blocks(
     ):
         gaps: dict[int, float | None] = {}
         evidence: list[str] = []
-        for gap_year in (2021, 2024):
+        from_year, to_year = gap_pair
+        for gap_year in gap_pair:
             _, _, gaps[gap_year], cited = group_gap(dimension, left_key, right_key, gap_year)
             if gaps[gap_year] is not None:
                 evidence.extend(cited)
-        change = (gaps[2024] - gaps[2021]
-                  if gaps.get(2024) is not None and gaps.get(2021) is not None else None)
+        change = (gaps[to_year] - gaps[from_year]
+                  if gaps.get(to_year) is not None and gaps.get(from_year) is not None else None)
         gap_points.append({
             "id": f"gap-{dimension}",
             "label": title,
-            "from_year": 2021,
-            "to_year": 2024,
-            "gap_from_pp": gaps.get(2021),
-            "gap_to_pp": gaps.get(2024),
+            "from_year": from_year,
+            "to_year": to_year,
+            "gap_from_pp": gaps.get(from_year),
+            "gap_to_pp": gaps.get(to_year),
             "change_pp": change,
             "status": "available" if change is not None else "unavailable",
             "evidence_ids": tuple(evidence),
@@ -1345,7 +1387,8 @@ def _build_blocks(
     gap_chart = {
         "id": "gap_change",
         "kind": "gap",
-        "title": "Évolution des écarts 2021 → 2024",
+        "title": (f"Évolution des écarts {gap_pair[0]} → {gap_pair[1]}" if gap_pair
+                  else "Évolution des écarts"),
         "subtitle": "Variation de l'écart entre deux groupes, en points de pourcentage.",
         "x_label": "Écart (points de pourcentage)",
         "y_label": None,
@@ -1355,7 +1398,8 @@ def _build_blocks(
             "Un écart négatif signifie que le groupe avantagé est en dessous; "
             "la variation est calculée en points, jamais en %.",
         ],
-        "formula": "change_pp = gap(2024) − gap(2021)",
+        "formula": (f"change_pp = gap({gap_pair[1]}) − gap({gap_pair[0]})" if gap_pair
+                    else None),
     }
     pages.append({
         "id": "inclusion", "title": "Inclusion & inégalités",
@@ -1501,8 +1545,9 @@ def _build_blocks(
             "status": "available" if available else "unavailable",
             "display": format_value(value, "percent"),
             "note": label_for(code) if available else (
-                f"Aucune observation {year} ({observation.get('reason') or 'missing_observation'}).")})
-        peer_rows[code] = data.reader.peer_average(BARRIER_KPI[code], year) if data.reader else None
+                f"Aucune observation {survey_year} ({observation.get('reason') or 'missing_observation'}).")})
+        peer_rows[code] = (data.reader.peer_average(BARRIER_KPI[code], survey_year)
+                           if data.reader else None)
     configured = sorted({c for row in peer_rows.values() if row
                          for c in (*row["peers_included"], *row["missing_peers"])})
     peer_column = f"Moyenne des pairs ({', '.join(configured)})" if configured else "Moyenne des pairs"
@@ -1514,10 +1559,10 @@ def _build_blocks(
         if row is None:
             note = "Moyenne des pairs indisponible : kpi_values absent du warehouse."
         elif value is None:
-            note = f"Aucun pair observé en {year}."
+            note = f"Aucun pair observé en {survey_year}."
         elif row["missing_peers"]:
             note = (f"Couverture partielle : moyenne de {', '.join(row['peers_included'])} ; "
-                    f"{', '.join(row['missing_peers'])} sans observation {year}.")
+                    f"{', '.join(row['missing_peers'])} sans observation {survey_year}.")
         else:
             note = f"Moyenne simple de {', '.join(row['peers_included'])}."
         barrier_cells.append({"column": peer_column, "row": code, "value": value,
@@ -1529,12 +1574,12 @@ def _build_blocks(
     ]
     if missing:
         barrier_notes.append(
-            f"Moyenne des pairs partielle : {', '.join(missing)} sans observation en {year}.")
+            f"Moyenne des pairs partielle : {', '.join(missing)} sans observation en {survey_year}.")
     barrier_notes.append("Aucune barre n'est dessinée à partir d'une valeur inventée.")
     barrier_chart = {
         "id": "barriers_heatmap", "kind": "heatmap",
         "title": "Barrières à l'ouverture d'un compte",
-        "subtitle": f"Raisons déclarées de ne pas avoir de compte bancaire, année {year} (Findex).",
+        "subtitle": f"Raisons déclarées de ne pas avoir de compte bancaire, année {survey_year} (Findex).",
         "x_label": None, "y_label": None, "unit": "percent",
         "columns": (country_column, peer_column),
         "rows": tuple(barrier_rows),
@@ -1548,7 +1593,7 @@ def _build_blocks(
     urban_rural_chart = {
         "id": "urban_rural", "kind": "bar",
         "title": "Détention d'un compte : urbain vs rural",
-        "subtitle": f"Année observée {year} (Findex, dimension urbanicity).",
+        "subtitle": f"Année observée {survey_year} (Findex, dimension urbanicity).",
         "x_label": "Milieu", "y_label": "Part des adultes (%)", "unit": "percent",
         "bars": [
             {"id": "urban_account", "label": "Urbain", "iso3": iso3, "value": urban["value"],
@@ -1870,6 +1915,8 @@ def _build_blocks(
             "region": country.get("region"), "income_group": country.get("income_group"),
         },
         "year": year,
+        "findex_year": survey_year,
+        "findex_wave": data.findex_wave,
         "pages": pages,
         "notices": notices,
         "provenance": provenance,
@@ -1962,7 +2009,10 @@ def baseline_facts(blocks: Mapping[str, Any], dataset: Mapping[str, Any]) -> lis
 def index_base_facts(blocks: Mapping[str, Any], dataset: Mapping[str, Any],
                      *, iso3: str) -> list[dict[str, Any]]:
     """Observation de l'annee de base de chaque indice (2017 = 100), lue telle quelle
-    dans la serie du dataset : un texte cite la valeur observee, jamais l'indice."""
+    dans la serie du dataset : un texte cite la valeur observee, jamais l'indice.
+    Aucune si la base est posterieure a l'annee choisie (jamais une annee future)."""
+    if INDEX_BASE_YEAR > int(blocks.get("year") or INDEX_BASE_YEAR):
+        return []
     points = {
         point.get("evidence_id"): (row, point)
         for row in dataset.get("series") or []
@@ -1998,6 +2048,7 @@ def index_base_facts(blocks: Mapping[str, Any], dataset: Mapping[str, Any],
 
 def extract_facts(blocks: Mapping[str, Any], *, iso3: str, year: int) -> list[dict[str, Any]]:
     facts: list[dict[str, Any]] = []
+    survey_year = blocks.get("findex_year") or year  # barrieres : vague Findex lue
     for page in blocks["pages"]:
         for metric in page["metrics"]:
             if metric["status"] == "placeholder":
@@ -2092,11 +2143,11 @@ def extract_facts(blocks: Mapping[str, Any], *, iso3: str, year: int) -> list[di
                     owner = "PEERS" if peers else iso3
                     kpi_id = BARRIER_KPI[cell["row"]]
                     facts.append({
-                        "id": f"F-{kpi_id}-{owner}-{year}", "code": kpi_id,
+                        "id": f"F-{kpi_id}-{owner}-{survey_year}", "code": kpi_id,
                         "label": f"{label_for(cell['row'])} — {cell['column']}",
-                        "value": cell["value"], "unit": "percent", "year": year,
+                        "value": cell["value"], "unit": "percent", "year": survey_year,
                         "iso3": owner, "provider": "semantic", "display": cell["display"],
-                        "evidence_ids": (f"EV-{kpi_id}-{owner}-{year}",),
+                        "evidence_ids": (f"EV-{kpi_id}-{owner}-{survey_year}",),
                     })
             if chart["kind"] == "line" and chart.get("unit") == "index_2017_100":
                 for series in chart["series"]:
@@ -2169,6 +2220,7 @@ def finalize_spec(
         "country": blocks["country"],
         "year": blocks["year"],
         "years": tuple(sorted(set(years))),
+        "findex_wave": blocks.get("findex_wave"),
         "countries_available": [dict(item) for item in countries],
         "pages": pages,
         "facts": facts_json,
@@ -2377,6 +2429,19 @@ def load_pipeline_info(
 
 
 # --------------------------------------------------------------------- entrypoint
+def _mark_requested_year(blocks: Mapping[str, Any], year: int) -> None:
+    """year_requested sur chaque valeur ; year reste l'annee reellement utilisee."""
+    for page in blocks["pages"]:
+        for metric in page.get("metrics") or ():
+            metric["year_requested"] = year
+        for chart in page.get("charts") or ():
+            for bar in chart.get("bars") or ():
+                bar["year_requested"] = year
+            for group in chart.get("groups") or ():
+                for row in group.get("rows") or ():
+                    row["year_requested"] = year
+
+
 def build_finova_spec(
     dataset: Mapping[str, Any], *, run_id: str, iso3: str | None = None,
     year: int | None = None, reader: WarehouseReader | None = None,
@@ -2407,8 +2472,10 @@ def build_finova_spec(
         dataset, reader=reader, reference=reference, iso3=iso3, year=spec_year,
         history=history, pipeline=pipeline, catalog=catalog,
     )
-    facts = (extract_facts(blocks, iso3=iso3, year=spec_year) + baseline_facts(blocks, dataset)
-             + index_base_facts(blocks, dataset, iso3=iso3))
+    _mark_requested_year(blocks, spec_year)
+    facts = [{**fact, "year_requested": spec_year} for fact in (
+        extract_facts(blocks, iso3=iso3, year=spec_year) + baseline_facts(blocks, dataset)
+        + index_base_facts(blocks, dataset, iso3=iso3))]
     known_years = sorted({
         point["year"]
         for row in dataset.get("series") or []

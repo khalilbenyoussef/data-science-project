@@ -17,7 +17,9 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 from biflow.agents.analyst import build_insights, build_xai
-from biflow.tools.analysis import DEFAULT_KPIS, AnalysisRequest, AnalysisService
+from biflow.tools.analysis import (
+    DEFAULT_KPIS, AnalysisRequest, AnalysisService, build_with_findex_wave,
+)
 from biflow.tools.dashboard_spec import (
     DashboardSpec, PEERS, build_finova_spec, load_pipeline_info, load_reference,
 )
@@ -171,7 +173,7 @@ class WarehouseSpecBuilder:
                 series_iso3=(iso3,), include_trends=False,
                 include_rankings=False, include_comparisons=False,
             )
-            dataset = self._service.build(request)
+            dataset = build_with_findex_wave(self._service, request)
             reader = WarehouseReader(self.warehouse)
             pipeline = self._pipeline_for(reader, stamp)
             reference = self._reference_for(stamp)

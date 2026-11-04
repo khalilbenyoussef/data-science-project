@@ -210,7 +210,6 @@ export const CHART_TITLES: Record<string, string> = {
   inclusion_funnel: "Du compte à l'usage formel",
   formal_vs_any: "Usage formel et usage informel",
   account_ownership_groups: "Détention d'un compte par groupe",
-  gap_change: "Évolution des écarts entre 2021 et 2024",
   physical_network: "Réseau physique (2015-2024)",
   supply_demand_index: "Offre et demande, base 100 en 2017",
   atm_peers: "Distributeurs automatiques pour 100 000 adultes — comparaison régionale",

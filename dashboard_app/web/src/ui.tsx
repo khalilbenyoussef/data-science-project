@@ -146,7 +146,10 @@ function MetricCard({ metric, onWhy }: { metric: Metric; onWhy: () => void }) {
         )}
       </div>
       <div className="metric-foot">
-        <span className="muted">Année : {metric.year}</span>
+        <span className="muted">
+          Année : {metric.year ?? metric.year_requested}
+          {metric.year_basis === "survey_wave" && " · dernière enquête"}
+        </span>
         {metric.delta && <span className="delta">{plainText(metric.delta.label)}</span>}
       </div>
       <div className="metric-actions">

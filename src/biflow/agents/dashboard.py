@@ -14,7 +14,7 @@ from typing import Any, Mapping
 
 from biflow.agents.base import BaseAgent
 from biflow.config import path_of, resolve
-from biflow.tools.analysis import AnalysisRequest, AnalysisService
+from biflow.tools.analysis import AnalysisRequest, AnalysisService, build_with_findex_wave
 from biflow.tools.dashboard_contract import build_dashboard_data, export_dashboard_json
 from biflow.tools.dashboard_spec import (
     PEERS, PRIMARY_COUNTRY, REFERENCE_PATH, build_finova_spec,
@@ -205,7 +205,7 @@ class DashboardSpecAgent(BaseAgent):
             self._warehouse(), self.catalog_path,
             lineage_path=self._lineage(), quality_report_path=self._quality(),
         )
-        dataset = service.build(request)
+        dataset = build_with_findex_wave(service, request)
         save_json(dataset, reports_dir / "analysis_dataset.json")
         return dataset
 
