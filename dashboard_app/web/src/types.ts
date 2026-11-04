@@ -353,7 +353,8 @@ export interface AskFact {
   label: string;
   display: string;
   year: number;
-  unit: string;
+  unit: string | null;
+  iso3?: string | null;
 }
 
 export interface AskResult {
@@ -366,6 +367,10 @@ export interface AskResult {
   facts: AskFact[];
   caveat: string | null;
   number_check: { passed: boolean; unknown: string[] };
+  mode?: "llm" | "deterministic";
+  lang?: string;
+  suggestions?: string[];
+  budget_left?: number;
   iso3: string;
   year: number;
   country_name: string;

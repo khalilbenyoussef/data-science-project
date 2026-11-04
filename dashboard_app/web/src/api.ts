@@ -54,11 +54,21 @@ export async function fetchSpec(
   return { spec, source };
 }
 
-export function askFinova(question: string, iso3: string, year: number): Promise<AskResult> {
+export interface ChatTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
+export function askFinova(
+  question: string,
+  iso3: string,
+  year: number,
+  context: { page?: string; session_id?: string; history?: ChatTurn[] } = {},
+): Promise<AskResult> {
   return request<AskResult>("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, iso3, year }),
+    body: JSON.stringify({ question, iso3, year, ...context }),
   });
 }
 

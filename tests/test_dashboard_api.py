@@ -133,6 +133,39 @@ def test_ask_rejects_empty_question(client):
     assert client.post("/api/ask", json={"question": "   "}).status_code == 422
 
 
+def test_ask_chat_uses_the_llm_tools_and_session_history(spec_path, tmp_path):
+    from langchain_core.messages import AIMessage
+
+    class Model:
+        def __init__(self):
+            self.replies = [
+                AIMessage("", tool_calls=[{"name": "get_kpi", "id": "c1",
+                                           "args": {"kpi_id": "account_ownership"}}]),
+                AIMessage("En 2024, 37,8 % des adultes ont un compte."),
+            ]
+            self.seen = []
+
+        def invoke(self, messages):
+            self.seen.append(messages)
+            return self.replies.pop(0)
+
+    model = Model()
+    app = create_app(
+        spec_path=spec_path, warehouse_path=tmp_path / "missing.duckdb",
+        reports_dir=tmp_path / "reports", history_dir=tmp_path / "history",
+        web_dist=tmp_path / "dist", spec_builder=lambda iso3, year: _spec(iso3, year),
+        ask_model=model,
+    )
+    body = TestClient(app).post("/api/ask", json={
+        "question": "Et le taux de compte ?", "session_id": "abc", "page": "overview",
+        "history": [{"role": "user", "text": "Bonjour"}, {"role": "assistant", "text": "Bonjour !"}],
+    }).json()
+    assert body["mode"] == "llm" and body["number_check"]["passed"]
+    assert body["facts"][0]["id"] == "F-account_ownership-TUN-2024"
+    assert body["budget_left"] == 28 and len(body["suggestions"]) >= 3
+    assert [m.content for m in model.seen[0][1:3]] == ["Bonjour", "Bonjour !"]
+
+
 def test_missing_spec_returns_503(tmp_path: Path):
     app = create_app(
         spec_path=tmp_path / "absent.json", warehouse_path=tmp_path / "w.duckdb",

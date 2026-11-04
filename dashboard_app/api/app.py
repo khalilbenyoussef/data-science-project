@@ -8,6 +8,7 @@ reuses numbers already present in the selected spec's facts.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import threading
@@ -21,9 +22,12 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from biflow.agents.analyst import AskRequest, answer_question
+from biflow.agents.ask import (
+    ChatRequest, SessionBudget, answer_chat, ask_settings, build_ask_llm,
+)
 from biflow.config import ROOT, load_config, resolve
-from biflow.tools.dashboard_spec import PEERS, REFERENCE_PATH
+from biflow.tools.dashboard_spec import COUNTRY_LABELS, PEERS, REFERENCE_PATH
+from biflow.tools.audit_text import template_text
 from biflow.tools.kpi import DEFAULT_CATALOG
 from biflow.tools.spec_cache import (
     DEFAULT_GENERATED_DIR, SpecBuilder, WarehouseSpecBuilder, cache_key,
@@ -59,6 +63,7 @@ def create_app(
     web_dist: str | Path | None = None,
     spec_builder: SpecBuilder | None = None,
     prewarm: bool | None = None,
+    ask_model: Any | None = None,
 ) -> FastAPI:
     cfg = load_config()
     dashboard = cfg.get("dashboard") or {}
@@ -274,13 +279,36 @@ def create_app(
                     break
         return {"runs": runs, "count": len(runs)}
 
+    settings = ask_settings(cfg)
+    budget = SessionBudget(settings["max_calls_per_session"])
+    chat_llm: dict[str, Any] = {}
+
+    def ask_llm() -> Any | None:
+        if "model" not in chat_llm:
+            chat_llm["model"] = ask_model if ask_model is not None else build_ask_llm(cfg)
+        return chat_llm["model"]
+
+    def explain_reader(kpi_id: str, iso3: str, year: int, lang: str) -> str | None:
+        """Explication stockee par l'Auditor (kpi_explanations), lecture seule."""
+        if not warehouse.is_file():
+            return None
+        try:
+            with duckdb.connect(str(warehouse), read_only=True) as con:
+                row = con.execute(
+                    "SELECT explanation FROM kpi_explanations WHERE kpi_id = ? AND iso3 = ? "
+                    "AND year = ?", [kpi_id, iso3, year]).fetchone()
+        except duckdb.Error:
+            return None
+        return template_text(json.loads(row[0]), lang) if row else None
+
     @app.post("/api/ask")
-    def ask(payload: AskRequest) -> dict[str, Any]:
+    def ask(payload: ChatRequest) -> dict[str, Any]:
         spec, source = resolve_spec(payload.iso3, payload.year)
-        facts = spec.get("facts") or []
         country = (spec.get("country") or {}).get("name") or "Tunisie"
-        result = answer_question(
-            payload.question, facts, country=country, year=_current_year(spec),
+        result = answer_chat(
+            payload, lambda code, year: resolve_spec(code, year)[0],
+            iso3=_current_iso3(spec), year=_current_year(spec), llm=ask_llm(),
+            budget=budget, settings=settings, explain_reader=explain_reader,
         )
         result.update({
             "iso3": _current_iso3(spec),
@@ -289,6 +317,10 @@ def create_app(
             "generated_at": spec.get("generated_at"),
             "source": source,
         })
+        resolved = result.get("resolved") or {}
+        if resolved.get("followup"):  # relance « et le Maroc ? » : badge du perimetre repondu
+            result.update({"iso3": resolved["iso3"], "year": resolved["year"],
+                           "country_name": COUNTRY_LABELS.get(resolved["iso3"], resolved["iso3"])})
         return result
 
     dist_dir = Path(dist)

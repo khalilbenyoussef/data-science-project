@@ -39,6 +39,12 @@ llm:
     analyst:      [groq, gemini]
     auditor:      [groq, gemini]   # reformulation seulement, verifiee (grounding)
     mapper:       [groq, gemini]   # roles de colonnes des sources utilisateur, re-valides
+    ask:          [groq, gemini]   # Ask Finova : conversation + outils sur les faits (grounding)
+  ask:                             # Ask Finova (POST /api/ask)
+    temperature: 0.2
+    max_calls_per_session: 30      # appels LLM par session de navigateur ; au-dela : mode simple
+    max_tool_steps: 4              # appels LLM par tour (outils compris), hors regeneration
+    history_turns: 10              # derniers messages de la session transmis au LLM
 
 # --------------------------------------------------------------------------- Orchestrateur
 orchestrator:

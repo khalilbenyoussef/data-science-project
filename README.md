@@ -713,7 +713,7 @@ Le login est une démonstration d'interface (aucune authentification réelle).
 |---|---|---|
 | GET | `/api/spec?iso3=TUN&year=2024` | contrat du scope demandé |
 | GET | `/api/runs?limit=20` | derniers `outputs/reports/*/run.json` |
-| POST | `/api/ask` | réponse déterministe vérifiée dans les faits |
+| POST | `/api/ask` | Ask Finova : conversation, chiffres lus par outils et vérifiés |
 | GET | `/api/health` | présence du contrat et du warehouse |
 
 Le scope publié est servi tel quel (`X-Finova-Source: file`). Tout autre
@@ -723,6 +723,16 @@ warehouse change. Cette génération réutilise le moteur KPI existant : le
 premier appel sur un nouveau couple pays/année peut durer une à deux minutes,
 les appels suivants sont instantanés. Aucune année n'est substituée : les
 cartes affichent l'année réellement utilisée, ou « To load » / « Indisponible ».
+
+Ask Finova (`POST /api/ask`, `src/biflow/agents/ask.py`) : avec une clé
+(`GROQ_API_KEY` ou `GOOGLE_API_KEY`, routage `llm.routing.ask`, réglages
+`llm.ask`), l'assistant converse et lit les chiffres uniquement via des outils
+sur les faits des vues Finova (`get_kpi`, `compare_countries`, `compare_years`,
+`explain` sur `kpi_explanations`, `list_kpis`, `current_scope`) ; tout nombre
+absent des résultats d'outils du tour déclenche une régénération puis la réponse
+déterministe. Le navigateur envoie les 10 derniers messages de la session et un
+budget d'appels LLM est tenu par session. Sans clé : salutations, suggestions,
+relances (« et en 2021 ? », « et le Maroc ? ») et formulations FR / EN / darija.
 
 ### 4. Tests
 

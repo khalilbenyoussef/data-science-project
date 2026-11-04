@@ -15,6 +15,35 @@ const NAV = [
   { id: "pipeline", label: "Sources et qualité", icon: "M4 6h16M4 12h16M4 18h16M8 4v4M16 10v4M10 16v4" },
 ];
 
+// conversation Ask Finova gardee pour la session du navigateur (sessionStorage)
+const CHAT_KEY = "finova.chat";
+const SESSION_KEY = "finova.session";
+
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStored(key: string, value: unknown) {
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* stockage indisponible : la conversation reste en memoire */
+  }
+}
+
+function sessionId(): string {
+  const existing = readStored<string | null>(SESSION_KEY, null);
+  if (existing) return existing;
+  const created = `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  writeStored(SESSION_KEY, created);
+  return created;
+}
+
 // pages Findex : bandeau quand la vue reprend une enquete anterieure
 const WAVE_PAGES = new Set(["overview", "inclusion", "exclusion"]);
 
@@ -48,7 +77,7 @@ export function App() {
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [askOpen, setAskOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => readStored(CHAT_KEY, []));
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
   const [reload, setReload] = useState(0);
@@ -125,13 +154,22 @@ export function App() {
   ];
   const rules = (askBlock?.payload as { rules?: string[] } | undefined)?.rules ?? [];
 
+  useEffect(() => {
+    writeStored(CHAT_KEY, messages.slice(-40));
+  }, [messages]);
+
   const submitAsk = (question: string) => {
     const text = question.trim();
     if (!text || busy) return;
     setAskOpen(true);
+    // historique de la session du navigateur : derniers echanges (hors erreurs)
+    const history = messages
+      .filter((message) => !message.isError)
+      .slice(-10)
+      .map((message) => ({ role: message.role, text: message.text.slice(0, 2000) }));
     setMessages((current) => [...current, { role: "user", text }]);
     setBusy(true);
-    askFinova(text, iso3, year)
+    askFinova(text, iso3, year, { page: page?.id, session_id: sessionId(), history })
       .then((result: AskResult) => {
         setMessages((current) => [
           ...current,

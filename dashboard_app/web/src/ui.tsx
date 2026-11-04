@@ -827,24 +827,41 @@ export function AskDock({
                     </span>
                     <span className="muted small">
                       {message.result.country_name} · {message.result.year}
+                      {message.result.mode === "llm" ? " · mode IA" : " · mode simple"}
                     </span>
                   </div>
                   {message.result.facts.length > 0 && (
                     <div className="tag-row">
                       {message.result.facts.map((fact) => (
                         <code key={fact.id} title={fact.id}>
-                          {plainText(fact.label)} : {plainText(fact.display)} ({fact.year})
+                          {plainText(fact.label)} : {plainText(fact.display)} ·{" "}
+                          {fact.iso3 ?? message.result!.iso3} · {fact.year}
                         </code>
                       ))}
                     </div>
                   )}
                   {message.result.caveat && <p className="caveat small">{plainText(message.result.caveat)}</p>}
+                  {index === messages.length - 1 && !busy && (message.result.suggestions?.length ?? 0) > 0 && (
+                    <div className="suggestions chat-suggestions">
+                      {message.result.suggestions!.map((suggestion) => (
+                        <button key={suggestion} onClick={() => onAsk(suggestion)}>
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </div>
           ),
         )}
-        {busy && <div className="bubble assistant pending">Recherche dans les chiffres…</div>}
+        {busy && (
+          <div className="bubble assistant pending typing" role="status" aria-label="Ask Finova écrit…">
+            <i />
+            <i />
+            <i />
+          </div>
+        )}
         <div ref={bottom} />
       </div>
       <footer>
