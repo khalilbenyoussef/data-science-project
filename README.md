@@ -11,6 +11,9 @@ Pipeline Business Intelligence automatique en deux routes :
 
 Domaine : **Économie & Finance / inclusion financière**.
 
+> **Nouvelle installation** : suivre « Démarrage » (prérequis, fichiers à obtenir
+> séparément, commandes dans l'ordre), puis `.\start.ps1`.
+
 Sources de données :
 
 | Source | Rôle | Fichier |
@@ -416,25 +419,108 @@ Options : `--country` (répétable ou CSV), `--kpis`, `--mode latest|year`,
 
 ## Démarrage
 
-Windows (PowerShell) :
+Procédure vérifiée sur un clone neuf de `el-final` (Windows 11, Python 3.10.11,
+Node 24) : installation, pipeline, Route 2 et dashboard en une quinzaine de minutes.
+
+### Prérequis
+
+- **Git** ;
+- **Python 3.10** : `requirements.lock` a été généré pour Windows / Python 3.10.
+  Si plusieurs versions sont installées, créer le venv explicitement avec
+  `py -3.10 -m venv .venv` (le lanceur `py` peut choisir une version plus récente
+  par défaut). Autre version ou autre système : voir « Installation reproductible »
+  plus bas, ou installer `requirements.txt` ;
+- **Node.js >= 18** pour le front FinOVA (`npm ci`). Les tests Node du dashboard
+  historique (`legacy/`) demandent Node >= 22.6 ; sans lui, ils sont ignorés ;
+- **un accès réseau** au premier lancement : le PIB (WDI) est téléchargé
+  automatiquement depuis l'API World Bank.
+
+### Fichiers à obtenir séparément (absents de Git)
+
+| Fichier | Obligatoire | Où le mettre | Où l'obtenir |
+|---|---|---|---|
+| `findex.csv` | **oui** | `data/raw/findex.csv` | World Bank Global Findex 2025, *Download data* : <https://www.worldbank.org/en/publication/globalfindex/download-data> (base au niveau pays, colonnes `countrynewwb, codewb, …, year, group, group2, account_t_d, …, fin11a…fin11f`) |
+| `fas.csv` | **oui** | `data/raw/fas.csv` | IMF Financial Access Survey : <https://data.imf.org/Datasets/FAS> (export large `SERIES_CODE` + années, séparateur `;`, deux lignes d'en-tête) |
+| `gdp.csv` | non | `data/raw/gdp.csv` | téléchargé tout seul par le Collector (API World Bank, indicateur `NY.GDP.MKTP.CD`) |
+| `.env` | non | racine du projet | `Copy-Item .env.example .env`, puis renseigner `GROQ_API_KEY` et/ou `GOOGLE_API_KEY` (clés personnelles, jamais commitées). Sans clé, le pipeline et le dashboard fonctionnent ; seuls le quality gate assisté et Ask Finova en mode IA sont désactivés |
+| vidéos de connexion | non | `dashboard_app/web/public/media/login/login-01.mp4` … `login-04.mp4`, **avant** `npm run build` (ou directement dans `dashboard_app/web/dist/media/login/`) | à demander à l'équipe (124 Mo, `*.mp4` ignoré par Git). Sans elles, la page de connexion garde son fond statique |
+
+Les documents de travail de `docs/sources/` (fiches Findex et FAS d'où viennent
+ces liens) ne sont pas versionnés non plus. Pour reproduire exactement les
+chiffres publiés (`AUDIT_REPORT.md`), utiliser les fichiers de l'équipe ; leurs
+empreintes SHA-256 :
+
+```
+35f3fa934adf940c3ec20603b64e8ed81b4315ff550bdb08d61968e38fc0bf66  data/raw/findex.csv
+f60b4d1b3de68e15b6b29c286b2954942d6d226c86e1f13c42e372965ac5e9b5  data/raw/fas.csv
+b746f41a1c591493feca1490d64f937ca00c227e7661b6694779735e79886c17  data/raw/gdp.csv   (téléchargé, 2026-11-04)
+```
+
+(`Get-FileHash data\raw\findex.csv` sous PowerShell, `sha256sum` sous Linux.)
+Sans `findex.csv` ou `fas.csv`, `main.py run` s'arrête au Collector avec
+« source statique introuvable : …\data\raw\<fichier> ».
+
+### Installation et lancement — Windows (PowerShell)
 
 ```powershell
-# 1. Environnement
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+# 1. Cloner
+git clone --branch el-final <url-du-depot> data-science-project
+cd data-science-project
 
-# 2. Clés LLM (optionnelles pour l'ETL, utiles au quality gate)
-Copy-Item .env.example .env
-# renseigner GOOGLE_API_KEY, GROQ_API_KEY
+# 2. Environnement Python (pip récent obligatoire : le pip 23 livré avec
+#    Python 3.10 refuse le verrou, « all requirements must have their versions pinned »)
+py -3.10 -m venv .venv            # ou : python -m venv .venv  si python = 3.10
+.\.venv\Scripts\python -m pip install --upgrade pip
+.\.venv\Scripts\python -m pip install --require-hashes -r requirements.lock
 
-# 3. Vérification des providers
-python scripts/check_llm.py
+# 3. Clés LLM (optionnelles)
+Copy-Item .env.example .env       # puis renseigner GROQ_API_KEY / GOOGLE_API_KEY
+.\.venv\Scripts\python scripts/check_llm.py   # sans clé : « Aucun provider operationnel » (attendu)
 
-# 4. Route 1 : pipeline complet (collector -> ... -> semantic_kpi -> auditor)
-python main.py run
+# 4. Données brutes : déposer findex.csv et fas.csv dans data\raw\ (voir tableau)
 
-# Etapes ciblees
+# 5. Route 1 : pipeline complet (collector -> ... -> semantic_kpi -> auditor), ~1 min
+.\.venv\Scripts\python main.py run
+#    attendu : « statut : success », gate=PASS, verdict pass_with_warnings
+
+# 6. Route 2 : contrat publié du dashboard (Tunisie 2024), ~1 min
+$env:PYTHONPATH = "src"
+.\.venv\Scripts\python -c "from biflow.route2_graph import run_route2; run_route2(use_llm=False)"
+
+# 7. Front FinOVA
+cd dashboard_app\web; npm ci; npm run build; cd ..\..
+
+# 8. Dashboard : http://127.0.0.1:8000
+.\start.ps1                       # .\stop.ps1 pour l'arrêter
+#    si les scripts sont bloqués : powershell -ExecutionPolicy Bypass -File .\start.ps1
+
+# 9. Tests (~11 min)
+$env:PYTHONPATH = "src"; .\.venv\Scripts\python -m pytest -q
+```
+
+### Installation et lancement — Linux / macOS (bash)
+
+`requirements.lock` est propre à Windows : installer `requirements.txt` (ou
+régénérer le verrou, voir « Installation reproductible »). `start.ps1` est un
+script Windows : lancer uvicorn directement.
+
+```bash
+git clone --branch el-final <url-du-depot> data-science-project && cd data-science-project
+python3.10 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
+cp .env.example .env                       # clés optionnelles
+# déposer findex.csv et fas.csv dans data/raw/
+.venv/bin/python main.py run
+PYTHONPATH=src .venv/bin/python -c "from biflow.route2_graph import run_route2; run_route2(use_llm=False)"
+(cd dashboard_app/web && npm ci && npm run build)
+PYTHONPATH=src .venv/bin/python -m uvicorn dashboard_app.api.app:app --host 127.0.0.1 --port 8000
+PYTHONPATH=src .venv/bin/python -m pytest -q
+```
+
+### Commandes utiles
+
+```powershell
 python main.py steps
 python main.py run --only quality
 python main.py run --from etl
@@ -446,55 +532,7 @@ python main.py explain --kpi gender_gap --iso3 TUN --year 2024 --compare-year 20
 python main.py explain --kpi branch_density --iso3 TUN --year 2024 --compare-iso3 PEERS
 python main.py add-source --file mon_fichier.csv --name ma_source --dry-run
 python scripts/evaluate_auditor.py        # injection de fautes -> data/audit/evaluation.md
-
-# 5. Route 2 (warehouse deja construit)
-python main.py dashboard --country TUN,MAR,DZA --mode latest
-
-# 6. Front (Node.js >= 18)
-cd dashboard_app/web; npm ci; npm run build; cd ../..
-
-# 7. Tests
-.\.venv\Scripts\python -m pytest -q
-```
-
-Linux / macOS (bash) :
-
-```bash
-# 1. Environnement
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-# 2. Clés LLM (optionnelles pour l'ETL, utiles au quality gate)
-cp .env.example .env
-# renseigner GOOGLE_API_KEY, GROQ_API_KEY
-
-# 3. Vérification des providers
-python scripts/check_llm.py
-
-# 4. Route 1 : pipeline complet (collector -> ... -> semantic_kpi -> auditor)
-python main.py run
-
-# Etapes ciblees
-python main.py steps
-python main.py run --only quality
-python main.py run --from etl
-python main.py run --to etl --no-llm
-python main.py run --only semantic_kpi
-python main.py run --rebuild
-python main.py explain --kpi account_ownership --iso3 TUN --year 2024
-python main.py explain --kpi gender_gap --iso3 TUN --year 2024 --compare-year 2021 --lang en
-python main.py add-source --file mon_fichier.csv --name ma_source --dry-run
-python scripts/evaluate_auditor.py
-
-# 5. Route 2 (warehouse deja construit)
-python main.py dashboard --country TUN,MAR,DZA --mode latest
-
-# 6. Front (Node.js >= 18)
-(cd dashboard_app/web && npm ci && npm run build)
-
-# 7. Tests
-.venv/bin/python -m pytest -q
+python main.py dashboard --country TUN,MAR,DZA --mode latest   # contrat Route 2 historique
 ```
 
 ## Sorties
@@ -720,7 +758,7 @@ Développement front avec proxy `/api` vers le port 8000 :
 
 ```powershell
 cd dashboard_app/web
-npm install
+npm ci
 npm run dev        # http://127.0.0.1:5173
 npm run build      # tsc --noEmit && vite build
 ```
@@ -795,6 +833,7 @@ fixe chaque paquet (dépendances transitives comprises) avec ses empreintes
 SHA-256 : pip refuse tout fichier dont l'empreinte diffère.
 
 ```powershell
+python -m pip install --upgrade pip   # pip 23.0 refuse ce verrou ; 26.3 vérifié
 python -m pip install --require-hashes -r requirements.lock
 ```
 
