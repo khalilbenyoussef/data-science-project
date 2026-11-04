@@ -2706,3 +2706,118 @@ select {
     align-items: flex-start;
   }
 }
+
+/* ------------------------------------------------------------------ Audit et confiance */
+.audit-page .panel + .panel {
+  margin-top: 16px;
+}
+
+.verdict-banner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px 32px;
+  border-left: 4px solid var(--accent);
+}
+
+.verdict-banner.verdict-pass {
+  border-left-color: var(--green);
+}
+
+.verdict-banner.verdict-fail {
+  border-left-color: var(--red);
+}
+
+.verdict-banner h3 {
+  margin: 4px 0 10px;
+  font-size: 1.25rem;
+}
+
+.verdict-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.verdict-meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.verdict-meta dt {
+  color: var(--muted);
+}
+
+.verdict-meta dd {
+  margin: 0;
+}
+
+.reason-line {
+  margin: 12px 0 0;
+}
+
+.audit-checks td:first-child {
+  white-space: nowrap;
+}
+
+.audit-checks .chip-user {
+  margin-left: 8px;
+}
+
+.affected-rows {
+  max-height: 220px;
+  margin: 6px 0 0;
+  padding-left: 18px;
+  overflow-y: auto;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.audit-insights {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audit-insights li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-inner);
+  font-size: 0.82rem;
+}
+
+.audit-insights p {
+  margin: 0 0 6px;
+}
+
+.trace {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding-left: 20px;
+  font-size: 0.82rem;
+}
+
+.trace li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+@media (max-width: 760px) {
+  .audit-checks th:nth-child(4),
+  .audit-checks td:nth-child(4) {
+    display: none;
+  }
+}

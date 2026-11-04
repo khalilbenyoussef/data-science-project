@@ -722,6 +722,9 @@ Le login est une démonstration d'interface (aucune authentification réelle).
 | GET | `/api/sources` | sources utilisateur : lignes, années, pays, score qualité, statut |
 | DELETE | `/api/sources/{name}` | retire la source (copie conservée) et lance le recalcul |
 | GET | `/api/sources/{name}/data` | valeurs publiées de la source (`fact`, source `user:<nom>`), lecture seule |
+| GET | `/api/audit/summary` | page « Audit et confiance » : verdict, publication, motifs de réserve, audit des constats, évaluation |
+| GET | `/api/audit/checks` | contrôles A1…C4 décrits en français, lignes concernées |
+| GET | `/api/audit/explain?kpi_id=&iso3=&year=` | explication d'une valeur (même lecture que `main.py explain`) |
 
 Le scope publié est servi tel quel (`X-Finova-Source: file`). Tout autre
 pays/année est **construit à la demande** depuis le warehouse
@@ -758,6 +761,12 @@ fictives** (« exemple fictif » dans chaque libellé, ligne de commentaire en t
 virgule décimale, noms de pays en français, une valeur « n.d. », une cellule vide
 et un pays à rattacher à la main (Mauritanie → MRT). Unités à choisir : nombre
 pour les clients, % pour le taux de pénétration. Ces valeurs ne sont pas réelles.
+
+Page « Audit et confiance » : lecture seule de `data/audit/audit_report.json`,
+`kpi_values` et `kpi_explanations` (données officielles uniquement). L'évaluation
+par injection de fautes n'est jamais lancée par l'API : elle est lue dans
+`data/audit/evaluation.json` (`python scripts/evaluate_auditor.py`), avec sa date ;
+si elle est antérieure au dernier audit, la page l'indique.
 
 ### 4. Tests
 

@@ -28,6 +28,7 @@ from biflow.agents.ask import (
 from biflow.config import ROOT, load_config, resolve
 from biflow.tools.dashboard_spec import COUNTRY_LABELS, PEERS, REFERENCE_PATH
 from biflow.tools.audit_text import template_text
+from dashboard_app.api.audit import create_audit_router
 from dashboard_app.api.sources import create_sources_router
 from biflow.tools.kpi import DEFAULT_CATALOG
 from biflow.tools.spec_cache import (
@@ -66,6 +67,7 @@ def create_app(
     prewarm: bool | None = None,
     ask_model: Any | None = None,
     sources_runner: Any | None = None,
+    audit_dir: str | Path | None = None,
 ) -> FastAPI:
     cfg = load_config()
     dashboard = cfg.get("dashboard") or {}
@@ -284,6 +286,10 @@ def create_app(
     # page « Mes données » : sources CSV de l'utilisateur (recalcul en arriere-plan)
     sources_router, _ = create_sources_router(cfg, warehouse=warehouse, runner=sources_runner)
     app.include_router(sources_router)
+    # page « Audit et confiance » : rapport d'audit, kpi_values et explications (lecture seule)
+    app.include_router(create_audit_router(
+        audit_dir=resolve(audit_dir if audit_dir is not None else paths.get("audit", "data/audit")),
+        warehouse=warehouse, spec_file=spec_file))
 
     settings = ask_settings(cfg)
     budget = SessionBudget(settings["max_calls_per_session"])

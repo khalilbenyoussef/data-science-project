@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime
 import os
 import shutil
 import sys
@@ -161,6 +162,15 @@ def _faults(focus: str) -> list[dict[str, Any]]:
     ]
 
 
+def _audit_run_id(cfg: dict[str, Any]) -> str | None:
+    """Run de l'audit reel evalue (rapport d'audit courant), pour tracer l'evaluation."""
+    path = resolve((cfg.get("paths") or {}).get("audit", "data/audit")) / "audit_report.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("run_id")
+    except (OSError, ValueError):
+        return None
+
+
 def evaluate(cfg: dict[str, Any] | None = None, out_dir: str | Path | None = None) -> dict[str, Any]:
     cfg = deepcopy(cfg or load_config())
     focus = normalize_iso3((cfg.get("kpi") or {}).get("focus"))
@@ -187,6 +197,9 @@ def evaluate(cfg: dict[str, Any] | None = None, out_dir: str | Path | None = Non
                 "evidence": evidence[:300],
             })
     summary = {
+        # date de l'evaluation : la page « Audit et confiance » la compare au dernier audit
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "audit_run_id": _audit_run_id(cfg),
         "baseline": {"verdict": baseline["verdict"], "counts": baseline["counts"],
                      "publication": baseline["publication"], "timing_s": baseline["timing_s"]},
         "faults": results,
