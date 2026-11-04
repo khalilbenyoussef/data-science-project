@@ -1,4 +1,4 @@
-import type { Bar, Chart, DumbbellGroup, GapPoint, ReferenceLine, Series } from "./types";
+import type { Bar, Chart, GapPoint, ReferenceLine, Series } from "./types";
 import { fmtNumber, fmtPct, fmtSigned, fmtUnit, unitLabel } from "./format";
 import {
   CHART_TITLES, HEATMAP_ROW_LABELS, STEP_LABELS, chipLabel, chipNeedsReview, chipTitle, plainText,
@@ -314,71 +314,79 @@ function FunnelChart({ chart }: { chart: Chart }) {
   );
 }
 
-function DumbbellChart({ chart }: { chart: Chart }) {
-  const groups = chart.groups;
-  if (groups.length === 0) return <p className="empty">Aucun groupe.</p>;
-  return (
-    <div className="dumbbell-list">
-      {groups.map((group) => (
-        <DumbbellGroupView key={group.id} group={group} unit={chart.unit} />
-      ))}
-    </div>
-  );
-}
+// HTML/CSS (positions en %) : la taille du texte ne suit jamais la largeur du graphique
+const DUMBBELL_TICKS = [0, 25, 50, 75, 100];
+const DUMBBELL_CLOSE = 9; // points d'ecart sous lesquels une etiquette passe sous son point
 
-function DumbbellGroupView({ group, unit }: { group: DumbbellGroup; unit: string | null }) {
+function DumbbellChart({ chart }: { chart: Chart }) {
+  const rows = chart.groups
+    .flatMap((group) => group.rows.map((row) => ({ group, row })))
+    .sort((a, b) => (b.row.gap_pp ?? -Infinity) - (a.row.gap_pp ?? -Infinity));
+  if (rows.length === 0) return <p className="empty">Aucun groupe.</p>;
+  const max = chart.unit === "percent"
+    ? 100
+    : niceMax(Math.max(...rows.flatMap(({ row }) => [row.left.value ?? 0, row.right.value ?? 0])) * 1.2);
+  const pos = (value: number) => `${Math.min(100, Math.max(0, (value / max) * 100))}%`;
   return (
-    <div className="dumbbell-group">
-      <h4>{plainText(group.title)}</h4>
-      {group.rows.map((row) => {
-        const values = [row.left.value ?? 0, row.right.value ?? 0];
-        const max = unit === "percent" ? 100 : niceMax(Math.max(...values) * 1.2);
-        const width = 640;
-        const left = 52;
-        const local = (value: number) => left + (value / max) * (width - 80);
+    <div className="db">
+      <div className="db-legend">
+        <span><i className="dot dot-series" />Groupe le moins équipé</span>
+        <span><i className="dot dot-accent" />Groupe le plus équipé</span>
+      </div>
+      {rows.map(({ group, row }) => {
+        const left = row.left.value;
+        const right = row.right.value;
+        const close = left !== null && right !== null && Math.abs(right - left) < DUMBBELL_CLOSE;
+        const gap = row.gap_pp !== null ? `${row.gap_pp >= 0 ? "+" : ""}${fmtNumber(row.gap_pp)} pts` : "—";
+        const summary = `${plainText(group.title)}, ${row.year} : ${plainText(row.left.label)} ${plainText(row.left.display)}, `
+          + `${plainText(row.right.label)} ${plainText(row.right.display)}, écart ${gap}`;
         return (
-          <div key={row.id} className="dumbbell-row">
-            <svg className="dumbbell-svg" viewBox={`0 0 ${width} 92`} role="img" aria-label={`${plainText(group.title)} : ${plainText(row.label)}`}>
-              <line x1={left} x2={width - 28} y1={62} y2={62} className="axis" />
-              {[0, 0.5, 1].map((share) => (
-                <g key={share}>
-                  <line x1={left + share * (width - 80)} x2={left + share * (width - 80)} y1={58} y2={66} className="axis" />
-                  <text x={left + share * (width - 80)} y={80} textAnchor="middle" className="tick">
-                    {fmtNumber(max * share, 0)}
-                  </text>
-                </g>
-              ))}
-              <line
-                x1={local(row.left.value ?? 0)}
-                x2={local(row.right.value ?? 0)}
-                y1={42}
-                y2={42}
-                className="dumbbell-link"
-              />
-              <circle cx={local(row.left.value ?? 0)} cy={42} r={7} fill="var(--series)">
-                <title>{`${plainText(row.left.label)} · ${plainText(row.left.display)} (${row.year})`}</title>
-              </circle>
-              <circle cx={local(row.right.value ?? 0)} cy={42} r={7} fill="var(--accent)">
-                <title>{`${plainText(row.right.label)} · ${plainText(row.right.display)} (${row.year})`}</title>
-              </circle>
-              <text x={local(row.left.value ?? 0)} y={26} textAnchor="middle" className="dumbbell-label">
-                {plainText(row.left.display)}
-              </text>
-              <text x={local(row.right.value ?? 0)} y={26} textAnchor="middle" className="dumbbell-label accent">
-                {plainText(row.right.display)}
-              </text>
-              <text x={width - 28} y={26} textAnchor="end" className="point-label">
-                écart +{fmtNumber(row.gap_pp)} points
-              </text>
-            </svg>
-            <div className="dumbbell-caption">
-              <span><i className="dot dot-series" />{plainText(row.left.label)}</span>
-              <span><i className="dot dot-accent" />{plainText(row.right.label)}</span>
-              <span className="muted">{row.year}</span>
+          <div key={row.id} className="db-row" role="img" aria-label={summary} title={summary}>
+            <div className="db-name">
+              <span>{plainText(group.title)}</span>
+              <small>
+                <b><i className="dot dot-series" />{plainText(row.left.label)}</b>
+                <b><i className="dot dot-accent" />{plainText(row.right.label)}</b>
+              </small>
             </div>
+            <div className="db-track">
+              {DUMBBELL_TICKS.map((tick) => (
+                <i key={tick} className="db-grid" style={{ left: pos((tick / 100) * max) }} />
+              ))}
+              <i className="db-line" />
+              {left !== null && right !== null && (
+                <i className="db-link" style={{ left: pos(Math.min(left, right)), width: `${(Math.abs(right - left) / max) * 100}%` }} />
+              )}
+              {left !== null && (
+                <>
+                  <i className="db-dot dot-series" style={{ left: pos(left) }} />
+                  <span className="db-value" style={{ left: pos(left) }}>{plainText(row.left.display)}</span>
+                </>
+              )}
+              {right !== null && (
+                <>
+                  <i className="db-dot dot-accent" style={{ left: pos(right) }} />
+                  <span className={`db-value accent ${close ? "below" : ""}`} style={{ left: pos(right) }}>
+                    {plainText(row.right.display)}
+                  </span>
+                </>
+              )}
+            </div>
+            <span className={`db-gap ${row.gap_pp === null ? "muted" : ""}`}>{gap}</span>
           </div>
         );
       })}
+      <div className="db-row db-axis" aria-hidden="true">
+        <span />
+        <div className="db-track">
+          {DUMBBELL_TICKS.map((tick) => (
+            <span key={tick} className="db-tick" style={{ left: pos((tick / 100) * max) }}>
+              {chart.unit === "percent" ? `${tick} %` : fmtNumber((tick / 100) * max, 0)}
+            </span>
+          ))}
+        </div>
+        <span />
+      </div>
     </div>
   );
 }
