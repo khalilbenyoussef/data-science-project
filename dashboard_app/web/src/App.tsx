@@ -3,8 +3,12 @@ import type { AskResult, Notice, Spec } from "./types";
 import { ApiError, askFinova, fetchSpec } from "./api";
 import { PageView } from "./pages";
 import { AskDock, ChatMessage, NoticeList } from "./ui";
+import { MyDataPage } from "./sources";
 import { prettyDate } from "./format";
 import { PAGE_COPY, PUBLICATION_LABELS, plainText } from "./copy";
+
+// page « Mes données » : hors contrat Finova (sources CSV de l'utilisateur)
+const MYDATA = "mydata";
 
 const NAV = [
   { id: "overview", label: "Vue d'ensemble", icon: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" },
@@ -13,6 +17,7 @@ const NAV = [
   { id: "exclusion", label: "Pourquoi l'exclusion ?", icon: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9a2.5 2.5 0 1 1 3.6 2.2c-.8.5-1.1 1-1.1 1.8M12 17h.01" },
   { id: "poverty", label: "Pauvreté et SMIG", icon: "M4 19V5m0 14h16M8 15l3-4 3 2 5-7" },
   { id: "pipeline", label: "Sources et qualité", icon: "M4 6h16M4 12h16M4 18h16M8 4v4M16 10v4M10 16v4" },
+  { id: MYDATA, label: "Mes données", icon: "M12 16V4m0 0-4 4m4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" },
 ];
 
 // conversation Ask Finova gardee pour la session du navigateur (sessionStorage)
@@ -128,7 +133,8 @@ export function App() {
           const merged = Array.from(new Set([...current, ...result.spec.years])).sort((a, b) => a - b);
           return merged.length ? merged : current;
         });
-        if (!result.spec.pages.some((page) => page.id === pageId)) setPageId("overview");
+        setPageId((current) =>
+          current === MYDATA || result.spec.pages.some((item) => item.id === current) ? current : "overview");
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
@@ -254,7 +260,9 @@ export function App() {
             <span className="muted small">FinOVA</span>
             <span className="sep">/</span>
             <strong>
-              {PAGE_COPY[page?.id ?? ""]?.title ?? (plainText(page?.title) || "Vue d'ensemble")}
+              {pageId === MYDATA
+                ? "Mes données"
+                : PAGE_COPY[page?.id ?? ""]?.title ?? (plainText(page?.title) || "Vue d'ensemble")}
             </strong>
           </div>
           <div className="topbar-tools">
@@ -305,21 +313,22 @@ export function App() {
         </header>
 
         <main className="content">
-          {loading && !spec && (
+          {pageId === MYDATA && <MyDataPage />}
+          {pageId !== MYDATA && loading && !spec && (
             <LoadingScreen
               country={countryName}
               year={year}
               elapsed={elapsed}
             />
           )}
-          {loading && spec && (
+          {pageId !== MYDATA && loading && spec && (
             <div className="loading-banner">
               Préparation des chiffres pour {countryName} {year}… ({elapsed} s).
               La vue précédente reste affichée pendant le calcul, puis elle sera
               remplacée.
             </div>
           )}
-          {error && (
+          {pageId !== MYDATA && error && (
             <div className="error-card">
               <h3>Tableau de bord indisponible</h3>
               <p>Les données n'ont pas pu être chargées pour le moment.</p>
@@ -343,7 +352,7 @@ export function App() {
               </button>
             </div>
           )}
-          {!loading && !error && spec && page && (
+          {pageId !== MYDATA && !loading && !error && spec && page && (
             <>
               {(spec.survey_years?.length ?? 0) > 0 && (
                 <p className="survey-hint">

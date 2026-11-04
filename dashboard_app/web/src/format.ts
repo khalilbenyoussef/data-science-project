@@ -42,7 +42,8 @@ export function unitDigits(unit: string | null | undefined): number {
 
 export function fmtUnit(value: number | null | undefined, unit: string | null | undefined): string {
   if (value === null || value === undefined) return "Indisponible";
-  const digits = unitDigits(unit);
+  // un nombre entier (unite « count », sources utilisateur) s'affiche sans decimale
+  const digits = unit === "count" && Number.isInteger(value) ? 0 : unitDigits(unit);
   const label = unitLabel(unit);
   return `${fmtNumber(value, digits)}${label ? ` ${label}` : ""}`;
 }

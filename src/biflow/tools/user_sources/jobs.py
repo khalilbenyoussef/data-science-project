@@ -53,6 +53,9 @@ class JobManager:
         self.timeout_s = float(timeout_s)
         self.runner = runner
         self._lock = threading.Lock()
+        # lectures et ecritures d'un fichier de job serialisees : sous Windows, os.replace
+        # echoue (acces refuse) si une requete de suivi lit le fichier au meme moment
+        self._io = threading.RLock()
         self._mine: set[str] = set()  # jobs suivis par ce processus
 
     # ------------------------------------------------------------- stockage
@@ -65,14 +68,23 @@ class JobManager:
         self.root.mkdir(parents=True, exist_ok=True)
         path = self._path(job["job_id"])
         tmp = path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(tmp, path)
+        with self._io:
+            tmp.write_text(json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
+            for attempt in range(20):  # fichier lu par un autre processus (antivirus, indexation)
+                try:
+                    os.replace(tmp, path)
+                    return
+                except PermissionError:
+                    if attempt == 19:
+                        raise
+                    time.sleep(0.05)
 
     def _read(self, job_id: str) -> dict[str, Any]:
-        try:
-            return json.loads(self._path(job_id).read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            raise KeyError(job_id) from exc
+        with self._io:
+            try:
+                return json.loads(self._path(job_id).read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                raise KeyError(job_id) from exc
 
     def get(self, job_id: str) -> dict[str, Any]:
         """Statut ; un job actif trop long ou orphelin est clos en erreur."""
@@ -170,15 +182,20 @@ def _stream(command: list[str], deadline: float, update: Callable[..., None], st
     reader = threading.Thread(target=read, daemon=True)
     reader.start()
     last = 0.0
-    while proc.poll() is None:
-        if time.time() > deadline:
+    try:
+        while proc.poll() is None:
+            if time.time() > deadline:
+                proc.kill()
+                proc.wait()
+                return None, tail
+            if time.time() - last >= HEARTBEAT_S:
+                update(step=state.get("step"))
+                last = time.time()
+            time.sleep(0.5)
+    finally:
+        if proc.poll() is None:  # job interrompu : jamais de recalcul orphelin
             proc.kill()
             proc.wait()
-            return None, tail
-        if time.time() - last >= HEARTBEAT_S:
-            update(step=state.get("step"))
-            last = time.time()
-        time.sleep(0.5)
     reader.join(timeout=5)
     return proc.returncode, tail
 

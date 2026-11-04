@@ -378,6 +378,119 @@ export interface AskResult {
   source: string;
 }
 
+// ------------------------------------------------------------ Mes données
+export type ColumnRole =
+  | "country" | "year" | "indicator" | "value" | "year_column" | "indicator_column" | "ignore";
+
+export interface DetectColumn {
+  name: string;
+  role: ColumnRole;
+  evidence: string;
+  origin: string | null;
+  samples: string[];
+}
+
+export interface DetectResult {
+  upload_id: string;
+  filename: string;
+  size_bytes: number;
+  max_file_mb: number;
+  rows: number;
+  read: { encoding: string; separator: string; decimal: string; header_row: number };
+  layout: "long" | "wide_by_year" | "wide_by_indicator" | null;
+  layout_evidence: string;
+  problem: string | null;
+  columns: DetectColumn[];
+  country: { column: string; kind: "iso3" | "name"; share: number } | null;
+  fingerprint: string;
+  reusable: { name: string; confirmed_at: string | null; indicators: Record<string, string> }[];
+}
+
+export interface IndicatorChoice {
+  label?: string;
+  unit?: string | null;
+  transform?: "none" | "percent_to_fraction";
+}
+
+export interface SourceMappingInput {
+  roles?: Record<string, ColumnRole>;
+  country_kind?: "iso3" | "name";
+  indicators?: Record<string, IndicatorChoice>;
+  country_names?: Record<string, string>;
+  reuse?: string;
+  replace?: boolean;
+}
+
+export interface DryRunResult {
+  name: string;
+  layout: string;
+  roles: Record<string, ColumnRole>;
+  indicators: { code: string; label: string; unit: string | null; transform: string }[];
+  country_names: Record<string, string>;
+  missing_fields: { indicator: string; label: string; field: string }[];
+  blocking: string[];
+  rows_mapped_pct: number;
+  observations: number;
+  mapped: number;
+  empty_cells: number;
+  year_range: [number, number] | null;
+  countries: string[];
+  unmapped_countries: Record<string, { rows: number; reason: string }>;
+  non_numeric: { count: number; examples: { line: number; column: string; text: string }[] };
+  invalid_years: { count: number };
+  duplicates: { exact_removed: number; conflicting_keys: number };
+  preview: {
+    iso3: string; year: number; indicator_code: string; indicator_label: string; value: number;
+    unit: string; raw_value: string; raw_column: string; line: number;
+  }[];
+  quality: { gate: boolean; score: number; issues: { code: string; severity: string; message: string | null }[] };
+}
+
+export interface SourceJob {
+  job_id: string;
+  kind: "add" | "delete";
+  source: string;
+  status: "queued" | "running" | "success" | "quality_failed" | "audit_failed" | "error";
+  step: string | null;
+  steps_done: string[];
+  run_id: string | null;
+  route2_run_id: string | null;
+  message: string | null;
+  reasons: string[];
+  started_at: string;
+  finished_at: string | null;
+  seconds: number | null;
+  quality_score?: number | null;
+}
+
+export interface UserSource {
+  name: string;
+  file: string;
+  confirmed_at: string | null;
+  indicators: { code: string; label: string; unit: string }[];
+  rows: number;
+  years: [number, number] | null;
+  countries: string[];
+  quality_score: number | null;
+  status: "included" | "excluded" | "pending";
+  reason: string | null;
+  last_job: { job_id: string; kind: string; status: string; finished_at: string | null } | null;
+}
+
+export interface SourcesList {
+  sources: UserSource[];
+  active_job: SourceJob | null;
+  max_file_mb: number;
+}
+
+export interface SourceData {
+  name: string;
+  provider: string;
+  chip: string;
+  indicators: { code: string; label: string; unit: string }[];
+  values: { iso3: string; year: number; indicator_code: string; indicator_label: string; value: number | null; unit: string }[];
+}
+
 export interface RunSummary {
   run_id: string;
   status: string | null;

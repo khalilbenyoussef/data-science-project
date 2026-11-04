@@ -140,7 +140,7 @@ function LineChart({ chart }: { chart: Chart }) {
           <g key={tick}>
             <line x1={x0} x2={x1} y1={sy(tick)} y2={sy(tick)} className="grid" />
             <text x={x0 - 10} y={sy(tick) + 4} textAnchor="end" className="tick">
-              {chart.unit === "percent" ? fmtNumber(tick, 0) : fmtNumber(tick, 0)}
+              {fmtNumber(tick, yMax - yMin < 5 ? 1 : 0)}
             </text>
           </g>
         ))}

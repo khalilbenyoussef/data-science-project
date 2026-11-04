@@ -269,3 +269,21 @@ def test_csv_exports_neutralise_formula_cells(tmp_path):
     assert safe["value"].tolist() == [-1.5, 2.0, 3.0, 4.0, 5.0, 6.0]  # nombres inchanges
     text = write_csv(frame, tmp_path / "export.csv", index=True).read_text(encoding="utf-8-sig")
     assert "'=1+1" in text and "'=x" in text and "\n=" not in text and ",=" not in text
+
+
+def test_job_file_survives_concurrent_status_reads(tmp_path):
+    """Suivi (lectures) pendant les mises a jour du job : jamais d'acces refuse."""
+    def runner(job, update):
+        for index in range(200):
+            update(step=f"etape {index}")
+        update(status="success")
+
+    jobs = JobManager(tmp_path / "jobs", timeout_s=900, runner=runner)
+    job = jobs.start("add", "lecture")
+    seen = set()
+    for _ in range(2000):
+        state = jobs.get(job["job_id"])
+        seen.add(state["status"])
+        if state["status"] == "success":
+            break
+    assert jobs.get(job["job_id"])["status"] == "success" and "error" not in seen

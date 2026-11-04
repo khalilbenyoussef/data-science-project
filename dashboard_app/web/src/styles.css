@@ -2351,3 +2351,358 @@ select {
     align-items: flex-start;
   }
 }
+
+/* ------------------------------------------------------------------ Mes données */
+.chip-user {
+  border-color: rgba(21, 128, 61, 0.4);
+  background: rgba(21, 128, 61, 0.08);
+  color: var(--green);
+  font-weight: 600;
+}
+
+.mydata .page-head-badges {
+  align-items: center;
+}
+
+.source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.source-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.source-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.source-card-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.source-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.source-facts dt {
+  color: var(--muted);
+}
+
+.source-facts dd {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.confirm-box {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.05);
+  font-size: 0.82rem;
+}
+
+.confirm-box p {
+  margin: 0 0 10px;
+}
+
+.primary-btn.danger {
+  background: var(--red);
+  color: #fff;
+}
+
+.wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.stepper li,
+.job-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stepper-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--card-inner);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.stepper li.current,
+.job-steps li.current {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.stepper li.current .stepper-dot,
+.job-steps li.current .stepper-dot {
+  border-color: var(--accent);
+  background: rgba(233, 169, 0, 0.15);
+  color: var(--accent-ink);
+}
+
+.stepper li.done .stepper-dot,
+.job-steps li.done .stepper-dot {
+  border-color: rgba(21, 128, 61, 0.45);
+  background: rgba(21, 128, 61, 0.1);
+  color: var(--green);
+}
+
+.wizard-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 34px 20px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--card-inner);
+  text-align: center;
+}
+
+.drop-zone.over {
+  border-color: var(--accent);
+  background: rgba(233, 169, 0, 0.08);
+}
+
+.layout-examples h4,
+.check-step h4,
+.unknown-countries h4,
+.confirm-step h4 {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+}
+
+.layout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.layout-example {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+
+.layout-example figcaption {
+  margin-bottom: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.detected-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detected-row .chip {
+  font-size: 0.74rem;
+}
+
+.reuse-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 420px;
+  font-size: 0.8rem;
+}
+
+.field.inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 520px;
+}
+
+.field input,
+.wizard .data-table input,
+.wizard .data-table select {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+}
+
+.wizard .data-table select.missing {
+  border-color: var(--accent);
+  background: rgba(233, 169, 0, 0.08);
+}
+
+.unit-cell {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.unit-cell input {
+  width: 90px;
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+}
+
+.structure-step,
+.indicator-step,
+.check-step,
+.upload-step {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-x: auto;
+}
+
+.check-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.check-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-inner);
+}
+
+.check-stats strong {
+  font-size: 1.2rem;
+}
+
+.unknown-countries {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.confirm-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.job-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.job-steps li.done {
+  color: var(--text);
+}
+
+.job-result {
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--card-inner);
+  font-size: 0.85rem;
+}
+
+.job-result.job-success {
+  border-color: rgba(21, 128, 61, 0.4);
+}
+
+.job-result.job-quality_failed,
+.job-result.job-audit_failed,
+.job-result.job-error {
+  border-color: rgba(220, 38, 38, 0.4);
+}
+
+.data-view {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.data-view-head,
+.data-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.data-view-head h3 {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .source-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .field.inline {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -1,4 +1,7 @@
-import type { AskResult, RunSummary, Spec } from "./types";
+import type {
+  AskResult, DetectResult, DryRunResult, RunSummary, SourceData, SourceJob, SourceMappingInput,
+  SourcesList, Spec,
+} from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -70,6 +73,49 @@ export function askFinova(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question, iso3, year, ...context }),
   });
+}
+
+// ------------------------------------------------------------ Mes données
+export async function detectSource(file: File): Promise<DetectResult> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  return request<DetectResult>("/api/sources/detect", { method: "POST", body: form });
+}
+
+function sourceBody(upload_id: string, name: string, mapping: SourceMappingInput): RequestInit {
+  return {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ upload_id, name, mapping }),
+  };
+}
+
+export function dryRunSource(uploadId: string, name: string, mapping: SourceMappingInput): Promise<DryRunResult> {
+  return request<DryRunResult>("/api/sources/dry-run", sourceBody(uploadId, name, mapping));
+}
+
+export function confirmSource(
+  uploadId: string,
+  name: string,
+  mapping: SourceMappingInput,
+): Promise<{ job_id: string; name: string; replaced: boolean }> {
+  return request("/api/sources/confirm", sourceBody(uploadId, name, mapping));
+}
+
+export function fetchSourceJob(jobId: string): Promise<SourceJob> {
+  return request<SourceJob>(`/api/sources/jobs/${encodeURIComponent(jobId)}`);
+}
+
+export function fetchSources(): Promise<SourcesList> {
+  return request<SourcesList>("/api/sources");
+}
+
+export function deleteSource(name: string): Promise<{ job_id: string; name: string }> {
+  return request(`/api/sources/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
+export function fetchSourceData(name: string): Promise<SourceData> {
+  return request<SourceData>(`/api/sources/${encodeURIComponent(name)}/data`);
 }
 
 export function fetchRuns(): Promise<{ runs: RunSummary[]; count: number }> {

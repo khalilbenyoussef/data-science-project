@@ -180,7 +180,7 @@ def detect_upload(path: Path, cfg: Mapping[str, Any], filename: str = "") -> dic
             "evidence": _evidence(column, roles.get(column, "ignore"), detection),
             "origin": next((o for r, o in origins.items()
                             if r in ("country", "year", "indicator", "value") and roles.get(column) == r), None),
-            "samples": [str(v) for v in df[column].tolist() if str(v).strip()][:3],
+            "samples": list(dict.fromkeys(str(v) for v in df[column].tolist() if str(v).strip()))[:3],
         } for column in columns],
         "country": ({"column": country, **country_kind(df, country, resolver)} if country else None),
         "fingerprint": print_fp, "reusable": reusable,
