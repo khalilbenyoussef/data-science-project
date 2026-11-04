@@ -683,6 +683,25 @@ de l'API (résultat dans `run.json`, clé `pregenerated`).
 
 ### 2. Lancer le dashboard
 
+Windows, en une commande (depuis la racine du projet) :
+
+```powershell
+.\start.ps1               # vérifie .venv et le build, puis ouvre http://127.0.0.1:8000
+.\start.ps1 -NoBrowser    # sans ouvrir le navigateur ; -Port 8001 pour un autre port
+.\stop.ps1                # arrête uniquement le serveur lancé par start.ps1
+```
+
+`start.ps1` vérifie que `.venv\Scripts\python.exe` et `dashboard_app\web\dist`
+existent, refuse de démarrer si le port 8000 est déjà occupé (il affiche le nom
+et le PID du processus qui le tient), fixe `PYTHONPATH=src`, lance uvicorn sur
+`127.0.0.1:8000` en arrière-plan (journaux dans `outputs\logsinova-server.*.log`),
+attend `/api/health` puis ouvre le navigateur. Le PID est écrit dans `.finova.pid`
+(non versionné) ; `stop.ps1` n'arrête que ce processus (et son processus enfant),
+jamais un autre programme sur le port. Si PowerShell refuse les scripts locaux :
+`powershell -ExecutionPolicy Bypass -File .\start.ps1`.
+
+Manuellement (toutes plateformes) :
+
 ```powershell
 $env:PYTHONPATH = "src"
 $env:FINOVA_PREWARM = "1"   # optionnel : prépare en tâche de fond les vues 2024/2021/2017

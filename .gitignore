@@ -25,6 +25,7 @@ config/kpi_catalog.user.yaml
 docs/sources/
 
 # Artefacts
+.finova.pid
 *.duckdb
 *.parquet
 *.log
