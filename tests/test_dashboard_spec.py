@@ -92,7 +92,18 @@ def finova_warehouse(tmp_path_factory):
                  dimension_value="rural"),
             _row("TUN", 2024, "findex", "account_t_d", "urbanicity", 0.467,
                  dimension_value="urban"),
+            _row("TUN", 2024, "findex", "account_t_d", "laborforce", 0.166,
+                 dimension_value="out of laborforce"),
+            _row("TUN", 2024, "findex", "account_t_d", "laborforce", 0.621,
+                 dimension_value="in laborforce"),
         ]
+        for year, primary, secondary in ((2021, 0.27, 0.414), (2024, 0.286, 0.458)):
+            rows += [
+                _row("TUN", year, "findex", "account_t_d", "education", primary,
+                     dimension_value="prim edu or less"),
+                _row("TUN", year, "findex", "account_t_d", "education", secondary,
+                     dimension_value="secondary edu or more"),
+            ]
         con.executemany("INSERT INTO fact VALUES (?, ?, ?, ?, ?, ?, ?, ?)", rows)
     return path
 
@@ -145,7 +156,7 @@ def test_catalog_values_deltas_and_review_flags(spec):
     assert saving.chip.requires_review is True  # provenance absente dans cette fixture
     assert "provisional_definition" not in saving.chip.review_reasons  # catalogue 1.3.0 : verifie
     assert saving.label == "Épargne (toute forme)"
-    assert saving.chip.note == "Définition catalogue v1.5.0 appliquée au warehouse."
+    assert saving.chip.note == "Définition catalogue v1.6.0 appliquée au warehouse."
 
     emergency = spec.metric("emergency_money")
     # catalogue 1.4.0 : KPI emergency_funds (fin24aP), identifiant du widget inchange
@@ -199,6 +210,38 @@ def test_subgroups_and_gaps_come_from_catalog_kpis(spec):
     rural = next(metric for metric in exclusion.metrics if metric.id == "rural_account")
     assert rural.provider == "semantic" and rural.value == pytest.approx(30.2)
     assert rural.evidence_ids == ("EV-account_ownership_rural-TUN-2024",)
+
+
+@pytest.mark.parametrize("dimension,kpi_id,gap", [
+    ("education", "education_gap", 17.2), ("laborforce", "laborforce_gap", 45.5),
+    ("urbanicity", "urban_gap", 16.5),
+])
+def test_catalog_1_6_gaps_back_the_gap_facts(spec, dimension, kpi_id, gap):
+    facts = {fact.id: fact for fact in spec.facts}
+    fact = facts[f"F-gap-{dimension}-TUN-2024"]
+    assert fact.provider == "semantic" and fact.value == pytest.approx(gap)
+    assert fact.evidence_ids == (f"EV-{kpi_id}-TUN-2024",)
+
+
+def test_education_gap_change_cites_both_gap_years(spec):
+    facts = {fact.id: fact for fact in spec.facts}
+    assert facts["F-gap-education-TUN-2021"].evidence_ids == ("EV-education_gap-TUN-2021",)
+    change = facts["F-gapchange-education-TUN"]
+    assert change.provider == "derived" and change.value == pytest.approx(2.8)
+    assert {"EV-education_gap-TUN-2021", "EV-education_gap-TUN-2024"} <= set(change.evidence_ids)
+
+
+def test_index_base_year_is_exported_as_the_observed_value(spec):
+    """Indice 2017 = 100 inchange a l'ecran ; le texte cite la valeur observee de 2017."""
+    facts = {fact.id: fact for fact in spec.facts}
+    base = facts["F-atm_per_100k_base-TUN-2017"]
+    assert base.code == "atm_per_100k_base" and base.provider == "semantic"
+    assert base.value == pytest.approx(30.0) and base.unit == "per_100k_adults"
+    assert base.evidence_ids == ("EV-atm_density-TUN-2017",)
+    access = spec.page("access")
+    index = next(chart for chart in access.charts if chart.id == "supply_demand_index")
+    atm = next(series for series in index.series if series.id == "index_atm_per_100k")
+    assert atm.points[0].value == pytest.approx(100.0)
 
 
 def test_peers_reference_lines_and_placeholders(spec):

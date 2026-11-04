@@ -8,12 +8,11 @@ reuses numbers already present in the selected spec's facts.
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 import threading
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Mapping
 
 import duckdb
 from fastapi import FastAPI, HTTPException, Query
@@ -22,18 +21,14 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from biflow.agents.analyst import AskRequest, answer_question, build_insights, build_xai
+from biflow.agents.analyst import AskRequest, answer_question
 from biflow.config import ROOT, load_config, resolve
-from biflow.tools.analysis import DEFAULT_KPIS, AnalysisRequest, AnalysisService
-from biflow.tools.dashboard_spec import (
-    DashboardSpec, PEERS, REFERENCE_PATH, build_finova_spec,
-    load_pipeline_info, load_reference,
+from biflow.tools.dashboard_spec import PEERS, REFERENCE_PATH
+from biflow.tools.spec_cache import (
+    DEFAULT_GENERATED_DIR, SpecBuilder, WarehouseSpecBuilder, generated_path,
+    store_generated,
 )
-from biflow.tools.kpi import DEFAULT_CATALOG
-from biflow.tools.warehouse_reader import WarehouseReader
 from biflow.utils.io import load_json
-
-SpecBuilder = Callable[[str, int], dict[str, Any]]
 
 
 def _current_year(payload: Mapping[str, Any]) -> int:
@@ -48,94 +43,6 @@ def _current_iso3(payload: Mapping[str, Any]) -> str:
     if not isinstance(iso3, str) or not iso3:
         raise ValueError("spec country missing")
     return iso3
-
-
-def _attach_analysis(payload: Mapping[str, Any], insights: Mapping[str, Any],
-                     xai: Mapping[str, Any] | None) -> dict[str, Any]:
-    data = dict(payload)
-    data["pages"] = [dict(page) for page in payload.get("pages") or []]
-    for page in data["pages"]:
-        page["insights"] = [dict(item) for item in insights.get(page.get("id"), [])]
-        if page.get("id") == "exclusion":
-            if xai is not None:
-                page["xai"] = dict(xai)
-            else:
-                page.pop("xai", None)
-    return DashboardSpec.model_validate(data).model_dump(mode="json")
-
-
-class WarehouseSpecBuilder:
-    """Deterministic on-demand spec for a scope not covered by the public file."""
-
-    def __init__(
-        self, cfg: Mapping[str, Any], *, warehouse: Path, lineage: Path,
-        quality: Path, reference: Path, reports: Path, history_dir: Path,
-    ) -> None:
-        self.cfg = cfg
-        self.warehouse = warehouse
-        self.lineage = lineage
-        self.quality = quality
-        self.reference = reference
-        self.reports = reports
-        self.history_dir = history_dir
-        self._lock = threading.Lock()
-        self._service: AnalysisService | None = None
-        self._service_stamp = 0.0
-        self._pipeline: tuple[float, dict[str, Any]] | None = None
-        self._reference_catalog: tuple[float, Any] | None = None
-
-    def _pipeline_for(self, reader: WarehouseReader, stamp: float) -> dict[str, Any]:
-        if self._pipeline is None or self._pipeline[0] != stamp:
-            history_files = sorted(
-                [path for path in self.history_dir.glob("*.json")
-                 if path.is_file()],
-                key=lambda path: path.stat().st_mtime, reverse=True,
-            )[:20]
-            self._pipeline = (stamp, load_pipeline_info(
-                self.cfg, reader=reader, lineage_path=self.lineage,
-                quality_report_path=self.quality, reports_dir=self.reports,
-                history_files=history_files,
-            ))
-        return self._pipeline[1]
-
-    def _reference_for(self, stamp: float) -> Any:
-        if self._reference_catalog is None or self._reference_catalog[0] != stamp:
-            self._reference_catalog = (stamp, load_reference(self.reference))
-        return self._reference_catalog[1]
-
-    def __call__(self, iso3: str, year: int) -> dict[str, Any]:
-        if not self.warehouse.is_file():
-            raise FileNotFoundError(f"warehouse introuvable : {self.warehouse}")
-        with self._lock:
-            stamp = self.warehouse.stat().st_mtime
-            if self._service is None or self._service_stamp != stamp:
-                self._service = AnalysisService(
-                    self.warehouse, DEFAULT_CATALOG, lineage_path=self.lineage,
-                    quality_report_path=self.quality,
-                )
-                self._service_stamp = stamp
-                self._pipeline = None
-                self._reference_catalog = None
-            request = AnalysisRequest(
-                iso3=(iso3, *(code for code in PEERS if code != iso3)),
-                kpi_ids=DEFAULT_KPIS, mode="year", year=year,
-                series_iso3=(iso3,), include_trends=False,
-                include_rankings=False, include_comparisons=False,
-            )
-            dataset = self._service.build(request)
-            reader = WarehouseReader(self.warehouse)
-            pipeline = self._pipeline_for(reader, stamp)
-            reference = self._reference_for(stamp)
-            spec = build_finova_spec(
-                dataset, run_id=f"api_{iso3}_{year}", iso3=iso3, year=year,
-                reader=reader, reference=reference, pipeline=pipeline,
-            )
-        facts = [fact.model_dump(mode="json") for fact in spec.facts]
-        insights, _ = build_insights(facts, spec.country.name)
-        xai, _ = build_xai(facts, spec.country.name)
-        return _attach_analysis(
-            spec.model_dump(mode="json"), insights, xai,
-        )
 
 
 def create_app(
@@ -184,7 +91,7 @@ def create_app(
     )
     generated_root = resolve(
         generated_dir if generated_dir is not None
-        else dashboard.get("generated_dir", "outputs/dashboard/generated")
+        else dashboard.get("generated_dir", DEFAULT_GENERATED_DIR)
     )
     dist = resolve(
         web_dist if web_dist is not None else "dashboard_app/web/dist"
@@ -194,18 +101,6 @@ def create_app(
         reference=reference, reports=reports, history_dir=history,
     )
     persist = generated_root if spec_builder is None else None
-
-    def _store_generated(path: Path, payload: Mapping[str, Any]) -> None:
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = path.with_suffix(path.suffix + ".tmp")
-            with open(temporary, "w", encoding="utf-8") as handle:
-                json.dump(payload, handle, ensure_ascii=False, allow_nan=False)
-            os.replace(temporary, path)
-        except (OSError, ValueError):
-            logging.getLogger(__name__).warning(
-                "cache disque non écrit : %s", path, exc_info=True,
-            )
 
     app = FastAPI(
         title="Finova Dashboard API",
@@ -281,7 +176,7 @@ def create_app(
             if hit is not None and hit.get("_stamp") == stamp:
                 return hit["payload"]
         cached_file = (
-            generated_root / f"{iso3}_{year}_{int(stamp)}.json"
+            generated_path(generated_root, iso3, year, stamp)
             if persist is not None else None
         )
         if cached_file is not None and cached_file.is_file():
@@ -310,7 +205,7 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         if cached_file is not None:
-            _store_generated(cached_file, payload)
+            store_generated(cached_file, payload)
         with lock:
             if len(cache) >= 8:
                 cache.pop(next(iter(cache)))

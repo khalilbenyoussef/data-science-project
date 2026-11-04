@@ -374,7 +374,7 @@ def test_explanation_traces_value_to_raw_record(world):
     e = stored[("account_ownership", "TUN", 2024)]
     assert e["value"] == pytest.approx(37.844486) and e["unit"] == "percent"
     assert e["formula"] == "100 * value" and "x 100" in e["transformation"]
-    assert e["catalog_version"] == "1.5.0" and e["publication_status"] == "approved"
+    assert e["catalog_version"] == "1.6.0" and e["publication_status"] == "approved"
     item, = e["inputs"]
     assert item["fact_value"] == 0.37844486
     raw = item["raw"]

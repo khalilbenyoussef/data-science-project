@@ -126,6 +126,12 @@ def test_route2_insights_are_audited_into_the_audit_report(tmp_path, finova_ware
     accepted = {r["insight_id"] for r in block["results"] if r["accepted"]}
     # variation 2021 -> 2024 et entonnoir formel : claims KPI pour chaque nombre cite
     assert {"overview:INS-overview-account", "inclusion:INS-inclusion-funnel"} <= accepted
+    # unites en lettres, ecarts du catalogue 1.6.0, valeurs ATM observees : aucun rejet
+    assert block["rejected"] == 0, [r for r in block["results"] if not r["accepted"]]
+    assert {"inclusion:INS-inclusion-gap-education", "inclusion:INS-inclusion-gap-laborforce",
+            "inclusion:INS-inclusion-gap-urbanicity", "access:INS-access-atm",
+            "access:INS-access-outreach"} <= accepted
+    assert block["not_auditable_ids"] == ["poverty:INS-poverty-smig", "poverty:INS-poverty-rate"]
     md =(tmp_path / "audit" / "audit_report.md").read_text(encoding="utf-8")
     assert "## Insights de la Route 2 (FinOVA Analyst)" in md
     # statut de publication fixe par l'Auditor, notice « non evalue » retiree
@@ -133,6 +139,52 @@ def test_route2_insights_are_audited_into_the_audit_report(tmp_path, finova_ware
     assert spec["publication_status"] == "approved"
     assert "publication_not_evaluated" not in {notice["code"] for notice in spec["notices"]}
     assert state["route2_summary"]["publication_status"] == "approved"
+
+
+def test_route2_pregenerates_peer_views_into_the_api_cache(tmp_path, finova_warehouse, config,
+                                                            monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from biflow.tools.spec_cache import WarehouseSpecBuilder, generated_path, warehouse_stamp
+    from dashboard_app.api.app import create_app
+
+    config["dashboard"].update({"pregenerate_peers": True,
+                                "generated_dir": str(tmp_path / "generated")})
+    config["kpi"] = {"peers": ["DZA", "EGY", "JOR", "MAR"]}
+    state = run_route2(REQUEST, cfg=config, run_id="route2_warm", warehouse_path=finova_warehouse)
+    assert state["status"] == "success", state.get("errors")
+    done = state["route2_pregenerated"]
+    assert [(item["iso3"], item["year"], item["status"]) for item in done] == [
+        (code, 2024, "generated") for code in ("DZA", "EGY", "JOR", "MAR")]
+    stamp = warehouse_stamp(finova_warehouse)
+    for code in ("DZA", "EGY", "JOR", "MAR"):
+        assert generated_path(tmp_path / "generated", code, 2024, stamp).is_file()
+    run = json.loads((tmp_path / "reports" / "route2_warm" / "run.json").read_text(encoding="utf-8"))
+    assert run["pregenerated"] == done
+
+    # L'API sert la vue depuis ce cache, sans reconstruire
+    def never(self, iso3, year):
+        raise AssertionError("vue reconstruite malgre le cache")
+
+    monkeypatch.setattr(WarehouseSpecBuilder, "__call__", never)
+    app = create_app(
+        spec_path=tmp_path / "public" / "finova.json", warehouse_path=finova_warehouse,
+        reports_dir=tmp_path / "reports", history_dir=tmp_path / "history",
+        generated_dir=tmp_path / "generated", web_dist=tmp_path / "dist", prewarm=False,
+    )
+    response = TestClient(app).get("/api/spec", params={"iso3": "MAR", "year": 2024})
+    assert response.status_code == 200
+    assert response.headers["X-Finova-Source"] == "generated"
+    assert response.json()["country"]["iso3"] == "MAR"
+
+    # deuxieme publication : le cache existant est reutilise tel quel
+    again = run_route2(REQUEST, cfg=config, run_id="route2_warm2", warehouse_path=finova_warehouse)
+    assert {item["status"] for item in again["route2_pregenerated"]} == {"cached"}
+
+
+def test_route2_does_not_pregenerate_unless_configured(tmp_path, finova_warehouse, config):
+    state = run_route2(REQUEST, cfg=config, run_id="route2_cold", warehouse_path=finova_warehouse)
+    assert state["status"] == "success" and "route2_pregenerated" not in state
 
 
 def test_route2_never_writes_an_audit_report_without_audit_path(tmp_path, finova_warehouse, config):

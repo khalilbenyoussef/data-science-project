@@ -1,9 +1,9 @@
 # Declarative definitions only. No calculations, publication decisions or agents execute this file.
 schema_version: 1
-catalog_version: "1.5.0"
+catalog_version: "1.6.0"
 catalog_id: biflow_core_kpis
 created_on: "2026-10-22"
-updated_on: "2026-11-03"
+updated_on: "2026-11-04"
 status: draft
 scope: country_year_total_population_and_subgroup_gaps
 versioning:
@@ -1749,6 +1749,126 @@ kpis:
     valid_years: [2024]
     year_evidence: observed_availability
     not_equivalent_to: [unbanked_share]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  education_gap:
+    definition_version: "1.0.0"
+    name: Account ownership education gap
+    business_objective: financial_inclusion
+    definition: Account ownership of adults with secondary education or more minus adults with primary education or less, same country and survey year, in percentage points.
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: education
+      dimension_value: "secondary edu or more"
+      subtrahend_dimension_value: "prim edu or less"
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: education, dimension_value: "secondary edu or more"}
+      - {source: findex, indicator_code: account_t_d, dimension: education, dimension_value: "prim edu or less"}
+    formula: {from_fact: "100 * (value[secondary edu or more] - value[prim edu or less])", from_wide: null}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    subgroup: education_secondary_or_more_minus_primary_or_less
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  laborforce_gap:
+    definition_version: "1.0.0"
+    name: Account ownership labor force gap
+    business_objective: financial_inclusion
+    definition: Account ownership of adults in the labor force minus adults out of the labor force, same country and survey year, in percentage points.
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: laborforce
+      dimension_value: "in laborforce"
+      subtrahend_dimension_value: "out of laborforce"
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: laborforce, dimension_value: "in laborforce"}
+      - {source: findex, indicator_code: account_t_d, dimension: laborforce, dimension_value: "out of laborforce"}
+    formula: {from_fact: "100 * (value[in laborforce] - value[out of laborforce])", from_wide: null}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    subgroup: laborforce_in_minus_out
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  urban_gap:
+    definition_version: "1.0.0"
+    name: Account ownership urban-rural gap
+    business_objective: financial_inclusion
+    definition: Account ownership of urban adults minus rural adults, same country and survey year, in percentage points.
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: urbanicity
+      dimension_value: "urban"
+      subtrahend_dimension_value: "rural"
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: urbanicity, dimension_value: "urban"}
+      - {source: findex, indicator_code: account_t_d, dimension: urbanicity, dimension_value: "rural"}
+    formula: {from_fact: "100 * (value[urban] - value[rural])", from_wide: null}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    subgroup: urbanicity_urban_minus_rural
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2024]
+    year_evidence: observed_availability
     aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
     missing_data_policy: preserve_missing_v1
     aggregation_policy: compatible_denominators_v1

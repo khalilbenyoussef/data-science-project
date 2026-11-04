@@ -28,6 +28,15 @@ GAPS = {
     "age_gap": ("age_cat", "age 25+", "ages 15-24", "age_gap_pp"),
 }
 
+# Catalogue 1.6.0 : memes ecarts, sans colonne large (sous-groupes etendus)
+GAPS_EXTENDED = {
+    "education_gap": ("education", "secondary edu or more", "prim edu or less",
+                      "account_ownership_secondary_or_more", "account_ownership_primary_or_less"),
+    "laborforce_gap": ("laborforce", "in laborforce", "out of laborforce",
+                       "account_ownership_in_laborforce", "account_ownership_out_of_laborforce"),
+    "urban_gap": ("urbanicity", "urban", "rural", "account_ownership_urban", "account_ownership_rural"),
+}
+
 
 # Catalogue 1.4.0 (REQUEST_CATALOG) : series FAS, Findex et sous-groupes de detention de compte
 FAS_NEW = {
@@ -76,11 +85,11 @@ def catalog():
 
 def test_catalog_identity_and_versions(catalog):
     assert catalog["schema_version"] == 1
-    assert catalog["catalog_version"] == "1.5.0"
+    assert catalog["catalog_version"] == "1.6.0"
     assert catalog["status"] == "draft"
     assert catalog["scope"] == "country_year_total_population_and_subgroup_gaps"
     assert set(catalog["kpis"]) == (set(EXPECTED) | set(GAPS) | set(FAS_NEW) | set(FINDEX_NEW)
-                                    | set(SUBGROUPS) | set(BARRIERS))
+                                    | set(SUBGROUPS) | set(BARRIERS) | set(GAPS_EXTENDED))
     assert {k["business_objective"] for k in catalog["kpis"].values()} == {
         "financial_inclusion", "banking_infrastructure", "digital_finance",
         "savings_deposits", "credit", "financial_exclusion_vulnerability", "financial_resilience",
@@ -314,6 +323,26 @@ def test_new_findex_series_cite_their_glossary_row(catalog, kpi_id):
     assert kpi["valid_years"] == years
 
 
+@pytest.mark.parametrize("kpi_id", GAPS_EXTENDED)
+def test_extended_gaps_follow_the_gap_pattern(catalog, kpi_id):
+    dimension, first, second, first_kpi, second_kpi = GAPS_EXTENDED[kpi_id]
+    kpi = catalog["kpis"][kpi_id]
+    mapping = kpi["warehouse"]
+    reference = catalog["kpis"]["gender_gap"]
+    assert set(kpi) == set(reference)
+    assert kpi["unit"] == "percentage_points" and kpi["verification"]["status"] == "derived_verified"
+    assert (mapping["indicator_code"], mapping["dimension"]) == ("account_t_d", dimension)
+    assert (mapping["dimension_value"], mapping["subtrahend_dimension_value"]) == (first, second)
+    assert [(d["dimension"], d["dimension_value"]) for d in kpi["fact_dependencies"]] == [
+        (dimension, first), (dimension, second)]
+    assert kpi["formula"] == {"from_fact": f"100 * (value[{first}] - value[{second}])", "from_wide": None}
+    assert mapping["wide_column"] is None  # aucune colonne large : jamais lue ailleurs
+    assert kpi["dependencies"] == [] and "same survey year" in kpi["reference_period"]
+    # annees : celles ou les deux sous-groupes du catalogue sont observes
+    assert kpi["valid_years"] == catalog["kpis"][first_kpi]["valid_years"] == catalog["kpis"][second_kpi]["valid_years"]
+    assert "findex_subgroups_extended" in kpi["verification"]["evidence"]
+
+
 @pytest.mark.parametrize("kpi_id", SUBGROUPS)
 def test_subgroup_kpis_read_one_findex_subgroup_each(catalog, kpi_id):
     dimension, value = SUBGROUPS[kpi_id]
@@ -326,7 +355,7 @@ def test_subgroup_kpis_read_one_findex_subgroup_each(catalog, kpi_id):
     # urbanicity n'est observe que pour la vague 2024 dans le fichier brut
     assert kpi["valid_years"] == ([2024] if dimension == "urbanicity" else [2011, 2014, 2017, 2021, 2022, 2024])
     # les ecarts du catalogue restent la difference de deux de ces sous-groupes
-    for gap_id, (gap_dimension, first, second, _) in GAPS.items():
+    for gap_id, (gap_dimension, first, second, *_) in {**GAPS, **GAPS_EXTENDED}.items():
         if gap_dimension == dimension:
             assert value in (first, second)
 

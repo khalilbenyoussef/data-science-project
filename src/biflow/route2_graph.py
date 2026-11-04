@@ -30,6 +30,7 @@ from biflow.tools.dashboard_spec import (
     load_reference, snapshot_from_spec,
 )
 from biflow.tools.kpi import DEFAULT_CATALOG
+from biflow.tools.spec_cache import DEFAULT_GENERATED_DIR, WarehouseSpecBuilder, pregenerate
 from biflow.tools.warehouse_reader import WarehouseReader
 from biflow.utils.io import load_json, save_json
 
@@ -269,6 +270,23 @@ def run_route2(
             f"{type(exc).__name__}: {exc}"
         ]
 
+    dashboard_cfg = cfg.get("dashboard") or {}
+    if state.get("status") == "success" and dashboard_cfg.get("pregenerate_peers"):
+        # Vue des pairs pour l'annee publiee, ecrite dans le cache disque de l'API :
+        # changer de pays dans le tableau de bord ne reconstruit plus la vue.
+        published = state.get("dashboard_spec_summary") or {}
+        peers = [code for code in (cfg.get("kpi") or {}).get("peers") or PEERS[1:]
+                 if code != published.get("country")]
+        builder = WarehouseSpecBuilder(
+            cfg, warehouse=warehouse, lineage=lineage, quality=quality,
+            reference=reference_path, reports=path_of(cfg, "reports"),
+            history_dir=history_dir, catalog_path=catalog_path,
+        )
+        state["route2_pregenerated"] = pregenerate(
+            builder, resolve(dashboard_cfg.get("generated_dir", DEFAULT_GENERATED_DIR)),
+            warehouse, [(code, published["year"]) for code in peers],
+        )
+
     summary = pipeline_graph._summary(state)
     summary.update({
         "analysis_request": state.get("analysis_request"),
@@ -276,6 +294,7 @@ def run_route2(
         "dashboard_spec_summary": state.get("dashboard_spec_summary"),
         "analyst_summary": state.get("analyst_summary"),
         "facts_path": state.get("facts_path"),
+        "pregenerated": state.get("route2_pregenerated"),
         "finished_at": datetime.now().isoformat(timespec="seconds"),
     })
     save_json(summary, reports_dir / "run.json")

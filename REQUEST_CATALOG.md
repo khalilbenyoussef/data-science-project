@@ -15,6 +15,11 @@
 > pour la vague 2024 seulement. La heatmap « Pourquoi l'exclusion ? » lit ces KPI
 > et, en colonne de référence, la moyenne PEERS de `kpi_values` (couverture
 > partielle signalée).
+>
+> **Catalogue 1.6.0.** Écarts `education_gap` (secondaire ou plus − primaire ou
+> moins), `laborforce_gap` (actifs − hors population active) et `urban_gap`
+> (urbain − rural, vague 2024 seulement) : même contrat que `gender_gap`. Les
+> constats d'écart de la Route 2 les citent et deviennent auditables.
 
 - **Émetteur** : propriétaire Route 2 (Analyst / Dashboard / UI)
 - **Destinataire** : propriétaire du catalogue (`config/kpi_catalog.v1.yaml`, version 1.0.0)

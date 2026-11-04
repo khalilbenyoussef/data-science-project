@@ -61,8 +61,21 @@ CONTRACTS = {
     "age_gap": ("findex", "account_t_d", "fraction", "age_cat", "age 25+",
                 "age_25_plus_minus_15_24", "percentage_points",
                 "100 * (value[age 25+] - value[ages 15-24])", "derived_verified"),
+    # Catalogue 1.6.0 : memes ecarts pour l'education, le marche du travail et le milieu
+    "education_gap": ("findex", "account_t_d", "fraction", "education", "secondary edu or more",
+                      "education_secondary_or_more_minus_primary_or_less", "percentage_points",
+                      "100 * (value[secondary edu or more] - value[prim edu or less])",
+                      "derived_verified"),
+    "laborforce_gap": ("findex", "account_t_d", "fraction", "laborforce", "in laborforce",
+                       "laborforce_in_minus_out", "percentage_points",
+                       "100 * (value[in laborforce] - value[out of laborforce])", "derived_verified"),
+    "urban_gap": ("findex", "account_t_d", "fraction", "urbanicity", "urban",
+                  "urbanicity_urban_minus_rural", "percentage_points",
+                  "100 * (value[urban] - value[rural])", "derived_verified"),
 }
-GAP_SUBTRAHEND = {"gender_gap": "women", "income_gap": "poorest 40%", "age_gap": "ages 15-24"}
+GAP_SUBTRAHEND = {"gender_gap": "women", "income_gap": "poorest 40%", "age_gap": "ages 15-24",
+                  "education_gap": "prim edu or less", "laborforce_gap": "out of laborforce",
+                  "urban_gap": "rural"}
 
 # Series FAS du catalogue 1.4.0 : KPI = indicateur canonique, code FAS publie, unite.
 FAS_SERIES = {
@@ -180,14 +193,19 @@ def _validate_catalog(catalog: Any) -> None:
                     or kpi["unit"] != w["input_unit"] or kpi["dependencies"] != []
                     or not isinstance(w.get("dimension"), str) or not isinstance(w.get("dimension_value"), str)):
                 raise CatalogError(f"Unsupported calculation contract: {kpi_id}")
-        # A gap depends on exactly its two same-year subgroup facts.
+        # A gap depends on exactly its two same-year subgroup facts, over the years
+        # both subgroup KPIs are observed.
+        subgroup_kpi = {group: kpi_id for kpi_id, group in SUBGROUP_KPIS.items()}
         for kpi_id, subtrahend in GAP_SUBTRAHEND.items():
             w = kpis[kpi_id]["warehouse"]
             expected = [{"source": w["source"], "indicator_code": w["indicator_code"],
                          "dimension": w["dimension"], "dimension_value": value}
                         for value in (w["dimension_value"], subtrahend)]
+            sides = [kpis[subgroup_kpi[(w["dimension"], value)]]["valid_years"]
+                     for value in (w["dimension_value"], subtrahend)]
             if (kpis[kpi_id]["fact_dependencies"] != expected
-                    or kpis[kpi_id]["valid_years"] != kpis["account_ownership"]["valid_years"]):
+                    or any(kpis[kpi_id]["valid_years"] != years for years in sides)
+                    or not set(kpis[kpi_id]["valid_years"]) <= set(kpis["account_ownership"]["valid_years"])):
                 raise CatalogError(f"Invalid gap fact dependencies: {kpi_id}")
         # A complement must describe exactly the same observation/population.
         for field in ("warehouse", "valid_years", "denominator", "subgroup"):

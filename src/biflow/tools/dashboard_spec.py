@@ -60,7 +60,9 @@ DIMENSION_SPECS = (
 )
 SUBGROUP_KPI = {group: kpi_id for kpi_id, group in SUBGROUP_KPIS.items()}
 # Ecart droite − gauche deja au catalogue : lu tel quel au lieu d'etre soustrait ici
-GAP_KPIS = {"gender": "gender_gap", "income": "income_gap", "age_cat": "age_gap"}
+GAP_KPIS = {"gender": "gender_gap", "income": "income_gap", "age_cat": "age_gap",
+            "education": "education_gap", "laborforce": "laborforce_gap",
+            "urbanicity": "urban_gap"}
 # Series FAS lues via le catalogue : identifiant du widget -> KPI
 ACCESS_KPIS = {
     "atm_per_100k": "atm_density", "depositors_per_1k": "depositors_per_1k",
@@ -75,6 +77,7 @@ SPEC_KPIS = (
     *BARRIER_KPIS,
 )
 BARRIER_KPI = {code: kpi_id for kpi_id, code in BARRIER_KPIS.items()}
+INDEX_BASE_YEAR = 2017
 
 
 # --------------------------------------------------------------------------- models
@@ -1438,7 +1441,7 @@ def _build_blocks(
     }
 
     index_series = []
-    base_year = 2017
+    base_year = INDEX_BASE_YEAR
     digital_points = data.kpi_points("digital_payment_rate")
     for series_id, label, points, provider, chip, color in (
         ("atm_per_100k", "ATMs (offre)", atm_series, "semantic",
@@ -1956,6 +1959,43 @@ def baseline_facts(blocks: Mapping[str, Any], dataset: Mapping[str, Any]) -> lis
     return facts
 
 
+def index_base_facts(blocks: Mapping[str, Any], dataset: Mapping[str, Any],
+                     *, iso3: str) -> list[dict[str, Any]]:
+    """Observation de l'annee de base de chaque indice (2017 = 100), lue telle quelle
+    dans la serie du dataset : un texte cite la valeur observee, jamais l'indice."""
+    points = {
+        point.get("evidence_id"): (row, point)
+        for row in dataset.get("series") or []
+        for point in row.get("points") or []
+        if point.get("evidence_id")
+    }
+    facts = []
+    for page in blocks["pages"]:
+        for chart in page["charts"]:
+            if chart["kind"] != "line" or chart.get("unit") != "index_2017_100":
+                continue
+            for series in chart["series"]:
+                # serie d'indice index_<widget> -> KPI du catalogue (ATM : atm_density)
+                widget = series["id"].removeprefix("index_")
+                evidence = f"EV-{ACCESS_KPIS.get(widget, widget)}-{iso3}-{INDEX_BASE_YEAR}"
+                row, point = points.get(evidence, (None, None))
+                if (point is None or point.get("availability_status") != "available"
+                        or point.get("value") is None):
+                    continue
+                unit = row.get("unit")
+                facts.append({
+                    "id": f"F-{widget}_base-{row['iso3']}-{point['year']}",
+                    "code": f"{widget}_base",
+                    "label": f"{series['label']} — {point['year']}",
+                    "value": float(point["value"]), "unit": unit,
+                    "year": int(point["year"]), "iso3": row["iso3"],
+                    "provider": "semantic",
+                    "display": format_value(float(point["value"]), unit),
+                    "evidence_ids": (evidence,),
+                })
+    return facts
+
+
 def extract_facts(blocks: Mapping[str, Any], *, iso3: str, year: int) -> list[dict[str, Any]]:
     facts: list[dict[str, Any]] = []
     for page in blocks["pages"]:
@@ -2367,7 +2407,8 @@ def build_finova_spec(
         dataset, reader=reader, reference=reference, iso3=iso3, year=spec_year,
         history=history, pipeline=pipeline, catalog=catalog,
     )
-    facts = extract_facts(blocks, iso3=iso3, year=spec_year) + baseline_facts(blocks, dataset)
+    facts = (extract_facts(blocks, iso3=iso3, year=spec_year) + baseline_facts(blocks, dataset)
+             + index_base_facts(blocks, dataset, iso3=iso3))
     known_years = sorted({
         point["year"]
         for row in dataset.get("series") or []

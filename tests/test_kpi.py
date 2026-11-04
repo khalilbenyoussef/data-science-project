@@ -85,7 +85,7 @@ def test_verified_values_subgroups_units_and_metadata(warehouse, kpi, expected, 
     assert result.iso3 == "TUN" and result.observation_year == 2024
     assert result.availability_status == "available" and result.reason is None
     assert result.definition == load_catalog()["kpis"][kpi]["definition"]
-    assert result.catalog_version == "1.5.0" and result.definition_version == "1.0.0"
+    assert result.catalog_version == "1.6.0" and result.definition_version == "1.0.0"
     assert len(result.catalog_sha256) == 64
     assert result.publication_status == "not_evaluated"
     with pytest.raises(FrozenInstanceError):
@@ -586,6 +586,10 @@ GAPS = {
     "gender_gap": ("gender", "men", "women", 25),
     "income_gap": ("income", "richest 60%", "poorest 40%", 30),
     "age_gap": ("age_cat", "age 25+", "ages 15-24", 36),
+    # catalogue 1.6.0
+    "education_gap": ("education", "secondary edu or more", "prim edu or less", 17),
+    "laborforce_gap": ("laborforce", "in laborforce", "out of laborforce", 27),
+    "urban_gap": ("urbanicity", "urban", "rural", 17),
 }
 
 
@@ -621,9 +625,11 @@ def test_gap_never_mixes_years(warehouse, kpi):
     change(warehouse, "UPDATE fact SET year=2021 WHERE indicator_code='account_t_d' AND dimension=? "
            "AND dimension_value=?", [dimension, first])
     calc = KpiCalculator(warehouse)
+    valid = load_catalog()["kpis"][kpi]["valid_years"]
     for year in (2021, 2024):
         r = calc.calculate("TUN", year, kpi)
-        assert r.value is None and r.reason == "missing_observation"
+        assert r.value is None
+        assert r.reason == ("missing_observation" if year in valid else "out_of_catalog_year")
 
 
 @pytest.mark.parametrize("kpi", GAPS)
@@ -642,6 +648,16 @@ def test_gap_catalog_dependencies_must_match_subgroup_facts(tmp_path, warehouse)
     path = tmp_path / "bad.yaml"
     path.write_text(yaml.safe_dump(catalog), encoding="utf-8")
     with pytest.raises(CatalogError):
+        load_catalog(path)
+
+
+def test_gap_years_must_match_its_subgroup_kpis(tmp_path):
+    # urbanicity n'est observe qu'en 2024 : un ecart ne peut pas declarer 2021
+    catalog = load_catalog()
+    catalog["kpis"]["urban_gap"]["valid_years"] = [2021, 2024]
+    path = tmp_path / "bad.yaml"
+    path.write_text(yaml.safe_dump(catalog), encoding="utf-8")
+    with pytest.raises(CatalogError, match="urban_gap"):
         load_catalog(path)
 
 

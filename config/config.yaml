@@ -181,6 +181,8 @@ dashboard:
   data_output: dashboard/public/data/dashboard.json
   spec_output: dashboard_app/public/data/finova.json
   history_dir: outputs/dashboard/history
+  generated_dir: outputs/dashboard/generated   # cache disque des vues generees (API)
+  pregenerate_peers: true          # apres run_route2 : vues des pairs pour l'annee publiee
   reference_path: config/reference/finova_reference.yaml
   default_country: TUN
   default_mode: latest

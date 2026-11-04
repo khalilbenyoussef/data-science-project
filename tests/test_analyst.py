@@ -114,6 +114,53 @@ def test_insights_are_number_checked(facts):
     assert "ne concorde pas" not in overview["INS-overview-emergency"]["statement"]
 
 
+def test_insight_units_are_written_in_words_and_atm_cites_observed_values(facts):
+    observed_2017 = F("atm_per_100k_base", 29.79, "29.79 / 100k adultes", year=2017,
+                      unit="per_100k_adults", provider="semantic", label="ATMs — 2017")
+    insights, warnings = build_insights(facts + [observed_2017], "Tunisie")
+    assert warnings == []
+    access = {item["id"]: item for item in insights["access"]}
+    for item in access.values():  # aucune unite chiffree dans un constat
+        assert "100k" not in item["statement"] and "1 000" not in item["statement"]
+    atm = access["INS-access-atm"]
+    assert atm["statement"] == ("Le parc de distributeurs atteint 35.44 pour cent mille adultes "
+                                "en 2024 (+0.65 vs 2023), contre 29.79 pour cent mille adultes en 2017.")
+    assert "Indice" not in atm["statement"]
+    assert "F-index_atm_per_100k-TUN-2024" not in atm["evidence_ids"]
+    assert "F-atm_per_100k_base-TUN-2017" in atm["evidence_ids"]
+    # variation deja mesuree depuis 2017 : la valeur 2017 n'est pas repetee
+    since_2017 = [f for f in facts if f["code"] != "atm_per_100k_delta"] + [observed_2017, F(
+        "atm_per_100k_delta", 5.65, "+5.65 vs 2017", unit="absolute", provider="derived")]
+    again, _ = build_insights(since_2017, "Tunisie")
+    atm = next(item for item in again["access"] if item["id"] == "INS-access-atm")
+    assert atm["statement"] == ("Le parc de distributeurs atteint 35.44 pour cent mille adultes "
+                                "en 2024 (+5.65 vs 2017).")
+    assert access["INS-access-outreach"]["statement"] == "Déposants 1063.3 pour mille adultes en 2018."
+    assert access["INS-access-branch"]["statement"].startswith(
+        "Le réseau d'agences est de 22.37 pour cent mille adultes")
+
+
+def test_gap_insights_cover_education_labour_force_and_place(facts):
+    extra = [
+        F("education_primaire-ou-moins", 28.6, "28.6 %"),
+        F("education_secondaire-ou-plus", 45.8, "45.8 %"),
+        F("gap_education", 17.2, "+17.2 pt", unit="percentage_points", provider="semantic"),
+        F("laborforce_hors-population-active", 16.6, "16.6 %"),
+        F("laborforce_population-active", 62.1, "62.1 %"),
+        F("gap_laborforce", 45.5, "+45.5 pt", unit="percentage_points", provider="semantic"),
+        F("urbanicity_rural", 30.2, "30.2 %"),
+        F("urbanicity_urbain", 46.7, "46.7 %"),
+    ]
+    insights, warnings = build_insights(facts + extra, "Tunisie")
+    assert warnings == []
+    inclusion = {item["id"]: item for item in insights["inclusion"]}
+    for dimension, gap in (("education", "+17.2 pt"), ("laborforce", "+45.5 pt"),
+                           ("urbanicity", "+16.6 pt")):
+        item = inclusion[f"INS-inclusion-gap-{dimension}"]
+        assert item["statement"].endswith(f"soit {gap}.")
+        assert f"F-gap_{dimension}-TUN-2024" in item["evidence_ids"]
+
+
 def test_review_wording_returns_when_the_backend_says_so(facts, monkeypatch):
     import biflow.agents.analyst as analyst
 

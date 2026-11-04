@@ -48,6 +48,7 @@ class PipelineState(TypedDict, total=False):
     dashboard_history_path: str
     dashboard_spec_summary: dict[str, Any]
     route2_summary: dict[str, Any]
+    route2_pregenerated: list[dict[str, Any]]
     # Etape semantic_kpi du pipeline (absente tant que l'etape n'a pas tourne)
     kpi_paths: dict[str, str]          # table kpi_values + parquet
     kpi_summary: dict[str, Any]        # comptes disponibles / a revoir

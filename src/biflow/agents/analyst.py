@@ -134,6 +134,23 @@ def _insight(
     }
 
 
+# Unites ecrites en lettres dans les constats : aucun chiffre d'unite n'est lu comme
+# un nombre par l'auditeur. Les valeurs affichees des widgets ne changent pas.
+SPOKEN_UNITS = {
+    "per_100k_adults": "pour cent mille adultes",
+    "per_1k_adults": "pour mille adultes",
+}
+
+
+def _spoken(fact: Mapping[str, Any]) -> str:
+    """Valeur affichee du fait, unite chiffree remplacee par sa forme en lettres."""
+    display = str(fact["display"])
+    unit = SPOKEN_UNITS.get(str(fact.get("unit")))
+    if unit is None:
+        return display
+    return f"{display.split(' / ')[0]} {unit}"
+
+
 def _delta_sentence(delta: Mapping[str, Any] | None) -> str:
     return f" ({delta['display']})" if delta is not None else ""
 
@@ -252,7 +269,9 @@ def build_insights(
         ))
     for dimension, title in (("gender", "femmes-hommes"),
                              ("income", "de revenu"),
-                             ("education", "d'éducation")):
+                             ("education", "d'éducation"),
+                             ("laborforce", "de marché du travail"),
+                             ("urbanicity", "entre milieux")):
         gap = pick(index, f"gap_{dimension}")
         if gap is None:
             continue
@@ -262,9 +281,15 @@ def build_insights(
         elif dimension == "income":
             left = pick(index, "income_40-les-plus-pauvres")
             right = pick(index, "income_60-les-plus-riches")
-        else:
+        elif dimension == "education":
             left = pick(index, "education_primaire-ou-moins")
             right = pick(index, "education_secondaire-ou-plus")
+        elif dimension == "laborforce":
+            left = pick(index, "laborforce_hors-population-active")
+            right = pick(index, "laborforce_population-active")
+        else:
+            left = pick(index, "urbanicity_rural")
+            right = pick(index, "urbanicity_urbain")
         if left is None or right is None:
             continue
         statement = (
@@ -282,23 +307,30 @@ def build_insights(
     # -------------------------------------------------------------------- access
     atm = pick(index, "atm_per_100k")
     if atm is not None:
+        delta = pick(index, "atm_per_100k_delta")
         statement = (
-            f"Le parc de distributeurs atteint {atm['display']} en {atm['year']}"
-            f"{_delta_sentence(pick(index, 'atm_per_100k_delta'))}."
+            f"Le parc de distributeurs atteint {_spoken(atm)} en {atm['year']}"
+            f"{_delta_sentence(delta)}"
         )
-        index_fact = pick(index, "index_atm_per_100k")
-        if index_fact is not None:
-            statement += f" Indice 2017 = 100 : {index_fact['display']}."
+        # annee de base de l'indice : valeur observee de la meme serie, jamais l'indice
+        # (omise si la variation est deja mesuree depuis cette annee)
+        base = pick(index, "atm_per_100k_base")
+        if (base is not None and base.get("year") != atm.get("year")
+                and not str((delta or {}).get("display", "")).endswith(f"vs {base['year']}")):
+            statement += f", contre {_spoken(base)} en {base['year']}"
+        else:
+            base = None
+        statement += "."
         add("access", _insight(
             "INS-access-atm", "atm_per_100k", statement,
             severity="info", kind="auto",
-            cited=(atm, pick(index, "atm_per_100k_delta"), index_fact),
+            cited=(atm, pick(index, "atm_per_100k_delta"), base),
             facts=facts, warnings=warnings,
         ))
     branch = pick(index, "branch_density")
     if branch is not None:
         statement = (
-            f"Le réseau d'agences est de {branch['display']} en {branch['year']}."
+            f"Le réseau d'agences est de {_spoken(branch)} en {branch['year']}."
         )
         add("access", _insight(
             "INS-access-branch", "branch_density", statement,
@@ -313,7 +345,7 @@ def build_insights(
         for label, fact in (("Déposants", depositors), ("Emprunteurs", borrowers)):
             if fact is None:
                 continue
-            parts.append(f"{label} {fact['display']} en {fact['year']}")
+            parts.append(f"{label} {_spoken(fact)} en {fact['year']}")
             cited.append(fact)
         statement = "; ".join(parts) + "."
         add("access", _insight(
