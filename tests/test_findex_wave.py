@@ -154,3 +154,63 @@ def test_account_history_stops_at_the_wave_used(warehouse, tmp_path):
         assert years and max(years) == last, (year, years)
         assert all(e.endswith(tuple(f"-{y}" for y in range(2000, last + 1))) for e in history.series[0].evidence_ids)
         assert len(history.reference_lines) == refs and "postérieurs à l'enquête" in history.notes[0]
+
+
+# ------------------------------------------------- « Pourquoi l'exclusion ? » avant 2024
+BARRIER_IDS = ("barrier_too_far", "barrier_too_expensive", "barrier_no_documents",
+               "barrier_no_trust", "barrier_insufficient_funds", "barrier_family_has_account")
+
+
+@pytest.fixture()
+def wave_kpi_values(warehouse, tmp_path):
+    """Copie du warehouse avec kpi_values : TUN observe en 2024 seulement, DZA jamais."""
+    import shutil
+
+    path = tmp_path / "warehouse_kpi.duckdb"
+    shutil.copyfile(warehouse, path)
+    rows = [(kpi, "TUN", 2024, 40.0, "available")
+            for kpi in ("account_ownership_urban", "account_ownership_rural", *BARRIER_IDS)]
+    rows += [(kpi, "DZA", 2024, None, "unavailable") for kpi in BARRIER_IDS]
+    with duckdb.connect(str(path)) as con:
+        con.execute("CREATE TABLE kpi_values (kpi_id VARCHAR, iso3 VARCHAR, year INTEGER, "
+                    "value DOUBLE, availability_status VARCHAR)")
+        con.executemany("INSERT INTO kpi_values VALUES (?, ?, ?, ?, ?)", rows)
+    return path
+
+
+def test_tun_2014_exclusion_explains_the_first_survey_year(wave_kpi_values, tmp_path):
+    page = _spec(wave_kpi_values, tmp_path, "TUN", 2014).page("exclusion")
+    for metric in page.metrics:  # urbain / rural
+        assert metric.status == "unavailable" and metric.display == "Indisponible"
+        assert metric.value is None  # aucune valeur substituee
+        assert metric.first_available_year == 2024
+        assert metric.unavailable_reason == "Mesuré seulement depuis l'enquête 2024"
+    heatmap = page.charts[0]
+    assert (heatmap.no_data_scope, heatmap.first_available_year) == ("later_wave", 2024)
+
+
+def test_dza_barriers_keep_the_country_message(wave_kpi_values, tmp_path):
+    page = _spec(wave_kpi_values, tmp_path, "DZA", 2024).page("exclusion")
+    heatmap = page.charts[0]
+    assert (heatmap.no_data_scope, heatmap.first_available_year) == ("country", None)
+    assert all(m.first_available_year is None and m.unavailable_reason is None for m in page.metrics)
+
+
+def test_no_reason_without_kpi_values(warehouse, tmp_path):
+    page = _spec(warehouse, tmp_path, "TUN", 2014).page("exclusion")
+    assert all(m.first_available_year is None for m in page.metrics)
+    assert page.charts[0].no_data_scope == "country"
+
+
+def test_front_shows_the_reason_and_the_wave_link():
+    from pathlib import Path
+
+    web = Path(__file__).resolve().parents[1] / "dashboard_app" / "web" / "src"
+    ui = (web / "ui.tsx").read_text(encoding="utf-8")
+    charts = (web / "charts.tsx").read_text(encoding="utf-8")
+    assert "metric.unavailable_reason" in ui
+    assert "metric.caveat && !unavailable" in ui  # pas de « À vérifier » sur une valeur absente
+    assert "ne sont mesurées que depuis l'enquête" in charts
+    assert "Aucun obstacle n'est encore disponible" not in charts
+    assert "Voir l'enquête {year}" in (web / "waveNav.tsx").read_text(encoding="utf-8")
+    assert "WaveNavContext.Provider value={setYear}" in (web / "App.tsx").read_text(encoding="utf-8")

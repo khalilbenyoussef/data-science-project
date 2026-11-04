@@ -368,6 +368,19 @@ class WarehouseReader:
                 "peers_included": list(included or []), "missing_peers": list(missing or []),
                 "publication_status": publication}
 
+    def first_available_year(self, kpi_id: str, iso3: str) -> int | None:
+        """Premiere annee de kpi_values ou le KPI est disponible pour le pays ;
+        None si aucune vague ne l'observe (ou table kpi_values absente)."""
+        try:
+            rows = self._rows(
+                "SELECT min(year) FROM kpi_values WHERE kpi_id = ? AND iso3 = ? "
+                "AND availability_status = 'available' AND value IS NOT NULL",
+                [kpi_id, iso3],
+            )
+        except duckdb.Error:
+            return None
+        return int(rows[0][0]) if rows and rows[0][0] is not None else None
+
     def country_meta(self, iso3: str) -> dict[str, Any] | None:
         rows = self._rows(
             "SELECT iso3, country, region, income_group FROM country_dim WHERE iso3 = ?",

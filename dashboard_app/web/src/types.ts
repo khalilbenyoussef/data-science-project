@@ -43,6 +43,9 @@ export interface Metric {
   evidence_ids: string[];
   why: WhyInfo | null;
   caveat: string | null;
+  // indisponible car mesuré seulement à partir d'une vague postérieure
+  first_available_year?: number | null;
+  unavailable_reason?: string | null;
 }
 
 export interface Point {
@@ -168,6 +171,9 @@ export interface Chart {
   notes: string[];
   formula: string | null;
   chip: Chip | null;
+  // sans valeur du pays : vague postérieure (first_available_year) ou pays jamais observé
+  no_data_scope?: "later_wave" | "country" | null;
+  first_available_year?: number | null;
 }
 
 export interface Insight {

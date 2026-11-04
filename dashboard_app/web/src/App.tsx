@@ -6,6 +6,7 @@ import { AskDock, ChatMessage, NoticeList } from "./ui";
 import { MyDataPage } from "./sources";
 import { AuditPage } from "./audit";
 import { prettyDate } from "./format";
+import { WaveNavContext } from "./waveNav";
 import { PAGE_COPY, PUBLICATION_LABELS, plainText } from "./copy";
 
 // page « Mes données » : hors contrat Finova (sources CSV de l'utilisateur)
@@ -382,7 +383,9 @@ export function App() {
                   par défaut.
                 </div>
               )}
-              <PageView page={page} spec={spec} onAsk={submitAsk} />
+              <WaveNavContext.Provider value={setYear}>
+                <PageView page={page} spec={spec} onAsk={submitAsk} />
+              </WaveNavContext.Provider>
               {(pageId === "overview" || pageId === "pipeline") && (
                 <NoticeList notices={globalNotices} />
               )}

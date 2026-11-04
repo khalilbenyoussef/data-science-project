@@ -758,6 +758,34 @@ code,
   font-size: 0.85rem;
 }
 
+.empty p {
+  margin: 0 0 8px;
+}
+
+/* valeur indisponible : la raison remplace « Indisponible » */
+.metric-reason {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.wave-link {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--accent-ink);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.wave-link:hover {
+  text-decoration: underline;
+}
+
 /* dumbbell : tailles de texte fixes, positions en % de la piste */
 .db-legend {
   display: flex;

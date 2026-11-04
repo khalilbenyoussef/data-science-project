@@ -146,12 +146,17 @@ class Metric(FinModel):
     evidence_ids: tuple[str, ...] = ()
     why: WhyInfo
     caveat: str | None = None
+    # valeur indisponible car mesuree seulement a partir d'une vague posterieure
+    first_available_year: int | None = None
+    unavailable_reason: str | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> "Metric":
         if self.status == "available":
             if self.value is None or not math.isfinite(self.value):
                 raise ValueError(f"available metric without a finite value: {self.id}")
+            if self.first_available_year is not None or self.unavailable_reason is not None:
+                raise ValueError(f"available metric with an unavailability reason: {self.id}")
         elif self.value is not None:
             raise ValueError(f"non-available metric must keep a null value: {self.id}")
         if self.status == "placeholder" and self.display != "To load":
@@ -309,9 +314,15 @@ class Chart(FinModel):
     notes: tuple[str, ...] = ()
     formula: str | None = None
     chip: Chip | None = None
+    # graphique sans valeur du pays : "later_wave" (mesure a partir de
+    # first_available_year) ou "country" (aucune vague n'observe ce pays)
+    no_data_scope: Literal["later_wave", "country"] | None = None
+    first_available_year: int | None = None
 
     @model_validator(mode="after")
     def _kind(self) -> "Chart":
+        if (self.no_data_scope == "later_wave") != (self.first_available_year is not None):
+            raise ValueError(f"chart {self.id}: later_wave needs first_available_year")
         required = {
             "line": bool(self.series), "bar": bool(self.bars),
             "funnel": len(self.steps) >= 2, "dumbbell": bool(self.groups),
@@ -721,6 +732,17 @@ class _Data:
         self.countries = {item["iso3"]: item for item in dataset["scope"]["countries"]}
 
     # ------------------------------------------------------------------ semantic
+    def first_later_year(self, kpi_id: str, year: int, iso3: str | None = None) -> int | None:
+        """Premiere vague (kpi_values, bornee aux valid_years du catalogue) ou le KPI
+        est observe pour le pays, si elle est posterieure a ``year`` ; sinon None."""
+        if self.reader is None:
+            return None
+        first = self.reader.first_available_year(kpi_id, iso3 or self.iso3)
+        valid = (self.kpi_meta.get(kpi_id) or {}).get("valid_years") or ()
+        if first is None or (valid and first not in valid) or first <= year:
+            return None
+        return first
+
     def observation(self, kpi_id: str, iso3: str | None = None) -> Mapping[str, Any]:
         return self.observations[(iso3 or self.iso3, kpi_id)]
 
@@ -782,6 +804,11 @@ class _Data:
         }
         if not available:
             metric["delta"] = None
+            read_year = self.findex_year if observation.get("source") == "findex" else self.year
+            first = self.first_later_year(kpi_id, read_year, code)
+            if first is not None:
+                metric["first_available_year"] = first
+                metric["unavailable_reason"] = f"Mesuré seulement depuis l'enquête {first}"
         elif upto and observation["year"] != self.year:
             metric["caveat"] = (
                 f"Dernière année observée {observation['year']} (série arrêtée) : elle est "
@@ -1585,6 +1612,11 @@ def _build_blocks(
         barrier_notes.append(
             f"Moyenne des pairs partielle : {', '.join(missing)} sans observation en {survey_year}.")
     barrier_notes.append("Aucune barre n'est dessinée à partir d'une valeur inventée.")
+    country_observed = any(cell["status"] == "available"
+                           for cell in barrier_cells if cell["column"] == country_column)
+    barrier_first = None if country_observed else min(
+        (y for y in (data.first_later_year(BARRIER_KPI[c], survey_year, iso3) for c in barrier_rows)
+         if y is not None), default=None)
     barrier_chart = {
         "id": "barriers_heatmap", "kind": "heatmap",
         "title": "Barrières à l'ouverture d'un compte",
@@ -1594,6 +1626,9 @@ def _build_blocks(
         "rows": tuple(barrier_rows),
         "cells": barrier_cells,
         "notes": barrier_notes,
+        "no_data_scope": None if country_observed else (
+            "later_wave" if barrier_first is not None else "country"),
+        "first_available_year": barrier_first,
     }
     urban = data.semantic_metric("account_ownership_urban", metric_id="urban_account",
                                  label="Compte — milieu urbain", previous=False)

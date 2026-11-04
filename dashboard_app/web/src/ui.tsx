@@ -7,6 +7,7 @@ import {
   fmtNumber, fmtPct, fmtSigned, fmtUnit, prettyDate, providerLabel, severityClass,
   shortHash, statusLabel, unitLabel,
 } from "./format";
+import { SeeWaveButton } from "./waveNav";
 import {
   DEFINITION_STATUS, INFO_LABELS, METRIC_LABELS,
   PIPELINE_NODES, REVIEW_REASONS, chipLabel, chipNeedsReview, chipTitle, friendlyCaveat, friendlyDefinition,
@@ -135,7 +136,11 @@ function MetricCard({ metric, onWhy }: { metric: Metric; onWhy: () => void }) {
       </header>
       <div className="metric-value">
         {unavailable ? (
-          display || emptyLabel
+          metric.unavailable_reason ? (
+            <span className="metric-reason">{metric.unavailable_reason}</span>
+          ) : (
+            display || emptyLabel
+          )
         ) : (
           <>
             <span className="metric-number">
@@ -156,7 +161,9 @@ function MetricCard({ metric, onWhy }: { metric: Metric; onWhy: () => void }) {
         <button className="why-pill" onClick={onWhy}>
           Source et méthode
         </button>
-        {metric.caveat && <span className="chip chip-warning">À vérifier</span>}
+        {metric.first_available_year && <SeeWaveButton year={metric.first_available_year} />}
+        {/* rien à vérifier sur une valeur absente */}
+        {metric.caveat && !unavailable && <span className="chip chip-warning">À vérifier</span>}
       </div>
     </article>
   );

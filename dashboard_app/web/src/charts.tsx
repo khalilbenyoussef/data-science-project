@@ -4,6 +4,7 @@ import { fmtNumber, fmtPct, fmtSigned, fmtUnit, unitLabel } from "./format";
 import {
   CHART_TITLES, HEATMAP_ROW_LABELS, STEP_LABELS, chipLabel, chipNeedsReview, chipTitle, plainText,
 } from "./copy";
+import { SeeWaveButton } from "./waveNav";
 
 const BASE_W = 760;
 const MIN_W = 260;
@@ -475,7 +476,18 @@ function HeatmapChart({ chart }: { chart: Chart }) {
   const lookup = new Map(chart.cells.map((cell) => [`${cell.row}|${cell.column}`, cell]));
   const hasValue = chart.cells.some((cell) => cell.status === "available" && cell.value !== null);
   if (!hasValue) {
-    return <p className="empty">Aucun obstacle n'est encore disponible pour ce pays.</p>;
+    if (chart.no_data_scope === "later_wave" && chart.first_available_year) {
+      return (
+        <div className="empty">
+          <p>
+            Les raisons de ne pas avoir de compte ne sont mesurées que depuis l'enquête{" "}
+            {chart.first_available_year}.
+          </p>
+          <SeeWaveButton year={chart.first_available_year} />
+        </div>
+      );
+    }
+    return <p className="empty">Aucune observation de ces raisons pour ce pays dans les enquêtes disponibles.</p>;
   }
   return (
     <div className="heatmap-wrap">
