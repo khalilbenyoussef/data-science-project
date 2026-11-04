@@ -1671,8 +1671,9 @@ def _build_blocks(
         "subtitle": "Contexte tunisien uniquement : SMIG, pauvreté INS 2021 et simulateur de frais.",
         "available": poverty_available,
         "unavailable_reason": None if poverty_available else (
-            "Les références SMIG et pauvreté INS sont propres à la Tunisie : "
-            "aucune valeur n'est affichée pour un autre pays."
+            "Hors périmètre par conception : les références SMIG et pauvreté INS sont "
+            "propres à la Tunisie ; aucune valeur n'est affichée pour ce pays "
+            f"({COUNTRY_LABELS.get(iso3, country.get('name', iso3))})."
         ),
         "metrics": [], "charts": [], "insights": [], "blocks": [], "notices": [],
     }
@@ -1822,11 +1823,26 @@ def _build_blocks(
         for row in dataset.get("observations") or []
         if row.get("iso3") == iso3 and row.get("source") == "findex"
     )
-    survey_reason = (
-        f"Aucune enquête Findex pour {year} : l'enquête est menée par vagues "
-        "(2011, 2014, 2017, 2021, 2024). Les indicateurs bancaires annuels restent "
-        "disponibles sur la page Accès et crédit."
-    )
+    # raison precise : aucune vague anterieure pour ce pays (sinon la vague est lue)
+    country_name = COUNTRY_LABELS.get(iso3, country.get("name", iso3))
+    later = [wave for wave in data.survey_years if wave > year]
+    if data.findex_wave is not None and later:
+        survey_reason = (
+            f"Aucune enquête Findex en {year} ni avant pour ce pays ({country_name}) : la "
+            f"première enquête observée date de {later[0]}. Les indicateurs bancaires "
+            "annuels restent disponibles sur la page Accès et crédit."
+        )
+    elif data.findex_wave is not None and not data.survey_years:
+        survey_reason = (
+            f"Aucune enquête Findex observée pour ce pays ({country_name}). Les indicateurs "
+            "bancaires annuels restent disponibles sur la page Accès et crédit."
+        )
+    else:
+        survey_reason = (
+            f"Aucune enquête Findex pour {year} : l'enquête est menée par vagues "
+            "(2011, 2014, 2017, 2021, 2024). Les indicateurs bancaires annuels restent "
+            "disponibles sur la page Accès et crédit."
+        )
     for page in pages:
         page["charts"] = [
             chart for chart in page.get("charts", []) if _chart_buildable(chart)

@@ -124,3 +124,23 @@ def test_no_earlier_wave_stays_unavailable(warehouse, tmp_path):
 def test_unavailable_emergency_card_shows_the_requested_year(warehouse, tmp_path):
     emergency = _spec(warehouse, tmp_path, "TUN", 2012).metric("emergency_money")
     assert emergency.value is None and emergency.year == 2012
+
+
+def test_no_earlier_wave_gives_the_specific_reason(warehouse, tmp_path):
+    spec = _spec(warehouse, tmp_path, "TUN", 2012)
+    for page_id in ("inclusion", "exclusion"):
+        assert spec.page(page_id).unavailable_reason == (
+            "Aucune enquête Findex en 2012 ni avant pour ce pays (Tunisie) : la première "
+            "enquête observée date de 2014. Les indicateurs bancaires annuels restent "
+            "disponibles sur la page Accès et crédit.")
+
+
+def test_poverty_page_is_out_of_scope_by_design_outside_tunisia(warehouse, tmp_path):
+    spec = _spec(warehouse, tmp_path, "DZA", 2012)
+    poverty = spec.page("poverty")
+    assert not poverty.available
+    assert poverty.unavailable_reason == (
+        "Hors périmètre par conception : les références SMIG et pauvreté INS sont propres "
+        "à la Tunisie ; aucune valeur n'est affichée pour ce pays (Algérie).")
+    # une annee sans enquete avec vague anterieure n'est jamais « non disponible »
+    assert spec.page("inclusion").available and spec.page("exclusion").available
