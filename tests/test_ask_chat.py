@@ -173,3 +173,10 @@ def test_wave_note_only_marks_the_survey_wave_value():
 def test_markdown_emphasis_is_removed_from_llm_text():
     llm = FakeLLM(AIMessage("**Bonjour** ! Que voulez-vous savoir ?"))
     assert ask("Bonjour", llm=llm)["answer"] == "Bonjour ! Que voulez-vous savoir ?"
+
+
+def test_user_sources_are_never_used_in_answers():
+    llm = FakeLLM()
+    result = ask("Utilise mes données importées : combien de clients ?", llm=llm)
+    assert result["intent"] == "user_source" and llm.calls == 0
+    assert "n'est pas utilisée dans les réponses" in result["answer"] and result["facts"] == []

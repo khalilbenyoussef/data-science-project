@@ -62,6 +62,9 @@ uploads:                           # python main.py add-source --file X.csv --na
   dir: data/uploads                # copies des fichiers (jamais une source officielle)
   mappings_dir: config/sources     # mappings confirmes, charges automatiquement
   max_file_mb: 200                 # taille maximale d'un fichier ajoute
+  pending_dir: outputs/uploads_pending  # page « Mes données » : depots en attente de confirmation
+  jobs_dir: outputs/jobs           # etat des recalculs (relu apres rechargement ou redemarrage)
+  job_timeout_min: 15              # au-dela, le recalcul se termine en erreur
 
 countries:
   name_to_iso3: {}                 # alias de noms de pays confirmes (ex. "Tunisie (centre)": TUN)

@@ -158,6 +158,17 @@ REPLIES = {
               "questions below.",
     },
 }
+# Sources CSV de l'utilisateur (page « Mes données ») : jamais utilisees dans les reponses
+USER_SOURCE_CUES = ("mes donnees", "source utilisateur", "sources utilisateur", "mon fichier",
+                    "mon csv", "fichier importe", "fichier depose", "my data", "user source", "my file",
+                    "uploaded file")
+USER_SOURCE_REPLY = {
+    "fr": "Cette source utilisateur n'est pas utilisée dans les réponses : Ask Finova ne cite que les "
+          "chiffres officiels vérifiés du tableau de bord. Vos données restent consultables sur la page "
+          "« Mes données ».",
+    "en": "User sources are not used in the answers: Ask Finova only cites the dashboard's verified "
+          "official figures. Your data stays available on the « Mes données » page.",
+}
 ARABIC_NOTE = ("Les réponses chiffrées sont en français ; une réponse complète en arabe "
                "nécessite le mode IA.")
 SYSTEM_PROMPT = """Tu es Ask Finova, l'assistant du tableau de bord Finova sur l'inclusion financière.
@@ -169,6 +180,8 @@ Règles strictes :
 - Une explication de concept sans outil ne contient aucun nombre.
 - Si un outil dit « indisponible », dis-le simplement : aucune valeur n'est estimée.
 - Cite l'année de chaque chiffre. Une association n'est jamais une causalité.
+- Les sources CSV ajoutées par l'utilisateur (page « Mes données ») ne sont jamais utilisées : si on
+  t'interroge à leur sujet, dis que cette source utilisateur n'est pas utilisée dans les réponses.
 - Réponds dans la langue de l'utilisateur (français, anglais ou arabe), en trois phrases au plus,
   en texte simple (pas de markdown)."""
 TOOLS = [
@@ -665,6 +678,11 @@ def answer_chat(request: ChatRequest, view: ViewProvider, *, iso3: str, year: in
     """Reponse d'un tour : LLM avec outils si disponible, sinon deterministe."""
     settings = settings or ask_settings({})
     lang = detect_language(request.question)
+    if any(cue in _norm(request.question) for cue in USER_SOURCE_CUES):
+        result = _base(request.question, USER_SOURCE_REPLY["en" if lang == "en" else "fr"], lang=lang,
+                       mode="deterministic", intent="user_source")
+        result["suggestions"] = suggestions_for(request.page, iso3, lang)
+        return result
     session = request.session_id or "anonymous"
     result = None
     note = None

@@ -156,3 +156,35 @@ def test_included_user_source_passes_the_audit(base, monkeypatch):
     assert checks["B6_source_hashes"]["result"] == "pass"
     manifest = SnapshotStore(base / "snapshots").manifest(state["snapshot_id"])
     assert "agents" in manifest["sources"]  # versionnee comme les autres sources
+
+
+def test_offline_official_job_changes_only_the_user_source(base, monkeypatch):
+    """Job « Mes données » : les sources officielles viennent du snapshot publie (aucun
+    reseau) ; le nouveau snapshot ne differe que par la source utilisateur."""
+    from biflow.agents.collector import CollectorAgent
+
+    cfg = full_cfg(base)
+    first = graph.run_pipeline(cfg=cfg, run_id="officiel", use_llm=False)
+    assert first["snapshot"]["status"] == "published"
+    store = SnapshotStore(base / "snapshots")
+    before = store.manifest(first["snapshot_id"])["sources"]
+
+    cfg["sources"]["gdp"].update(static=False, dynamic=True)  # source dynamique : jamais rafraichie ici
+    for method in ("_refresh", "_fas_api", "_get", "_get_text"):
+        monkeypatch.setattr(CollectorAgent, method, lambda *a, **k: pytest.fail("appel reseau interdit"))
+    add_user_source(base, cfg, monkeypatch)
+    added = graph.run_pipeline(cfg=cfg, run_id="ajout", use_llm=False, offline_official=True)
+    assert added["status"] == "success" and added["snapshot"]["status"] == "published"
+    after = store.manifest(added["snapshot_id"])["sources"]
+    changed = {name for name in after if (before.get(name) or {}).get("sha256") != after[name]["sha256"]}
+    assert changed == {"agents"}
+    assert {name: after[name]["sha256"] for name in OFFICIAL} == {name: before[name]["sha256"] for name in OFFICIAL}
+
+    (base / "sources" / "agents.yaml").unlink()
+    cfg["sources"].pop("agents")
+    removed = graph.run_pipeline(cfg=cfg, run_id="retrait", use_llm=False, offline_official=True)
+    final = store.manifest(removed["snapshot_id"])["sources"]
+    assert set(final) == set(OFFICIAL)
+    assert {name: final[name]["sha256"] for name in OFFICIAL} == {name: before[name]["sha256"] for name in OFFICIAL}
+    with duckdb.connect(str(base / "processed" / "warehouse.duckdb"), read_only=True) as con:
+        assert con.execute("SELECT count(*) FROM fact WHERE source LIKE 'user:%'").fetchone()[0] == 0

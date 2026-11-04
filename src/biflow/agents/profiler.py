@@ -12,7 +12,7 @@ except Exception:  # noqa: BLE001
 
 from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
-from biflow.utils.io import load_source, save_json
+from biflow.utils.io import load_source, save_json, write_csv
 
 YEAR_RE = re.compile(r"^(19|20)\d{2}$")
 
@@ -557,20 +557,14 @@ class ProfilerAgent(BaseAgent):
         out_dir = self.cfg["paths"]["profiles"]
         json_path = resolve(f"{out_dir}/profile_{name}.json")
         save_json(prof, json_path)
-        pd.DataFrame(prof["columns"]).to_csv(
-            resolve(f"{out_dir}/columns_{name}.csv"), index=False, encoding="utf-8-sig"
-        )
+        # exports CSV neutralises (S6) : noms de colonnes et libelles peuvent venir d'un depot utilisateur
+        write_csv(pd.DataFrame(prof["columns"]), f"{out_dir}/columns_{name}.csv")
         if prof["indicator_coverage"]:
             ic = prof["indicator_coverage"]
-            pd.DataFrame(ic["matrix"]).T.fillna(0).astype(int).to_csv(
-                resolve(f"{out_dir}/indicator_coverage_{name}.csv"), encoding="utf-8-sig"
-            )
+            write_csv(pd.DataFrame(ic["matrix"]).T.fillna(0).astype(int),
+                      f"{out_dir}/indicator_coverage_{name}.csv", index=True)
         if prof["indicator_catalog"]:
-            pd.DataFrame(prof["indicator_catalog"]).to_csv(
-                resolve(f"{out_dir}/indicator_catalog_{name}.csv"),
-                index=False,
-                encoding="utf-8-sig",
-            )
+            write_csv(pd.DataFrame(prof["indicator_catalog"]), f"{out_dir}/indicator_catalog_{name}.csv")
         resolve(f"{out_dir}/profile_{name}.md").write_text(to_markdown(prof), encoding="utf-8")
         return prof, str(json_path)
 

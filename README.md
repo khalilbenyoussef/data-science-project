@@ -715,6 +715,13 @@ Le login est une démonstration d'interface (aucune authentification réelle).
 | GET | `/api/runs?limit=20` | derniers `outputs/reports/*/run.json` |
 | POST | `/api/ask` | Ask Finova : conversation, chiffres lus par outils et vérifiés |
 | GET | `/api/health` | présence du contrat et du warehouse |
+| POST | `/api/sources/detect` | dépôt CSV (multipart) : structure, rôles proposés, configuration réutilisable |
+| POST | `/api/sources/dry-run` | contrôle sans écriture : lignes retenues, pays inconnus, unités manquantes, aperçu |
+| POST | `/api/sources/confirm` | enregistre la source et lance le recalcul (`job_id`) |
+| GET | `/api/sources/jobs/{job_id}` | état du recalcul (étape, succès, exclusion qualité, échec d'audit) |
+| GET | `/api/sources` | sources utilisateur : lignes, années, pays, score qualité, statut |
+| DELETE | `/api/sources/{name}` | retire la source (copie conservée) et lance le recalcul |
+| GET | `/api/sources/{name}/data` | valeurs publiées de la source (`fact`, source `user:<nom>`), lecture seule |
 
 Le scope publié est servi tel quel (`X-Finova-Source: file`). Tout autre
 pays/année est **construit à la demande** depuis le warehouse
@@ -733,6 +740,17 @@ absent des résultats d'outils du tour déclenche une régénération puis la r�
 déterministe. Le navigateur envoie les 10 derniers messages de la session et un
 budget d'appels LLM est tenu par session. Sans clé : salutations, suggestions,
 relances (« et en 2021 ? », « et le Maroc ? ») et formulations FR / EN / darija.
+
+Page « Mes données » (sources CSV de l'utilisateur, API locale) : le fichier
+déposé reste en attente (`outputs/uploads_pending/`) jusqu'à la confirmation,
+puis est copié tel quel dans `data/uploads/` ; il n'est jamais exécuté ni ouvert
+par un tableur. Le recalcul (un seul à la fois, état dans `outputs/jobs/`, délai
+`uploads.job_timeout_min`) lance `python main.py run --no-llm --offline-official`
+puis Route 2 : avec `--offline-official`, Findex, FAS et PIB sont repris du
+snapshot publié, sans réseau, et seule la source utilisateur peut changer. Les
+données utilisateur n'entrent ni dans les cartes KPI officielles ni dans les
+réponses d'Ask Finova. Les CSV exportés (rapports qualité, profils) préfixent
+d'une apostrophe les cellules texte commençant par `=`, `+`, `-` ou `@` (S6).
 
 ### 4. Tests
 

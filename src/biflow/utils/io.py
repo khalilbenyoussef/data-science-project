@@ -162,11 +162,35 @@ def load_source(source_cfg: dict[str, Any], **kwargs: Any) -> pd.DataFrame:
     raise ValueError(f"Format de source non supporte : {fmt} ({path.name})")
 
 
-def write_csv(df: pd.DataFrame, path: str | Path) -> Path:
-    """Ecrit un CSV UTF-8 avec BOM (Excel) et cree le dossier parent."""
+FORMULA_PREFIXES = ("=", "+", "-", "@")
+
+
+def neutralize_cell(value: Any) -> Any:
+    """S6 : un texte commencant par = + - @ est prefixe d'une apostrophe (jamais
+    interprete comme formule par un tableur). Les nombres ne sont pas touches."""
+    if isinstance(value, str) and value.startswith(FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
+def neutralize_formulas(df: pd.DataFrame) -> pd.DataFrame:
+    """Copie du tableau avec en-tetes, index et cellules texte neutralises (S6)."""
+    out = df.copy()
+    out.columns = [neutralize_cell(c) for c in out.columns]
+    if out.index.dtype == object:
+        out.index = [neutralize_cell(i) for i in out.index]
+    for column in out.columns:
+        if out[column].dtype == object:
+            out[column] = out[column].map(neutralize_cell)
+    return out
+
+
+def write_csv(df: pd.DataFrame, path: str | Path, *, index: bool = False) -> Path:
+    """Ecrit un CSV d'export UTF-8 avec BOM (Excel) et cree le dossier parent ;
+    les cellules texte sont neutralisees contre l'injection de formule (S6)."""
     out = resolve(path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(out, index=False, encoding="utf-8-sig")
+    neutralize_formulas(df).to_csv(out, index=index, encoding="utf-8-sig")
     return out
 
 
@@ -253,6 +277,8 @@ __all__ = [
     "sha256_file",
     "read_csv_smart",
     "load_source",
+    "neutralize_cell",
+    "neutralize_formulas",
     "write_csv",
     "save_json",
     "cached_sha256_file",

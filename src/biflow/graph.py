@@ -293,6 +293,7 @@ def run_pipeline(
     *,
     semantic_kpi_request: Any = _NO_SEMANTIC_REQUEST,
     rebuild: bool = False,
+    offline_official: bool = False,
 ) -> dict[str, Any]:
     if semantic_kpi_request is not _NO_SEMANTIC_REQUEST:
         if any(selection is not None for selection in (only, start, stop)):
@@ -303,6 +304,8 @@ def run_pipeline(
     cfg = deepcopy(cfg or load_config())
     if not use_llm:
         cfg.setdefault("llm", {})["enabled"] = False
+    if offline_official:  # sources officielles reprises du snapshot publie, sans reseau
+        cfg.setdefault("collector", {})["offline_official"] = True
     objective = objective or (cfg.get("project") or {}).get("objective", "Pipeline BI BIFlow")
     run_id = run_id or datetime.now().strftime("%Y%m%dT%H%M%S")
     state = new_state(objective=objective, run_id=run_id)

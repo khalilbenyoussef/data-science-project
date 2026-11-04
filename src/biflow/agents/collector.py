@@ -15,7 +15,7 @@ import pandas as pd
 
 from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
-from biflow.utils.io import ensure_dir, file_stat, read_csv_smart, sha256_file
+from biflow.utils.io import cached_sha256_file, ensure_dir, file_stat, read_csv_smart, sha256_file
 
 COLUMNS = ["iso3", "country", "indicator_code", "indicator_name", "year", "value"]
 SDMX_REQUIRED = ("COUNTRY", "FREQUENCY", "TIME_PERIOD", "OBS_VALUE", "SCALE")
@@ -321,6 +321,25 @@ class CollectorAgent(BaseAgent):
                       meta["size_mb"], Path(meta["mapping"]).name)
         return meta
 
+    def _offline(self, name: str, source_cfg: dict, published: Mapping[str, Any] | None) -> dict[str, Any]:
+        """collector.offline_official : source officielle reprise telle quelle, sans reseau.
+
+        Blob du snapshot publie (empreinte identique par construction) ; a defaut,
+        fichier local deja present (cache API compris). Jamais de telechargement."""
+        if published is not None and name in published["raw_paths"]:
+            meta = dict(published["raw_meta"][name])
+            if cached_sha256_file(meta["path"]) != meta["sha256"]:
+                raise AgentError(f"[{name}] blob du snapshot publie altere (hash different du manifeste)")
+            self.log.info("[%s] hors ligne : blob du snapshot publie (sha256 %s)", name, meta["sha256"][:12])
+            return {**meta, "updated": False, "offline": True}
+        api = source_cfg.get("api") or {}
+        out = resolve(api.get("path", "data/raw/fas_api.csv") if api.get("enabled") else source_cfg["path"])
+        if not out.is_file():
+            raise AgentError(f"[{name}] hors ligne : aucun snapshot publie ni fichier local ({out})")
+        self.log.info("[%s] hors ligne : fichier local %s (aucun telechargement)", name, out.name)
+        return {"path": str(out), "rows": None, "updated": False, "sha256": sha256_file(out),
+                "origin": "local_file", "offline": True, **file_stat(out)}
+
     def _static(self, name: str, source_cfg: dict, out) -> dict[str, Any]:
         if not out.exists():
             raise FileNotFoundError(f"[{name}] source statique introuvable : {out}")
@@ -359,6 +378,17 @@ class CollectorAgent(BaseAgent):
         warnings: list[str] = []
         failed: list[str] = []
         excluded: list[dict[str, Any]] = list(ctx.get("excluded_sources") or [])
+        # Job « Mes données » : seules les sources utilisateur peuvent changer
+        offline = bool((self.cfg.get("collector") or {}).get("offline_official"))
+        published = None
+        if offline:
+            from biflow.tools.snapshots import SnapshotStore
+
+            try:
+                published = SnapshotStore((self.cfg.get("snapshots") or {}).get("root", "data/snapshots")
+                                          ).published_inputs()
+            except (KeyError, OSError):
+                published = None
 
         for name, source_cfg in sources.items():
             if source_cfg.get("type") == "user":  # un depot utilisateur ne bloque jamais le pipeline officiel
@@ -373,7 +403,10 @@ class CollectorAgent(BaseAgent):
                 continue
             out = resolve(source_cfg["path"])
             try:
-                if (source_cfg.get("api") or {}).get("enabled"):
+                if offline:
+                    meta = self._offline(name, source_cfg, published)
+                    out = resolve(meta["path"])
+                elif (source_cfg.get("api") or {}).get("enabled"):
                     meta = self._fas_api(name, source_cfg)
                     out = resolve(meta["path"])
                     if meta.get("warning"):

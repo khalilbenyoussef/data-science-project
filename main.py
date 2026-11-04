@@ -255,6 +255,9 @@ def main() -> int:
     run.add_argument("--objective", default=None, help="objectif metier du run")
     run.add_argument("--run-id", default=None, help="identifiant du run")
     run.add_argument("--no-llm", action="store_true", help="desactive tous les appels LLM")
+    run.add_argument("--offline-official", action="store_true",
+                     help="sources officielles reprises du snapshot publie, sans reseau "
+                          "(seules les sources utilisateur peuvent changer)")
     run.add_argument("--rebuild", action="store_true",
                      help="rejoue snapshot -> auditor sur les blobs du snapshot publie (nouveau run_id)")
 
@@ -320,6 +323,7 @@ def main() -> int:
         run_id=args.run_id,
         use_llm=not args.no_llm,
         rebuild=args.rebuild,
+        offline_official=args.offline_official,
     )
     _print_state(state)
     return 0 if state.get("status") in ("success", "no_change") else 2
