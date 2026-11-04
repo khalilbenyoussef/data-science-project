@@ -32,8 +32,8 @@ backups/
 
 # Dashboard (Node)
 node_modules
-dashboard/dist/
-dashboard/public/data/*.json
+legacy/dashboard/dist/
+legacy/dashboard/public/data/*.json
 dashboard_app/web/dist/
 
 # Videos d'arriere-plan (124 Mo, a heberger separement ou via Git LFS)

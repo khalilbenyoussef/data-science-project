@@ -6,8 +6,8 @@ Pipeline Business Intelligence automatique en deux routes :
   → KPI → audit, orchestré par LangGraph ; les agents LLM (Gemini, Groq) restent
   optionnels et ne calculent aucun chiffre.
 - **Route 2 — Analyse** : warehouse → Semantic & KPI → **BI Analyst** →
-  **Dashboard React/ECharts**, entièrement déterministe (aucun LLM, aucun
-  recalcul, aucune interpolation).
+  **dashboard FinOVA** (`dashboard_app/`), entièrement déterministe (aucun LLM,
+  aucun recalcul, aucune interpolation).
 
 Domaine : **Économie & Finance / inclusion financière**.
 
@@ -66,7 +66,8 @@ src/biflow/
 config/config.yaml     chemins, LLM, orchestrateur, KPI, sources, seuils, analyst, dashboard
 config/kpi_catalog.v1.yaml  definitions declaratives des KPI (version 1.7.0, libelles francais name_fr)
 data/                  raw, snapshots, staging, processed, profiles, quality, audit
-dashboard/             front React + Vite + ECharts (donnees JSON)
+dashboard_app/         dashboard FinOVA : API FastAPI (api/) + front React/Vite (web/)
+legacy/dashboard/      ancien front React/ECharts, retire du service (remplace par FinOVA)
 outputs/               reports, profiles, logs, cache LLM
 ```
 
@@ -379,7 +380,7 @@ ni calcul parallèle.
 | Etape | Agent | Sorties |
 |---|---|---|
 | S10 | `bi_analyst` | `analysis_dataset.json`, `bi_analyst.json`, `bi_analyst.md` |
-| S11 | `dashboard` | `dashboard_data.json`, `dashboard/public/data/dashboard.json` |
+| S11 | `dashboard` | `dashboard_data.json`, `outputs/dashboard/dashboard.json` |
 
 Le **BI Analyst** produit des constats déterministes (`F-001`, …) rattachés à
 des identifiants de preuve (`EV-…`, `TR-…`, `CMP-…`). Le **Dashboard** valide
@@ -392,13 +393,12 @@ python main.py analyze --country TUN,MAR,DZA --mode latest --run-id demo
 # Analyste + donnees du dashboard
 python main.py dashboard --country TUN,MAR,DZA --kpis account_ownership,saving_rate `
   --mode year --year 2024 --reference TUN --top 5 --run-id demo
-
-# Front React (Vite + ECharts)
-cd dashboard
-npm install
-npm run dev        # http://127.0.0.1:5173
-npm run build      # tsc --noEmit && vite build
 ```
+
+> Le front historique React/ECharts (`dashboard/`) est **remplacé par FinOVA
+> (`dashboard_app`)** : il est conservé dans `legacy/dashboard/` pour mémoire,
+> n'est plus construit ni servi, et la Route 1 n'écrit plus dans son dossier
+> (`outputs/dashboard/dashboard.json`). Voir « Dashboard Finova » plus bas.
 
 Options : `--country` (répétable ou CSV), `--kpis`, `--mode latest|year`,
 `--year`, `--reference`, `--top`, `--no-series`, `--run-id`.
@@ -451,7 +451,7 @@ python scripts/evaluate_auditor.py        # injection de fautes -> data/audit/ev
 python main.py dashboard --country TUN,MAR,DZA --mode latest
 
 # 6. Front (Node.js >= 18)
-cd dashboard; npm install; npm run dev
+cd dashboard_app/web; npm ci; npm run build; cd ../..
 
 # 7. Tests
 .\.venv\Scripts\python -m pytest -q
@@ -491,7 +491,7 @@ python scripts/evaluate_auditor.py
 python main.py dashboard --country TUN,MAR,DZA --mode latest
 
 # 6. Front (Node.js >= 18)
-cd dashboard && npm install && npm run dev
+(cd dashboard_app/web && npm ci && npm run build)
 
 # 7. Tests
 .venv/bin/python -m pytest -q
@@ -529,7 +529,8 @@ d'un run précédent).
 - `outputs/reports/<run_id>/bi_analyst.{json,md}` : rapport et constats
   rattachés aux preuves ;
 - `outputs/reports/<run_id>/dashboard_data.json` : contrat validé ;
-- `dashboard/public/data/dashboard.json` : copie consommée par le front ;
+- `outputs/dashboard/dashboard.json` : copie exportée du contrat (l'ancien front
+  qui la lisait est retiré, voir `legacy/dashboard/`) ;
 - `outputs/reports/<run_id>/run.json` : résumé du run Route 2.
 
 ## Données et périmètre

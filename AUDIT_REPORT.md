@@ -28,7 +28,7 @@
 | Injection de fautes | 9 / 9 détectées |
 | Tests | 1 248 réussis, 0 échec |
 | Constats de sécurité S1–S9 | 9 corrigés, 0 ouvert |
-| Nouveaux constats | 1 modéré ouvert (N1), 3 informatifs |
+| Nouveaux constats | 1 modéré retiré du service (N1), 3 informatifs |
 
 ---
 
@@ -118,7 +118,7 @@ la page signale un résultat antérieur au dernier audit.
 
 | ID | Sévérité | Constat | Statut / recommandation |
 |---|---|---|---|
-| N1 | **Modérée** | `npm audit` (dashboard historique `dashboard/`) : ECharts < 6.1.0, avis XSS GHSA-fgmj-fm8m-jvvx. Correctif = passage majeur à ECharts 6.1 (rupture). Le front FinOVA n'utilise pas ECharts (`npm audit` : 0 vulnérabilité). | **Ouvert.** Atténué par S4 (libellés échappés). Mettre à jour ECharts ou retirer le dashboard historique s'il n'est plus servi. |
+| N1 | **Modérée** | `npm audit` (dashboard historique, désormais `legacy/dashboard/`) : ECharts < 6.1.0, avis XSS GHSA-fgmj-fm8m-jvvx. Correctif = passage majeur à ECharts 6.1 (rupture). Le front FinOVA n'utilise pas ECharts (`npm audit` : 0 vulnérabilité). | **Retiré du service.** Le dashboard historique est déplacé dans `legacy/dashboard/`, remplacé par FinOVA (`dashboard_app`) : il n'est plus construit ni servi, et la Route 1 n'écrit plus dans son dossier (`outputs/dashboard/dashboard.json`). La dépendance vulnérable reste dans le code archivé (atténuée par S4) ; ne pas le remettre en service sans passer à ECharts 6.1. |
 | N2 | Info | La CSP autorise Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`) : requête tierce à chaque visite. Les pages de développement `/docs` et `/redoc` sont exemptées de CSP (scripts du CDN Swagger). | Héberger la police Inter localement ; désactiver `/docs` hors développement. |
 | N3 | Info | Ask Finova en mode IA envoie la question et les faits officiels du tableau de bord au fournisseur LLM (Groq, puis Gemini). Aucune source utilisateur, aucun chemin ni clé n'est transmis ; budget d'appels par session. | À mentionner aux utilisateurs ; mode sans clé disponible. |
 | N4 | Info | `requirements.lock` est propre à Windows / Python 3.10. | Régénérer par plateforme (commande documentée dans le README). |
@@ -142,12 +142,12 @@ la page signale un résultat antérieur au dernier audit.
 | Suite complète `pytest` | **1 248 réussis**, 0 échec (1 avertissement : fonction `load` de langchain en bêta) |
 | Tests ciblés sécurité / dépôt / audit | 61 réussis |
 | Build FinOVA (`npm run build`) | réussi |
-| `npm audit --omit=dev` | FinOVA : 0 vulnérabilité ; dashboard historique : 1 modérée (N1) |
+| `npm audit --omit=dev` | FinOVA : 0 vulnérabilité ; dashboard historique (`legacy/`, retiré du service) : 1 modérée (N1) |
 | Navigateur (Playwright, 1 440 et 768 px) | 0 violation CSP ; erreurs console uniquement sur la page de connexion : 404 des vidéos de fond non versionnées (repli sur le fond statique) |
 
 ## 10. Risques résiduels et priorités
 
-1. **N1** — mettre à jour ECharts du dashboard historique ou le retirer.
+1. **N1** — retiré du service (`legacy/dashboard/`) ; à ne réactiver qu'après passage à ECharts 6.1.
 2. Vidéos de la page de connexion absentes du dépôt (404, repli statique) : les héberger ou retirer la référence.
 3. **N2** — héberger la police localement pour une CSP sans origine tierce.
 4. Réserves de données C2 / C4 : présentées comme telles dans l'interface (« approuvé avec réserve », variations dans le bruit d'enquête).
@@ -156,8 +156,8 @@ la page signale un résultat antérieur au dernier audit.
 
 Le pipeline, la Route 2 et l'interface FinOVA sont conformes : 0 échec d'audit, 0 valeur bloquée,
 15/15 constats acceptés, 9/9 fautes détectées, 1 248 tests réussis. Les constats de sécurité S1–S9
-sont tous corrigés ; le seul point ouvert de sévérité modérée (N1) concerne le dashboard historique,
-pas l'interface FinOVA.
+sont tous corrigés ; le seul constat de sévérité modérée (N1) concerne le dashboard historique, retiré du service
+(`legacy/dashboard/`), pas l'interface FinOVA.
 
 ---
 
@@ -176,6 +176,6 @@ pas l'interface FinOVA.
 | 9 | `curl -sI http://127.0.0.1:8000/api/health` | S8 (en-têtes) |
 | 10 | Playwright : connexion, 9 pages et panneau Ask Finova à 1 440 et 768 px (écouteur `securitypolicyviolation`) | S8 (navigateur), §9 |
 | 11 | `pytest` ciblé (`test_llm`, `test_legacy_dashboard_escape`, `test_dashboard`, `test_kpi`, `test_analysis`, `test_dashboard_api`, `test_sources_api`, `test_user_integration`, `test_audit_api`) | S1, S4–S8, §8 |
-| 12 | `npm audit --omit=dev` dans `dashboard_app/web` et `dashboard` | N1 |
+| 12 | `npm audit --omit=dev` dans `dashboard_app/web` et `legacy/dashboard` | N1 |
 | 13 | `git ls-files` + `wc -l` (fichiers et lignes) | §2 |
 | 14 | `npm run build` puis `pytest -q` (suite complète) | §9 |

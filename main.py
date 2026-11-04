@@ -163,7 +163,7 @@ def _print_analysis_state(state: dict) -> None:
     if paths:
         print(f"\nDashboard    : {paths.get('data')}")
         print(f"Front React  : {paths.get('public')}")
-        print("Lancer       : cd dashboard && npm run dev")
+        print("Front        : FinOVA (dashboard_app), lancer start.ps1 (voir README)")
 
     warnings = state.get("warnings") or []
     if warnings:

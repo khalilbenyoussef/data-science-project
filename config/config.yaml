@@ -187,7 +187,7 @@ analyst:
   narrate: false                   # narration LLM optionnelle, chiffres verifies
 
 dashboard:
-  data_output: dashboard/public/data/dashboard.json
+  data_output: outputs/dashboard/dashboard.json   # contrat Route 1 (front historique retire : legacy/dashboard)
   spec_output: dashboard_app/public/data/finova.json
   history_dir: outputs/dashboard/history
   generated_dir: outputs/dashboard/generated   # cache disque des vues generees (API)

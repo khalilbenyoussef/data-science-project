@@ -82,7 +82,7 @@ class DashboardAgent(BaseAgent):
         dashboard_cfg = self.cfg.get("dashboard") or {}
         public_path = export_dashboard_json(
             data,
-            dashboard_cfg.get("data_output", "dashboard/public/data/dashboard.json"),
+            dashboard_cfg.get("data_output", "outputs/dashboard/dashboard.json"),
         )
         warnings = [
             notice["message"] for notice in data["notices"]
