@@ -214,3 +214,10 @@ def test_recommendations_route_is_served_with_csp(client):
     assert response.status_code == 200  # entrepot absent : aucune piste, jamais d'erreur 500
     assert response.json()["recommendations"] == []
     assert response.headers.get("Content-Security-Policy") == CONTENT_SECURITY_POLICY
+
+
+def test_pipeline_routes_are_served(client):
+    body = client.get("/api/pipeline/agents").json()
+    assert [a["id"] for a in body["agents"]][:2] == ["collector", "snapshot"]
+    assert len(body["agents"]) == 10 and "active_job" in body
+    assert client.get("/api/pipeline/agents", params={"run_id": "../x"}).status_code == 400

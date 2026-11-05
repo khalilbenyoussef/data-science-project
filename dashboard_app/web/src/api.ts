@@ -1,5 +1,5 @@
 import type {
-  AskResult, DetectResult, DryRunResult, RecommendationsResult, RunSummary, SourceData, SourceJob,
+  AgentsTimeline, AskResult, DetectResult, DryRunResult, RecommendationsResult, RunSummary, SourceData, SourceJob,
   SourceMappingInput,
   SourcesList, Spec,
 } from "./types";
@@ -126,4 +126,13 @@ export function fetchRuns(): Promise<{ runs: RunSummary[]; count: number }> {
 export function fetchRecommendations(iso3: string, year: number, signal?: AbortSignal): Promise<RecommendationsResult> {
   return request<RecommendationsResult>(
     `/api/recommendations?iso3=${encodeURIComponent(iso3)}&year=${year}`, { signal });
+}
+
+export function fetchAgents(runId?: string): Promise<AgentsTimeline> {
+  const query = runId ? `?run_id=${encodeURIComponent(runId)}` : "";
+  return request<AgentsTimeline>(`/api/pipeline/agents${query}`);
+}
+
+export function startDemo(): Promise<{ job_id: string; status: string }> {
+  return request("/api/pipeline/demo", { method: "POST" });
 }

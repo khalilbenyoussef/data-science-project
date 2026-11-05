@@ -1,6 +1,6 @@
 # Architecture multi-agents — FinOVA / BIFlow
 
-- **Généré le** : 2026-11-05T18:36:18
+- **Généré le** : 2026-11-05T19:04:13
 - **Run audité (Route 1)** : `part_d_audit_report`
 - **Snapshot** : `v5`
 - **Version du catalogue KPI** : 1.7.0
@@ -37,7 +37,7 @@ Durées, statuts et appels LLM lus dans les rapports d'agent (`outputs/reports/<
 
 | Agent | Run | Statut | Durée | Sortie clé | Appels LLM mesurés |
 |---|---|---|---|---|---|
-| Collector | `user_delete_20261104T105203` | réussi | 0.12 s | 3 source(s) collectée(s) | 0 appel |
+| Collector | `demo_20261105T190335` | réussi | 0.13 s | 3 source(s) collectée(s) | 0 appel |
 | Snapshot | `part_d_audit_report` | réussi | 0.11 s | snapshot v5 (rebuild) | 0 appel |
 | Profiler | `part_d_audit_report` | réussi | 2.31 s | findex 8 577 × 36 ; fas 32 209 × 57 ; gdp 19 575 × 6 | 0 appel |
 | Quality | `part_d_audit_report` | réussi | 1.20 s | score 0.936, gate réussi | 0 appel |

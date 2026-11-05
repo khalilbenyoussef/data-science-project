@@ -2884,3 +2884,100 @@ select {
 .chart-measure .chart-svg {
   max-width: none;
 }
+
+/* ------------------------------------------------------------------ agents (Sources et qualité) */
+.agents-timeline .panel-head { gap: 12px; flex-wrap: wrap; }
+
+.agents-routes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.agent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-item {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-inner);
+}
+
+.agent-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.agent-done .agent-index { background: var(--series); border-color: var(--series); color: #fff; }
+.agent-running .agent-index { background: var(--accent); border-color: var(--accent); color: #2a1e00; }
+.agent-running { border-color: var(--accent); }
+.agent-skipped { opacity: 0.6; }
+.agent-error .agent-index { background: var(--red); border-color: var(--red); color: #fff; }
+
+.agent-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.agent-head strong { font-size: 0.88rem; }
+.agent-body p { margin: 2px 0 4px; }
+
+.agent-mode {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.7rem;
+}
+
+.agent-mode.mode-llm { border-color: var(--accent); }
+
+.agent-status {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.agent-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 0.75rem;
+}
+
+.agents-banner {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card-inner);
+  font-size: 0.82rem;
+}
+
+.agents-banner.banner-run,
+.agents-banner.banner-info { border-color: var(--series); }
+.agents-banner.banner-error,
+.agents-banner.banner-audit_failed { border-color: var(--red); }
+
+@media (max-width: 900px) {
+  .agents-routes { grid-template-columns: 1fr; }
+}

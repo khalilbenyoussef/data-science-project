@@ -1,6 +1,6 @@
 # Évaluation des agents et approche de référence
 
-- **Généré le** : 2026-11-05T18:36:18
+- **Généré le** : 2026-11-05T19:04:13
 - **Run audité (Route 1)** : `part_d_audit_report`
 - **Snapshot** : `v5`
 - **Version du catalogue KPI** : 1.7.0
@@ -20,7 +20,7 @@
 
 | Agent | Mode | Statut | Durée | Lignes entrée → sortie | Sortie clé | Appels LLM |
 |---|---|---|---|---|---|---|
-| Collector | déterministe | réussi | 0.12 s | non disponible → 60 361 | 3 source(s) collectée(s) | 0 appel |
+| Collector | déterministe | réussi | 0.13 s | non disponible → 60 361 | 3 source(s) collectée(s) | 0 appel |
 | Snapshot | déterministe | réussi | 0.11 s | non disponible → 60 361 | snapshot v5 (rebuild) | 0 appel |
 | Profiler | déterministe | réussi | 2.31 s | 60 361 → 60 361 | findex 8 577 × 36 ; fas 32 209 × 57 ; gdp 19 575 × 6 | 0 appel |
 | Quality | déterministe + LLM optionnel | réussi | 1.20 s | 60 361 → non disponible | score 0.936, gate réussi | 0 appel |
@@ -36,7 +36,7 @@
 *Collecte les sources officielles (Findex, FAS, PIB WDI) et les sources utilisateur confirmées ; calcule l'empreinte SHA-256 de chaque fichier.*
 
 - Mode : déterministe
-- Run : `user_delete_20261104T105203` — statut réussi, durée 0.12 s, 0 avertissement(s), 0 erreur(s)
+- Run : `demo_20261105T190335` — statut réussi, durée 0.13 s, 0 avertissement(s), 0 erreur(s)
 - Sortie clé : 3 source(s) collectée(s)
 - Appels LLM mesurés : 0 appel
 - run courant reconstruit depuis le snapshot publié : dernier Collector exécuté

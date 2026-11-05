@@ -199,3 +199,22 @@ def test_evaluation_reports_live_ask_check(ctx):
     text = dl.render_evaluation(ctx)
     assert "**1/2 réponses fondées**" in text and "groq (m)" in text
     assert "| q2 | llm | non | 12 | 12 |" in text
+
+
+def test_demo_script_reads_its_numbers(ctx, monkeypatch):
+    values = {("account_ownership", "TUN"): 37.84, ("account_ownership", "MAR"): 44.4, ("gender_gap", "TUN"): 22.96,
+              ("income_gap", "TUN"): 26.96, ("barrier_insufficient_funds", "TUN"): 45.7}
+    monkeypatch.setattr(dl, "kpi_value", lambda c, k, iso3, year: values.get((k, iso3)))
+    monkeypatch.setattr(dl, "scope_recommendations", lambda c, iso3=None, year=None: {"recommendations": [
+        {"target_group": "femmes"}]})
+    ctx.spec = {"country": {"iso3": "TUN"}, "year": 2024}
+    ctx.audit.update({"counts": {"pass": 18, "warn": 1, "fail": 0}})
+    ctx.fault_injection = {"detected": 9, "total": 9}
+    text = dl.render_demo(ctx)
+    assert text.count("\n| ") == 1 + 9  # en-tete et 9 etapes (le separateur commence par |---)
+    assert "Détention d'un compte : 37.8 %" in text and "MAR 44.4 %" in text
+    assert "Écart hommes − femmes : 23.0 pts ; revenu : 27.0 pts" in text
+    assert "1 pistes ; ex. groupe cible « femmes »" in text
+    assert "pass : 18 réussis, 1 avertissements, 0 échecs" in text and "fautes 9/9" in text
+    assert "contrôle en direct non mesuré" in text and "| 9:30–10:00 | Conclusion | — |" in text
+    assert dl.TARGETS["DEMO.md"] == "docs/DEMO.md"

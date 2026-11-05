@@ -7,6 +7,8 @@ a la main. Relancable a volonte (seule la ligne « Genere le » change).
     python scripts/build_deliverables.py            # ecrit les fichiers
     python scripts/build_deliverables.py --check    # echoue si un fichier est perime
     python scripts/build_deliverables.py --only KPI_CATALOG.md
+
+Ecrit aussi docs/DEMO.md (script de demonstration de 10 minutes).
 """
 from __future__ import annotations
 
@@ -18,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from biflow.tools.deliverables import DELIVERABLES_DIR, RENDERERS, load_context, stable  # noqa: E402
+from biflow.tools.deliverables import DELIVERABLES_DIR, RENDERERS, TARGETS, load_context, stable  # noqa: E402
 
 
 def build(out_dir: Path, only: list[str] | None = None, check: bool = False) -> int:
@@ -27,7 +29,8 @@ def build(out_dir: Path, only: list[str] | None = None, check: bool = False) -> 
     stale = []
     for name in names:
         text = RENDERERS[name](ctx)
-        target = out_dir / name
+        # DEMO.md va dans docs/ quand la sortie est le dossier par defaut
+        target = ROOT / TARGETS[name] if name in TARGETS and out_dir == DELIVERABLES_DIR else out_dir / name
         if check:
             current = target.read_text(encoding="utf-8") if target.is_file() else ""
             if stable(current) != stable(text):
@@ -51,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--only", action="append", choices=sorted(RENDERERS), help="un seul document")
     parser.add_argument("--check", action="store_true", help="compare sans ecrire (code 1 si perime)")
     args = parser.parse_args(argv)
-    return build(Path(args.out), args.only, args.check)
+    return build(Path(args.out).resolve(), args.only, args.check)
 
 
 if __name__ == "__main__":

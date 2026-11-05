@@ -28,7 +28,9 @@ from biflow.agents.ask import (
 from biflow.config import ROOT, load_config, resolve
 from biflow.tools.dashboard_spec import COUNTRY_LABELS, PEERS, REFERENCE_PATH
 from biflow.tools.audit_text import template_text
+from biflow.tools.deliverables import load_context
 from dashboard_app.api.audit import create_audit_router
+from dashboard_app.api.pipeline import create_pipeline_router
 from dashboard_app.api.reports import create_reports_router
 from dashboard_app.api.sources import create_sources_router
 from biflow.tools.kpi import DEFAULT_CATALOG
@@ -313,8 +315,11 @@ def create_app(
         return {"runs": runs, "count": len(runs)}
 
     # page « Mes données » : sources CSV de l'utilisateur (recalcul en arriere-plan)
-    sources_router, _ = create_sources_router(cfg, warehouse=warehouse, runner=sources_runner)
+    sources_router, source_jobs = create_sources_router(cfg, warehouse=warehouse, runner=sources_runner)
     app.include_router(sources_router)
+    # page « Sources et qualité » : frise des agents du dernier run, relance de la demonstration
+    # (meme recalcul hors ligne que les sources utilisateur ; 409 si un recalcul est en cours)
+    app.include_router(create_pipeline_router(context=lambda: load_context(cfg), jobs=source_jobs))
     # page « Audit et confiance » : rapport d'audit, kpi_values et explications (lecture seule)
     audit_root = resolve(audit_dir if audit_dir is not None else paths.get("audit", "data/audit"))
     app.include_router(create_audit_router(audit_dir=audit_root, warehouse=warehouse, spec_file=spec_file))

@@ -454,7 +454,7 @@ export interface DryRunResult {
 
 export interface SourceJob {
   job_id: string;
-  kind: "add" | "delete";
+  kind: "add" | "delete" | "demo";
   source: string;
   status: "queued" | "running" | "success" | "quality_failed" | "audit_failed" | "error";
   step: string | null;
@@ -467,6 +467,8 @@ export interface SourceJob {
   finished_at: string | null;
   seconds: number | null;
   quality_score?: number | null;
+  skipped?: string[];
+  no_change?: boolean;
 }
 
 export interface UserSource {
@@ -544,4 +546,31 @@ export interface RecommendationsResult {
   rules_checked: number;
   recommendations: Recommendation[];
   rejected: number;
+}
+
+// ------------------------------------------------------------ Agents (page Sources et qualité)
+export interface AgentRow {
+  id: string;
+  route: "Route 1" | "Route 2" | "Interface";
+  label: string;
+  role: string;
+  status: string | null;
+  started_at: string | null;
+  duration_s: number | null;
+  key_output: string | null;
+  llm: boolean;
+  llm_mode: string;
+  llm_measured: string;
+  note: string | null;
+}
+
+export interface AgentsTimeline {
+  route1_run_id: string;
+  route2_run_id: string | null;
+  snapshot_id: string;
+  status: string | null;
+  no_change: boolean;
+  finished_at: string | null;
+  agents: AgentRow[];
+  active_job: SourceJob | null;
 }

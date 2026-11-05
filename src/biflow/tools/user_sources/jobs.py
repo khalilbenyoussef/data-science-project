@@ -133,7 +133,8 @@ class JobManager:
                 raise JobBusy("Un recalcul est déjà en cours : attendez la fin avant une nouvelle opération.")
             job_id = uuid.uuid4().hex
             job = {"job_id": job_id, "kind": kind, "source": source, "status": "queued", "step": None,
-                   "steps_done": [], "run_id": None, "route2_run_id": None, "message": None, "reasons": [],
+                   "steps_done": [], "skipped": [], "no_change": False, "run_id": None, "route2_run_id": None,
+                   "message": None, "reasons": [],
                    "started_at": _now(), "heartbeat_at": _now(), "finished_at": None, "seconds": None}
             self._write(job)
             self._mine.add(job_id)
@@ -205,7 +206,8 @@ def pipeline_runner(cfg: Mapping[str, Any], timeout_s: float) -> Runner:
 
     def run(job: dict[str, Any], update: Callable[..., None]) -> None:
         deadline = time.time() + timeout_s
-        run_id = f"user_{job['kind']}_{datetime.now().strftime('%Y%m%dT%H%M%S')}"
+        prefix = "demo" if job["kind"] == "demo" else f"user_{job['kind']}"
+        run_id = f"{prefix}_{datetime.now().strftime('%Y%m%dT%H%M%S')}"
         update(run_id=run_id, step="collector")
 
         def on_line(line: str) -> None:
@@ -226,7 +228,11 @@ def pipeline_runner(cfg: Mapping[str, Any], timeout_s: float) -> Runner:
         snapshot = summary.get("snapshot") or {}
         audit = summary.get("audit") or {}
         if summary.get("status") == "no_change" or snapshot.get("status") == "no_change":
-            update(status="success", steps_done=list(STEPS), step=None,
+            # agents executes = rapports presents ; les suivants sont ignores (et affiches comme tels)
+            reports = path_of(dict(cfg), "reports") / run_id
+            done = [step for step in STEPS if (reports / f"{step}.json").is_file()]
+            update(status="success", steps_done=done, step=None, no_change=True,
+                   skipped=[step for step in STEPS if step not in done],
                    message="Aucune donnée nouvelle : le contenu est identique à la version publiée.")
             return
         if code != 0 or summary.get("status") not in ("success",):
@@ -263,8 +269,9 @@ def pipeline_runner(cfg: Mapping[str, Any], timeout_s: float) -> Runner:
             return
         update(status="success", steps_done=list(STEPS), step=None, route2_run_id=route2,
                quality_score=check.get("score"), audit=audit.get("verdict"),
-               message="Source intégrée et tableau de bord recalculé." if job["kind"] == "add"
-               else "Source retirée et tableau de bord recalculé.")
+               message={"add": "Source intégrée et tableau de bord recalculé.",
+                        "demo": "Démonstration terminée : données recalculées, auditées et publiées."}.get(
+                   job["kind"], "Source retirée et tableau de bord recalculé."))
 
     return run
 

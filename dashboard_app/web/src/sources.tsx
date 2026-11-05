@@ -748,7 +748,11 @@ function JobProgress({
     <section className="panel job-panel" aria-live="polite">
       <div className="panel-head">
         <div>
-          <h3>{job?.kind === "delete" ? "Suppression et recalcul" : "Ajout et recalcul"} · {job?.source ?? "…"}</h3>
+          <h3>
+            {job?.kind === "demo"
+              ? "Démonstration · recalcul hors ligne"
+              : `${job?.kind === "delete" ? "Suppression et recalcul" : "Ajout et recalcul"} · ${job?.source ?? "…"}`}
+          </h3>
           <p className="muted small">L'opération continue même si vous rechargez la page.</p>
         </div>
         {job?.seconds != null && <span className="muted small">{fmtValue(job.seconds)} s</span>}
@@ -769,7 +773,9 @@ function JobProgress({
         <div className={`job-result job-${job.status}`}>
           <strong>
             {job.status === "success"
-              ? job.kind === "add" ? "Source intégrée à l'entrepôt" : "Source retirée"
+              ? job.kind === "add" ? "Source intégrée à l'entrepôt"
+                : job.kind === "demo" ? (job.no_change ? "Aucune donnée nouvelle" : "Démonstration terminée")
+                  : "Source retirée"
               : job.status === "quality_failed" ? "Source exclue par le contrôle qualité"
                 : job.status === "audit_failed" ? "Audit en échec : version précédente conservée" : "Le recalcul a échoué"}
           </strong>

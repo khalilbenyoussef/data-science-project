@@ -1,6 +1,7 @@
 import type { Chart, InfoBlock, Page, Spec } from "./types";
 import { ChartView } from "./charts";
 import { PAGE_COPY, plainText } from "./copy";
+import { AgentsTimeline } from "./agents";
 import { PdfDownload } from "./pdf";
 import { Recommendations } from "./recommendations";
 import { prettyDate } from "./format";
@@ -155,6 +156,7 @@ export function PageView({
 
       {page.id === "pipeline" && (
         <>
+          <AgentsTimeline />
           {page.blocks.map((block) => (
             <Block key={block.id} block={block} onAsk={onAsk} />
           ))}

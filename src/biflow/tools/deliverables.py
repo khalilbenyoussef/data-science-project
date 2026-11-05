@@ -21,6 +21,7 @@ import duckdb
 import yaml
 
 from biflow.config import ROOT, load_config, path_of, resolve
+from biflow.tools.dashboard_spec import COUNTRY_LABELS
 from biflow.tools.kpi import DEFAULT_CATALOG, load_catalog
 
 NA = "non disponible"
@@ -367,7 +368,7 @@ def _key_output(agent_id: str, report: Mapping[str, Any], ctx: Context, counts: 
     return {"text": NA}
 
 
-def agent_summaries(ctx: Context) -> list[dict[str, Any]]:
+def agent_summaries(ctx: Context, *, collector_fallback: bool = True) -> list[dict[str, Any]]:
     """Un enregistrement par agent : role, mode LLM, statut, duree, sortie cle (dernier run)."""
     counts = warehouse_counts(ctx)
     out = []
@@ -378,7 +379,7 @@ def agent_summaries(ctx: Context) -> list[dict[str, Any]]:
             report = (run.get("agents") or {}).get(aid)
             run_id = run.get("run_id")
             note = None
-            if aid == "collector" and report is None and ctx.collector:
+            if aid == "collector" and report is None and ctx.collector and collector_fallback:
                 report, run_id = ctx.collector, ctx.collector.get("run_id")
                 note = "run courant reconstruit depuis le snapshot publié : dernier Collector exécuté"
         elif aid in ROUTE2:
@@ -853,13 +854,137 @@ def render_evaluation(ctx: Context) -> str:
     return "\n".join(lines)
 
 
+SKIPPED_NOTE = "ignoré : aucune donnée nouvelle"
+STOPPED = {"no_change": SKIPPED_NOTE, "quality_failed": "ignoré : gate qualité échoué",
+           "failed": "non exécuté : run en échec", "audit_failed": "non exécuté : audit en échec"}
+
+
+def run_timeline(ctx: Context, run_id: str | None = None) -> dict[str, Any]:
+    """Frise des agents : dernier run (audit courant + spec publiee) ou un run donne.
+
+    Pour un run donne, un agent sans rapport est « ignoré » (aucune donnee nouvelle,
+    gate qualite) ou « non exécuté » ; la Route 2 n'est lue que si le run a abouti.
+    KeyError si le run n'existe pas."""
+    no_change = False
+    if run_id is not None:
+        folder = ctx.paths["reports"] / run_id
+        if not (folder / "run.json").is_file():
+            raise KeyError(run_id)
+        selected = _run_reports(folder)
+        status = (selected["run"] or {}).get("status")
+        no_change = status == "no_change" or ((selected["run"] or {}).get("snapshot") or {}).get("status") == "no_change"
+        ctx = Context(**{**ctx.__dict__, "route1": selected,
+                         "route2": ctx.route2 if status == "success" else None})
+    rows = agent_summaries(ctx, collector_fallback=run_id is None)
+    stopped = STOPPED.get("no_change" if no_change else str(((ctx.route1 or {}).get("run") or {}).get("status")))
+    for row in rows:
+        row["llm"] = row["llm_mode"] != "déterministe" and not row["llm_mode"].startswith("déterministe (")
+        if run_id is not None and row["status"] is None and row["id"] != "ask" and stopped:
+            row.update(status="skipped", note=stopped, key_output=None)
+    run = (ctx.route1 or {}).get("run") or {}
+    return {
+        "route1_run_id": (ctx.route1 or {}).get("run_id") or ctx.run_id,
+        "route2_run_id": (ctx.route2 or {}).get("run_id") if ctx.route2 else None,
+        "snapshot_id": (run.get("snapshot") or {}).get("snapshot_id") or ctx.snapshot_id,
+        "status": run.get("status"), "no_change": no_change, "finished_at": run.get("finished_at"),
+        "agents": [{k: row[k] for k in ("id", "route", "label", "role", "status", "started_at", "duration_s",
+                                        "key_output", "llm", "llm_mode", "llm_measured", "note")} for row in rows],
+    }
+
+
+def kpi_value(ctx: Context, kpi_id: str, iso3: str, year: int) -> float | None:
+    """Valeur publiee (lecture seule) ; None si absente ou bloquee."""
+    if not ctx.warehouse.is_file():
+        return None
+    try:
+        with duckdb.connect(str(ctx.warehouse), read_only=True) as con:
+            row = con.execute("SELECT value FROM kpi_values WHERE kpi_id = ? AND iso3 = ? AND year = ? "
+                              "AND publication_status <> 'blocked'", [kpi_id, iso3, year]).fetchone()
+    except duckdb.Error:
+        return None
+    return float(row[0]) if row and row[0] is not None else None
+
+
+def render_demo(ctx: Context) -> str:
+    iso3 = (ctx.spec.get("country") or {}).get("iso3") or "TUN"
+    year = int(ctx.spec.get("year") or 2024)
+    v = lambda k, c=iso3, y=year: kpi_value(ctx, k, c, y)  # noqa: E731
+    peers = (ctx.cfg.get("kpi") or {}).get("peers") or []
+    agents = {a["id"]: a for a in agent_summaries(ctx)}
+    recs = scope_recommendations(ctx, iso3, year)
+    first = recs["recommendations"][0] if recs["recommendations"] else None
+    barriers = sorted(((v(k), (ctx.catalog["kpis"].get(k) or {}).get("name_fr", k)) for k in ctx.official_kpis()
+                       if k.startswith("barrier_")), key=lambda item: -(item[0] or -1))
+    top_barrier = barriers[0] if barriers and barriers[0][0] is not None else None
+    counts = ctx.audit.get("counts") or {}
+    publication = (ctx.audit.get("publication") or {}).get("by_status") or {}
+    fi, insight = ctx.fault_injection, ctx.audit.get("route2_insight_audit") or {}
+    base, live = ctx.baseline, ctx.ask_live
+    total_r1 = sum(a["duration_s"] or 0 for a in agents.values() if a["route"] == "Route 1" and a["id"] != "collector")
+    lines = header(ctx, "Script de démonstration (10 minutes)",
+                   ["table kpi_values", "data/audit/audit_report.json", "outputs/reports/<run>/*.json",
+                    "outputs/evaluation/*.json", "config/recommendations.yaml"])
+    lines += [
+        "Lancement : `./start.ps1` puis ouvrir l'adresse affichée (ajouter `?demo=1` pour passer l'écran d'accueil). "
+        f"Périmètre de la démonstration : **{COUNTRY_LABELS.get(iso3, iso3)}, {year}**. Les chiffres ci-dessous sont lus "
+        "dans les données courantes : régénérer ce script après un nouveau run.", "",
+        "| Minute | Écran | Ce que je clique | Ce que je dis | Chiffres attendus |", "|---|---|---|---|---|",
+        f"| 0:00–1:00 | Accueil → Vue d'ensemble | « Entrer », pays {iso3}, année {year} | FinOVA mesure l'inclusion "
+        "financière de la Tunisie face à quatre pairs, à partir de sources officielles auditées. | "
+        f"Détention d'un compte : {fmt_num(v('account_ownership'))} % ; pairs : "
+        + ", ".join(f"{c} {fmt_num(v('account_ownership', c))} %" for c in peers) + " |",
+        f"| 1:00–2:30 | Vue d'ensemble, bas de page | Faire défiler jusqu'à « Pistes de recommandation » | Les pistes "
+        "viennent de règles fixes appliquées aux valeurs auditées ; chacune cite ses chiffres et son groupe cible ; "
+        f"association, pas causalité. | {len(recs['recommendations'])} pistes"
+        + (f" ; ex. groupe cible « {first['target_group']} »" if first else "") + " |",
+        f"| 2:30–3:00 | Vue d'ensemble | « Télécharger le rapport (PDF) » | Le rapport des constats est construit à la "
+        "demande, pour le pays et l'année affichés. | page de garde : run, snapshot, catalogue |",
+        f"| 3:00–4:00 | Inclusion et inégalités | Graphique des groupes | Les écarts entre groupes sont les plus forts "
+        f"signaux. | Écart hommes − femmes : {fmt_num(v('gender_gap'))} pts ; revenu : {fmt_num(v('income_gap'))} pts |",
+        f"| 4:00–5:00 | Pourquoi l'exclusion ? | Carte des obstacles | Obstacles déclarés par les adultes sans compte, "
+        "comparés aux pairs. | "
+        + (f"{top_barrier[1]} : {fmt_num(top_barrier[0])} %" if top_barrier else NA) + " |",
+        f"| 5:00–7:00 | Sources et qualité → « Agents » | Lire la frise, puis « Relancer la démonstration » | "
+        f"{len(ROUTE1)} agents en Route 1 puis {len(ROUTE2)} en Route 2, chacun déterministe ou avec LLM optionnel. "
+        "Le recalcul reprend les sources officielles du snapshot publié ; sans donnée nouvelle, il s'arrête après "
+        "le snapshot et les autres agents sont marqués « ignoré ». | "
+        f"score qualité {fmt_num(ctx.quality.get('overall_score'), 3)} ; {fmt_int(warehouse_counts(ctx).get('fact_rows'))} "
+        f"lignes fact ; {fmt_int(ctx.audit.get('rows'))} lignes KPI ; Route 1 (hors collecte) "
+        f"{fmt_num(total_r1, 1)} s |",
+        f"| 7:00–8:30 | Audit et confiance | Verdict, contrôles, injection de fautes, « Télécharger le rapport (PDF) » | "
+        "Un auditeur indépendant recalcule chaque valeur ; on a vérifié qu'il détecte des fautes injectées. | "
+        f"{ctx.audit.get('verdict', NA)} : {counts.get('pass', NA)} réussis, {counts.get('warn', NA)} avertissements, "
+        f"{counts.get('fail', NA)} échecs ; {fmt_int(publication.get('approved'))} approuvées, "
+        f"{fmt_int(publication.get('approved_with_review_note'))} avec réserve ; fautes "
+        f"{fi.get('detected', NA)}/{fi.get('total', NA)} ; constats {insight.get('accepted', NA)}/"
+        f"{insight.get('audited', NA)} acceptés |",
+        f"| 8:30–9:30 | Ask Finova | Poser « Quel est le taux de détention d'un compte en Tunisie ? » | Chaque nombre "
+        "de la réponse est contrôlé contre les faits ; sinon réponse déterministe. | "
+        f"{fmt_num(v('account_ownership'))} % ; contrôle en direct "
+        + (f"{live.get('grounded')}/{live.get('questions')} réponses fondées" if live.get("status") == "mesuré"
+           else "non mesuré") + " |",
+        "| 9:30–10:00 | Conclusion | — | Recalcul naïf depuis les CSV : mêmes valeurs ; le pipeline ajoute statut, "
+        "pairs, traçabilité et audit. | "
+        + (f"{base.get('matched')}/{base.get('compared')} valeurs identiques" if base else NA) + " |",
+        "", "## Si une question arrive", "",
+        "- *Le LLM invente-t-il des chiffres ?* Non : tout nombre est vérifié contre les faits ; voir EVALUATION.md.",
+        "- *Pourquoi « association, pas causalité » ?* Les données Findex sont des enquêtes transversales : elles "
+        "décrivent des écarts, pas leurs causes.",
+        "- *Et sans clé LLM ?* Chaque agent a un repli déterministe ; la démonstration fonctionne hors ligne.", "",
+    ]
+    return "\n".join(lines)
+
+
 RENDERERS = {
     "ARCHITECTURE.md": render_architecture,
     "DATA_QUALITY_REPORT.md": render_quality,
     "KPI_CATALOG.md": render_kpi_catalog,
     "INSIGHTS_ET_RECOMMANDATIONS.md": render_insights,
     "EVALUATION.md": render_evaluation,
+    "DEMO.md": render_demo,
 }
+# Documents ecrits hors de docs/deliverables/ (chemin relatif a la racine du projet)
+TARGETS = {"DEMO.md": "docs/DEMO.md"}
 
 
 def stable(text: str) -> str:
@@ -867,5 +992,5 @@ def stable(text: str) -> str:
     return "\n".join(line for line in text.splitlines() if not line.startswith("- **Généré le**"))
 
 
-__all__ = ["AGENTS", "Context", "DELIVERABLES_DIR", "NA", "RENDERERS", "agent_summaries", "load_context",
-           "evaluation_freshness", "scope_recommendations", "stable", "warehouse_counts"]
+__all__ = ["AGENTS", "Context", "DELIVERABLES_DIR", "NA", "RENDERERS", "TARGETS", "agent_summaries", "load_context",
+           "evaluation_freshness", "run_timeline", "scope_recommendations", "stable", "warehouse_counts"]
