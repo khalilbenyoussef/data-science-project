@@ -71,6 +71,28 @@ def _attach_analysis(
     return DashboardSpec.model_validate(data)
 
 
+def build_route2_graph(prepare, analyst, dashboard, finalize):
+    """Graphe Route 2 compile : prepare -> (analyst || dashboard) -> finalize.
+
+    None sans LangGraph (execution sequentielle equivalente dans run_route2).
+    Expose pour l'export Mermaid des livrables (structure reelle du graphe).
+    """
+    if not pipeline_graph.LANGGRAPH_AVAILABLE:
+        return None
+    graph = pipeline_graph.StateGraph(PipelineState)
+    graph.add_node("prepare", prepare)
+    graph.add_node("analyst", analyst)
+    graph.add_node("dashboard", dashboard)
+    graph.add_node("finalize", finalize)
+    graph.add_edge(pipeline_graph.START, "prepare")
+    graph.add_edge("prepare", "analyst")
+    graph.add_edge("prepare", "dashboard")
+    graph.add_edge("analyst", "finalize")
+    graph.add_edge("dashboard", "finalize")
+    graph.add_edge("finalize", pipeline_graph.END)
+    return graph.compile()
+
+
 def run_route2(
     request: AnalysisRequest | Mapping[str, Any] | None = None,
     cfg: dict[str, Any] | None = None,
@@ -241,19 +263,14 @@ def run_route2(
 
     try:
         if pipeline_graph.LANGGRAPH_AVAILABLE:
-            graph = pipeline_graph.StateGraph(PipelineState)
-            graph.add_node("prepare", prepare)
             # Route 2 : aucun nouvel essai d'agent (conception)
-            graph.add_node("analyst", pipeline_graph._node(analyst_agent, {"orchestrator": {"max_retries": 0}}))
-            graph.add_node("dashboard", pipeline_graph._node(dashboard_agent, {"orchestrator": {"max_retries": 0}}))
-            graph.add_node("finalize", finalize)
-            graph.add_edge(pipeline_graph.START, "prepare")
-            graph.add_edge("prepare", "analyst")
-            graph.add_edge("prepare", "dashboard")
-            graph.add_edge("analyst", "finalize")
-            graph.add_edge("dashboard", "finalize")
-            graph.add_edge("finalize", pipeline_graph.END)
-            state = graph.compile().invoke(state, config={"recursion_limit": 20})
+            graph = build_route2_graph(
+                prepare,
+                pipeline_graph._node(analyst_agent, {"orchestrator": {"max_retries": 0}}),
+                pipeline_graph._node(dashboard_agent, {"orchestrator": {"max_retries": 0}}),
+                finalize,
+            )
+            state = graph.invoke(state, config={"recursion_limit": 20})
         else:
             pipeline_graph._merge_updates(state, prepare(state))
             for agent in (analyst_agent, dashboard_agent):
@@ -302,4 +319,4 @@ def run_route2(
     return state
 
 
-__all__ = ["run_route2"]
+__all__ = ["build_route2_graph", "run_route2"]
