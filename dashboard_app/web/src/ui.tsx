@@ -14,6 +14,16 @@ import {
   friendlyFilter, friendlyRule, friendlySource, noticeCopy, plainText, rejectedLabel, sourceName,
 } from "./copy";
 
+export const USER_CHIP_TEXT = "Données utilisateur · non vérifiée par BIFlow";
+
+export function UserChip() {
+  return (
+    <span className="chip chip-user" title="Valeur importée par l'utilisateur, hors chiffres officiels : BIFlow ne la vérifie pas">
+      {USER_CHIP_TEXT}
+    </span>
+  );
+}
+
 export function ChipBadge({ chip }: { chip: Metric["chip"] | InfoItem["chip"] | null }) {
   if (!chip) return null;
   return (
@@ -827,11 +837,15 @@ export function AskDock({
               {message.result && !message.isError && (
                 <>
                   <div className="ask-badges">
-                    <span className={`status ${message.result.number_check.passed ? "status-available" : "status-warning"}`}>
-                      {message.result.number_check.passed
-                        ? "Chiffres vérifiés"
-                        : "Chiffres à vérifier"}
-                    </span>
+                    {message.result.intent === "user_source" || message.result.facts.some((fact) => fact.user_data) ? (
+                      <UserChip />
+                    ) : (
+                      <span className={`status ${message.result.number_check.passed ? "status-available" : "status-warning"}`}>
+                        {message.result.number_check.passed
+                          ? "Chiffres vérifiés"
+                          : "Chiffres à vérifier"}
+                      </span>
+                    )}
                     <span className="muted small">
                       {message.result.country_name} · {message.result.year}
                       {message.result.mode === "llm" ? " · mode IA" : " · mode simple"}
@@ -840,12 +854,16 @@ export function AskDock({
                   {message.result.facts.length > 0 && (
                     <div className="tag-row">
                       {message.result.facts.map((fact) => (
-                        <code key={fact.id} title={fact.id}>
-                          {plainText(fact.label)} : {plainText(fact.display)} ·{" "}
+                        <code key={fact.id} title={fact.user_data ? `${fact.id} · ${fact.chip ?? ""}` : fact.id}
+                          className={fact.user_data ? "user-fact" : undefined}>
+                          {fact.user_data ? "Vos données · " : ""}{plainText(fact.label)} : {plainText(fact.display)} ·{" "}
                           {fact.iso3 ?? message.result!.iso3} · {fact.year}
                         </code>
                       ))}
                     </div>
+                  )}
+                  {message.result.user_data_policy?.reason && (
+                    <p className="caveat small user-policy">{message.result.user_data_policy.reason}</p>
                   )}
                   {message.result.caveat && <p className="caveat small">{plainText(message.result.caveat)}</p>}
                   {index === messages.length - 1 && !busy && (message.result.suggestions?.length ?? 0) > 0 && (

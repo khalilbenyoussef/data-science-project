@@ -175,11 +175,11 @@ def test_markdown_emphasis_is_removed_from_llm_text():
     assert ask("Bonjour", llm=llm)["answer"] == "Bonjour ! Que voulez-vous savoir ?"
 
 
-def test_user_sources_are_never_used_in_answers():
+def test_user_source_question_without_user_data_never_calls_the_llm():
     llm = FakeLLM()
     result = ask("Utilise mes données importées : combien de clients ?", llm=llm)
     assert result["intent"] == "user_source" and llm.calls == 0
-    assert "n'est pas utilisée dans les réponses" in result["answer"] and result["facts"] == []
+    assert "Aucune donnée utilisateur" in result["answer"] and result["facts"] == []
 
 
 def test_llm_answer_badge_follows_the_scope_actually_answered():

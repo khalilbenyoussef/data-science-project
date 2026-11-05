@@ -25,6 +25,7 @@ from biflow.agents.analyst import (
 )
 from biflow.llm import LLMConfigError, build_chat_model, key_format_ok, provider_env_var
 from biflow.tools.audit_text import extract_numbers, grounding
+from biflow.tools.user_sources.data import USER_CHIP, USER_MARKER, UserData
 
 logger = logging.getLogger(__name__)
 
@@ -158,16 +159,32 @@ REPLIES = {
               "questions below.",
     },
 }
-# Sources CSV de l'utilisateur (page « Mes données ») : jamais utilisees dans les reponses
-USER_SOURCE_CUES = ("mes donnees", "source utilisateur", "sources utilisateur", "mon fichier",
-                    "mon csv", "fichier importe", "fichier depose", "my data", "user source", "my file",
-                    "uploaded file")
-USER_SOURCE_REPLY = {
-    "fr": "Cette source utilisateur n'est pas utilisée dans les réponses : Ask Finova ne cite que les "
-          "chiffres officiels vérifiés du tableau de bord. Vos données restent consultables sur la page "
-          "« Mes données ».",
-    "en": "User sources are not used in the answers: Ask Finova only cites the dashboard's verified "
-          "official figures. Your data stays available on the « Mes données » page.",
+# Sources CSV de l'utilisateur (page « Mes données ») : lues uniquement par l'outil
+# get_user_indicator ; jamais transmises au LLM sauf si llm.ask.allow_user_data_to_llm.
+USER_SOURCE_CUES = ("mes donnees", "nos donnees", "vos donnees", "source utilisateur", "sources utilisateur",
+                    "donnees utilisateur", "mon fichier", "mon csv", "fichier importe", "fichier depose",
+                    "donnees importees", "ma banque", "notre banque", "my data", "our data", "user source",
+                    "my file", "uploaded file", "my bank", "our bank")
+USER_MARKER_EN = "According to your data (not verified by BIFlow)"
+USER_MARKERS = (USER_MARKER, USER_MARKER_EN)
+NO_USER_DATA = {
+    "fr": "Aucune donnée utilisateur n'est intégrée pour l'instant : ajoutez un fichier sur la page "
+          "« Mes données ». Ask Finova ne présente jamais une donnée utilisateur comme officielle.",
+    "en": "No user data is loaded yet: add a file on the « Mes données » page. Ask Finova never presents "
+          "user data as official.",
+}
+USER_POLICY_REASON = {
+    "fr": "Réponse en mode simple : vos données ne sont pas transmises au service d'IA externe "
+          "(paramètre llm.ask.allow_user_data_to_llm désactivé).",
+    "en": "Simple-mode answer: your data is not sent to the external AI service "
+          "(setting llm.ask.allow_user_data_to_llm is off).",
+}
+USER_RULE = {
+    True: "- Les données importées par l'utilisateur se lisent uniquement avec l'outil get_user_indicator ; "
+          "toute réponse qui en cite une valeur commence par « " + USER_MARKER + " » et ne la présente "
+          "jamais comme officielle ni vérifiée.",
+    False: "- Les données importées par l'utilisateur ne te sont pas transmises : n'en parle pas et "
+           "n'estime aucune de leurs valeurs.",
 }
 ARABIC_NOTE = ("Les réponses chiffrées sont en français ; une réponse complète en arabe "
                "nécessite le mode IA.")
@@ -180,9 +197,7 @@ Règles strictes :
 - Une explication de concept sans outil ne contient aucun nombre.
 - Si un outil dit « indisponible », dis-le simplement : aucune valeur n'est estimée.
 - Cite l'année de chaque chiffre. Une association n'est jamais une causalité.
-- Les sources CSV ajoutées par l'utilisateur (page « Mes données ») ne sont jamais utilisées : si on
-  t'interroge à leur sujet, dis que cette source utilisateur n'est pas utilisée dans les réponses ;
-  n'en parle jamais si la question ne les mentionne pas.
+{regle_utilisateur}
 - Réponds dans la langue de l'utilisateur (français, anglais ou arabe), en trois phrases au plus,
   en texte simple (pas de markdown)."""
 TOOLS = [
@@ -213,6 +228,20 @@ TOOLS = [
             "kpi_id": {"type": "string"}, "iso3": {"type": "string"}, "year": {"type": "integer"}},
             "required": ["kpi_id"]}}},
 ]
+
+
+USER_TOOL = {"type": "function", "function": {
+    "name": "get_user_indicator",
+    "description": "Données importées par l'utilisateur (non vérifiées par BIFlow), lecture seule. Sans "
+                   "indicateur : liste des indicateurs (libellés, sans valeurs). Avec un indicateur : valeur "
+                   "de l'année demandée ou de la dernière année antérieure.",
+    "parameters": {"type": "object", "properties": {
+        "indicator": {"type": "string"}, "iso3": {"type": "string"}, "year": {"type": "integer"}}}}}
+
+
+def tools_for(allow_user_data: bool) -> list[dict[str, Any]]:
+    """Outils lies au LLM : l'outil utilisateur seulement si le parametre l'autorise."""
+    return [*TOOLS, USER_TOOL] if allow_user_data else list(TOOLS)
 
 
 class ChatTurn(BaseModel):
@@ -369,8 +398,12 @@ class FactTools:
     """Outils de lecture des faits Finova ; consignent les faits renvoyes au tour."""
 
     def __init__(self, view: ViewProvider, *, iso3: str, year: int, page: str | None,
-                 explain_reader: ExplainReader | None = None, lang: str = "fr") -> None:
+                 explain_reader: ExplainReader | None = None, lang: str = "fr",
+                 user_data: UserData | None = None, allow_user_data: bool = False) -> None:
         self.view = view
+        self.user_data = user_data
+        self.allow_user_data = allow_user_data
+        self.user_used = False
         self.iso3 = iso3
         self.year = year
         self.page = page
@@ -462,8 +495,36 @@ class FactTools:
         return self._record({"kpi_id": kpi_id, "iso3": code, "year": wanted,
                              "explanation": text or "indisponible"})
 
+    def get_user_indicator(self, indicator: str | None = None, iso3: str | None = None,
+                           year: int | None = None) -> dict[str, Any]:
+        if not self.allow_user_data or self.user_data is None:  # jamais lie dans ce cas : defense en profondeur
+            return {"error": "données utilisateur non disponibles pour ce service"}
+        items = self.user_data.indicators()
+        if not indicator:
+            return self._record({"chip": USER_CHIP, "indicators": [
+                {"indicator": item["code"], "label": item["label"]} for item in items]})
+        wanted = str(indicator).strip().lower()
+        item = next((i for i in items if wanted in (i["code"].lower(), i["code"].split(".", 1)[1].lower(),
+                                                    i["label"].lower())), None)
+        if item is None:
+            matched = self.user_data.match(str(indicator))
+            item = matched[0] if matched else None
+        if item is None:
+            return {"status": "indisponible", "indicateurs_valides": [i["code"] for i in items]}
+        code = (iso3 or self.iso3).upper()
+        row = self.user_data.latest(item["code"], code, int(year or self.year))
+        self.user_used = True
+        if row is None:
+            return self._record({"indicator": item["code"], "label": item["label"], "iso3": code,
+                                 "status": "indisponible", "chip": USER_CHIP})
+        return self._record({"chip": USER_CHIP, "status": "available", "values": [{
+            "fact_id": f"USER-{row['indicator_code']}-{row['iso3']}-{row['year']}", "label": row["label"],
+            "display": row["display"], "year": row["year"], "iso3": row["iso3"], "unit": row["unit"],
+            "user_data": True, "year_requested": row["year_requested"]}]})
+
     def call(self, name: str, args: Mapping[str, Any]) -> Any:
-        method = getattr(self, name, None) if name in {tool["function"]["name"] for tool in TOOLS} else None
+        allowed = {tool["function"]["name"] for tool in tools_for(self.allow_user_data)}
+        method = getattr(self, name, None) if name in allowed else None
         if method is None:
             return {"error": f"outil inconnu : {name}"}
         try:
@@ -503,7 +564,9 @@ def ask_settings(cfg: Mapping[str, Any]) -> dict[str, Any]:
     return {"temperature": float(ask.get("temperature", 0.2)),
             "max_calls_per_session": int(ask.get("max_calls_per_session", 30)),
             "max_tool_steps": int(ask.get("max_tool_steps", 4)),
-            "history_turns": int(ask.get("history_turns", 10))}
+            "history_turns": int(ask.get("history_turns", 10)),
+            # donnees utilisateur transmises au LLM : jamais par defaut
+            "allow_user_data_to_llm": ask.get("allow_user_data_to_llm", False) is True}
 
 
 def build_ask_llm(cfg: Mapping[str, Any]) -> Any | None:
@@ -513,7 +576,9 @@ def build_ask_llm(cfg: Mapping[str, Any]) -> Any | None:
     if not llm_cfg.get("enabled", True):
         return None
     providers = llm_cfg.get("providers") or {}
-    temperature = ask_settings(cfg)["temperature"]
+    settings = ask_settings(cfg)
+    temperature = settings["temperature"]
+    tools = tools_for(settings["allow_user_data_to_llm"])
     built = []
     for name in (llm_cfg.get("routing") or {}).get("ask") or []:
         spec = providers.get(name)
@@ -524,7 +589,7 @@ def build_ask_llm(cfg: Mapping[str, Any]) -> Any | None:
             if not key or not key_format_ok(name, spec, key):
                 continue
             built.append(build_chat_model(name, {**spec, "temperature": temperature}, temperature)
-                         .bind_tools(TOOLS))
+                         .bind_tools(tools))
         except (LLMConfigError, ImportError, ValueError) as exc:
             logger.info("ask : provider %s ignore (%s)", name, exc)
     if not built:
@@ -539,7 +604,8 @@ def _base(question: str, answer: str, *, lang: str, mode: str, intent: str,
           caveat: str | None = None, unknown: Sequence[str] = ()) -> dict[str, Any]:
     chips = [{"id": fact.get("fact_id") or fact.get("id"), "label": fact.get("label"),
               "display": fact.get("display"), "year": fact.get("year"),
-              "iso3": fact.get("iso3"), "unit": fact.get("unit")} for fact in facts]
+              "iso3": fact.get("iso3"), "unit": fact.get("unit"),
+              **({"user_data": True, "chip": USER_CHIP} if fact.get("user_data") else {})} for fact in facts]
     return {"schema_version": SCHEMA_VERSION, "question": question, "intent": intent,
             "answer": answer, "fallback": fallback, "mode": mode, "lang": lang,
             "fact_ids": tuple(chip["id"] for chip in chips if chip["id"]), "facts": chips,
@@ -622,7 +688,8 @@ def llm_answer(request: ChatRequest, llm: Any, tools: FactTools, *, lang: str,
                  if wave.get("year_used") and wave.get("year_used") != tools.year else "")
     messages: list[Any] = [SystemMessage(SYSTEM_PROMPT.format(
         pays=(spec.get("country") or {}).get("name") or tools.iso3, iso3=tools.iso3,
-        annee=tools.year, page=request.page or "overview", vague=wave_text)
+        annee=tools.year, page=request.page or "overview", vague=wave_text,
+        regle_utilisateur=USER_RULE[tools.allow_user_data])
         + " Résultat de l'outil current_scope : " + json.dumps(scope, ensure_ascii=False)
         + " Identifiants kpi_id utilisables (libellés, sans valeurs) : "
         + "; ".join(f"{item['kpi_id']} = {item['label']}" for item in tools.list_kpis()["kpis"]))]
@@ -660,6 +727,9 @@ def llm_answer(request: ChatRequest, llm: Any, tools: FactTools, *, lang: str,
         if not accepted:
             logger.info("ask : reponse LLM non fondee (%s), repli deterministe", unsupported)
             return None
+    if tools.user_used and not any(marker in answer for marker in USER_MARKERS):
+        # reponse fondee sur des donnees utilisateur : toujours dite explicitement
+        answer = f"{USER_MARKER_EN if lang == 'en' else USER_MARKER} : {answer}"
     numbers = set(extract_numbers(answer))
     used, seen = [], set()
     for fact in tools.returned:
@@ -680,24 +750,82 @@ def llm_answer(request: ChatRequest, llm: Any, tools: FactTools, *, lang: str,
     return result
 
 
+def _user_turn_free(history: Sequence[ChatTurn]) -> tuple[ChatTurn, ...]:
+    """Historique sans les reponses qui citent des donnees utilisateur (jamais transmises au LLM)."""
+    return tuple(turn for turn in history
+                 if not (turn.role == "assistant" and any(marker in turn.text for marker in USER_MARKERS)))
+
+
+def user_answer(request: ChatRequest, user_data: UserData, items: Sequence[Mapping[str, Any]], *,
+                iso3: str, year: int, lang: str) -> dict[str, Any]:
+    """Reponse deterministe sur les donnees utilisateur (aucun appel LLM), toujours etiquetee."""
+    countries = mentioned_countries(request.question)
+    code = countries[0] if countries else iso3
+    wanted = mentioned_year(request.question) or year
+    country = COUNTRY_EN.get(code, code) if lang == "en" else COUNTRY_IN.get(code, f"pour {code}")
+    marker = USER_MARKER_EN if lang == "en" else USER_MARKER
+    parts, facts = [], []
+    for item in list(items)[:6]:
+        row = user_data.latest(item["code"], code, wanted)
+        if row is None:
+            parts.append(f"{item['label']} : " + ("no value" if lang == "en" else "aucune valeur"))
+            continue
+        later = "" if row["same_year"] else (
+            f", latest year available before {wanted}" if lang == "en"
+            else f", dernière année disponible avant {wanted}")
+        parts.append(f"{item['label']} : {row['display']} ({row['year']}{later})")
+        facts.append({"fact_id": f"USER-{row['indicator_code']}-{row['iso3']}-{row['year']}",
+                      "label": row["label"], "display": row["display"], "year": row["year"],
+                      "iso3": row["iso3"], "unit": row["unit"], "user_data": True})
+    text = f"{marker}, {country} : " + " ; ".join(parts) + "."
+    out = _base(request.question, text, lang=lang, mode="deterministic", intent="user_source", facts=facts)
+    out["resolved"] = {"iso3": code, "year": wanted, "followup": False, "question": None}
+    return out
+
+
 def answer_chat(request: ChatRequest, view: ViewProvider, *, iso3: str, year: int,
                 llm: Any | None = None, budget: SessionBudget | None = None,
                 settings: Mapping[str, Any] | None = None,
-                explain_reader: ExplainReader | None = None) -> dict[str, Any]:
-    """Reponse d'un tour : LLM avec outils si disponible, sinon deterministe."""
+                explain_reader: ExplainReader | None = None,
+                user_data: UserData | None = None) -> dict[str, Any]:
+    """Reponse d'un tour : LLM avec outils si disponible, sinon deterministe.
+
+    Donnees utilisateur : sans llm.ask.allow_user_data_to_llm (defaut), une question
+    qui les concerne recoit une reponse deterministe (aucun appel LLM), l'outil
+    get_user_indicator n'est jamais lie au LLM et l'historique transmis au LLM ne
+    contient aucune reponse citant ces donnees."""
     settings = settings or ask_settings({})
+    allow_user = settings.get("allow_user_data_to_llm") is True
     lang = detect_language(request.question)
-    if any(cue in _norm(request.question) for cue in USER_SOURCE_CUES):
-        result = _base(request.question, USER_SOURCE_REPLY["en" if lang == "en" else "fr"], lang=lang,
-                       mode="deterministic", intent="user_source")
-        result["suggestions"] = suggestions_for(request.page, iso3, lang)
-        return result
     session = request.session_id or "anonymous"
+    items = user_data.match(request.question) if user_data is not None else []
+    about_user = bool(items) or any(cue in _norm(request.question) for cue in USER_SOURCE_CUES)
+    if about_user:
+        indicators = user_data.indicators() if user_data is not None else []
+        if not indicators:
+            result = _base(request.question, NO_USER_DATA["en" if lang == "en" else "fr"], lang=lang,
+                           mode="deterministic", intent="user_source")
+        elif llm is not None and allow_user and (budget is None or budget.left(session) > 0):
+            result = None
+        else:
+            result = user_answer(request, user_data, items or indicators, iso3=iso3, year=year, lang=lang)
+            if not allow_user:
+                result["user_data_policy"] = {"llm_allowed": False,
+                                              "reason": USER_POLICY_REASON["en" if lang == "en" else "fr"]}
+        if result is not None:
+            result["llm_available"] = llm is not None
+            result["suggestions"] = suggestions_for(request.page, iso3, lang)
+            if budget is not None:
+                result["budget_left"] = budget.left(session)
+            return result
+    if not allow_user:
+        request = request.model_copy(update={"history": _user_turn_free(request.history)})
     result = None
     note = None
     if llm is not None:
         tools = FactTools(view, iso3=iso3, year=year, page=request.page,
-                          explain_reader=explain_reader, lang="en" if lang == "en" else "fr")
+                          explain_reader=explain_reader, lang="en" if lang == "en" else "fr",
+                          user_data=user_data if allow_user else None, allow_user_data=allow_user)
         take = (lambda: budget.take(session)) if budget is not None else (lambda: True)
         if budget is not None and budget.left(session) == 0:
             note = ("(Budget de la session atteint : réponse en mode simple.)" if lang != "en"
@@ -708,6 +836,12 @@ def answer_chat(request: ChatRequest, view: ViewProvider, *, iso3: str, year: in
             except Exception:  # noqa: BLE001 - un incident LLM ne casse jamais le chat
                 logger.warning("ask : appel LLM en echec, repli deterministe", exc_info=True)
                 result = None
+            if result is not None and tools.user_used:
+                result["user_data_policy"] = {"llm_allowed": True, "reason": None}
+    if result is None and about_user and user_data is not None:
+        result = user_answer(request, user_data, items or user_data.indicators(), iso3=iso3, year=year,
+                             lang=lang)
+        result["llm_available"] = llm is not None
     if result is None:
         result = deterministic_answer(request, view, iso3=iso3, year=year, lang=lang, note=note)
         result["llm_available"] = llm is not None
@@ -718,7 +852,8 @@ def answer_chat(request: ChatRequest, view: ViewProvider, *, iso3: str, year: in
 
 
 __all__ = [
-    "ChatRequest", "ChatTurn", "FactTools", "SessionBudget", "TOOLS", "answer_chat", "ask_settings",
+    "ChatRequest", "ChatTurn", "FactTools", "SessionBudget", "TOOLS", "USER_TOOL", "answer_chat",
+    "ask_settings", "tools_for", "user_answer",
     "build_ask_llm", "detect_language", "deterministic_answer", "llm_answer", "mentioned_countries",
     "resolve_followup", "small_talk", "suggestions_for",
 ]

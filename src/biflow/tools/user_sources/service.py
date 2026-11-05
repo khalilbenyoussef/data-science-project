@@ -26,6 +26,7 @@ from biflow.tools.user_sources.mapping import (
     OFFICIAL_SOURCES, _validate_role, fingerprint, propose_mapping, slug, validate_mapping,
 )
 from biflow.tools.user_sources.registry import list_mappings, load_mapping, mapping_path, register, unregister
+from biflow.tools.user_sources.data import USER_CHIP
 from biflow.utils.countries import is_country, normalize_iso3
 
 NAME = re.compile(r"^[a-z][a-z0-9_]{1,40}$")
@@ -450,7 +451,7 @@ def source_data(cfg: Mapping[str, Any], warehouse: Path, name: str, *, indicator
             rows = []
     labels = {f"{name}.{code}": spec.label for code, spec in mapping.indicators.items()}
     return {
-        "name": name, "provider": "user", "chip": "Données utilisateur",
+        "name": name, "provider": "user", "chip": USER_CHIP,
         "indicators": [{"code": f"{name}.{code}", "label": spec.label, "unit": spec.stored_unit}
                        for code, spec in mapping.indicators.items()],
         "values": [{"iso3": r[0], "year": int(r[1]), "indicator_code": r[2],

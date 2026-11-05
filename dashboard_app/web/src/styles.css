@@ -2981,3 +2981,12 @@ select {
 @media (max-width: 900px) {
   .agents-routes { grid-template-columns: 1fr; }
 }
+
+/* Ask Finova : valeurs issues des donnees utilisateur (jamais presentees comme officielles) */
+.tag-row code.user-fact {
+  border: 1px dashed rgba(21, 128, 61, 0.5);
+}
+.user-policy {
+  border-left: 3px solid rgba(21, 128, 61, 0.5);
+  padding-left: 8px;
+}

@@ -29,6 +29,7 @@ from biflow.config import ROOT, load_config, resolve
 from biflow.tools.dashboard_spec import COUNTRY_LABELS, PEERS, REFERENCE_PATH
 from biflow.tools.audit_text import template_text
 from biflow.tools.deliverables import load_context
+from biflow.tools.user_sources.data import UserData
 from dashboard_app.api.audit import create_audit_router
 from dashboard_app.api.pipeline import create_pipeline_router
 from dashboard_app.api.reports import create_reports_router
@@ -328,6 +329,7 @@ def create_app(
                                              spec_for=resolve_spec))
 
     settings = ask_settings(cfg)
+    user_data = UserData(cfg, warehouse)  # « Mes donnees » : lecture seule, toujours etiquetee
     budget = SessionBudget(settings["max_calls_per_session"])
     chat_llm: dict[str, Any] = {}
 
@@ -356,7 +358,7 @@ def create_app(
         result = answer_chat(
             payload, lambda code, year: resolve_spec(code, year)[0],
             iso3=_current_iso3(spec), year=_current_year(spec), llm=ask_llm(),
-            budget=budget, settings=settings, explain_reader=explain_reader,
+            budget=budget, settings=settings, explain_reader=explain_reader, user_data=user_data,
         )
         result.update({
             "iso3": _current_iso3(spec),

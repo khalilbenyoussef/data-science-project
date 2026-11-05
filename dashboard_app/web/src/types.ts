@@ -361,6 +361,8 @@ export interface AskFact {
   year: number;
   unit: string | null;
   iso3?: string | null;
+  user_data?: boolean;
+  chip?: string;
 }
 
 export interface AskResult {
@@ -377,6 +379,7 @@ export interface AskResult {
   lang?: string;
   suggestions?: string[];
   budget_left?: number;
+  user_data_policy?: { llm_allowed: boolean; reason: string | null };
   iso3: string;
   year: number;
   country_name: string;

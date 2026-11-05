@@ -4,6 +4,9 @@ import {
   fetchSources,
 } from "./api";
 import { ChartView } from "./charts";
+import { UserChip } from "./ui";
+
+export { USER_CHIP_TEXT, UserChip } from "./ui";
 import type {
   Chart, ColumnRole, DetectResult, DryRunResult, IndicatorChoice, SourceData, SourceJob,
   SourceMappingInput, SourcesList, UserSource,
@@ -70,10 +73,6 @@ function slugName(filename: string): string {
   const base = filename.replace(/\.[^.]+$/, "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const slug = base.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
   return /^[a-z]/.test(slug) && slug.length >= 2 ? slug : `source_${slug || "csv"}`.slice(0, 40);
-}
-
-export function UserChip() {
-  return <span className="chip chip-user" title="Valeur importée par l'utilisateur, hors chiffres officiels">Données utilisateur</span>;
 }
 
 function StatusChip({ source }: { source: UserSource }) {
