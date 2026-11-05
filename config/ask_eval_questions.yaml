@@ -1,0 +1,15 @@
+# Questions fixes du controle « en direct » d'Ask Finova (scripts/evaluate_agents.py --ask-live).
+# Chaque question est envoyee a POST /api/ask pour le pays et l'annee indiques ; une reponse
+# est fondee si chacun de ses nombres figure dans les faits FinOVA (pays focus et pairs,
+# meme annee) ou est une annee. Sans cle LLM : « non mesure ».
+questions:
+  - {id: q01, iso3: TUN, year: 2024, page: overview, question: "Quel est le taux de détention d'un compte en Tunisie ?"}
+  - {id: q02, iso3: TUN, year: 2024, page: overview, question: "Comment la Tunisie se compare-t-elle au Maroc pour la détention d'un compte ?"}
+  - {id: q03, iso3: TUN, year: 2024, page: inclusion, question: "Quel est l'écart entre les hommes et les femmes ?"}
+  - {id: q04, iso3: TUN, year: 2024, page: overview, question: "Combien d'adultes utilisent les paiements numériques ?"}
+  - {id: q05, iso3: TUN, year: 2024, page: access, question: "Combien y a-t-il d'agences bancaires pour 100 000 adultes ?"}
+  - {id: q06, iso3: TUN, year: 2024, page: exclusion, question: "Pourquoi les adultes n'ont-ils pas de compte ?"}
+  - {id: q07, iso3: TUN, year: 2024, page: inclusion, question: "Quelle part des adultes épargne auprès d'une institution financière ?"}
+  - {id: q08, iso3: TUN, year: 2024, page: overview, question: "Le taux de détention a-t-il progressé depuis 2021 ?"}
+  - {id: q09, iso3: MAR, year: 2024, page: overview, question: "Et pour le Maroc, quel est le taux de détention d'un compte ?"}
+  - {id: q10, iso3: TUN, year: 2024, page: exclusion, question: "What is the main barrier to account ownership?"}

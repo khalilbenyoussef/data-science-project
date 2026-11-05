@@ -168,3 +168,34 @@ def test_insights_document_lists_audit_status_and_recommendations(ctx, tmp_path,
     assert "1. Piste à explorer : étudier des offres et canaux de distribution conçus pour les femmes." in text
     assert "23.0 pts" in text and "Groupe cible : femmes" in text
     assert str(reco.load_rules()["rules"][0]["threshold_pp"]) + " pts" in text
+
+
+def test_evaluation_flags_stale_results_and_unmeasured_manual_time(ctx):
+    ctx.audit.update({"created_at": "2026-11-04T12:00:00", "counts": {"pass": 18, "warn": 1, "fail": 0}})
+    ctx.fault_injection = {"created_at": "2026-11-01T09:00:00", "detected": 9, "total": 9,
+                           "faults": [{"label": "Valeur modifiee", "expected_check": "A1_recomputed_values",
+                                       "detected": True, "verdict": "fail"}]}
+    ctx.baseline = {"created_at": "2026-11-05T09:00:00", "matched": 4, "compared": 4, "tolerance": 1e-9,
+                    "countries": ["TUN"], "timing_s": {"naive_pandas": 0.5, "kpi_values_read": 0.01},
+                    "by_kpi": {"account_ownership": {"compared": 4, "matched": 4}}, "mismatched": [],
+                    "missing_in_naive": []}
+    ctx.manual = {"minutes_per_kpi": {"account_ownership": None}}
+    text = dl.render_evaluation(ctx)
+    assert "Injection de fautes : 2026-11-01T09:00:00 — **résultat antérieur au dernier audit**" in text
+    assert "### Injection de fautes (9/9 détectées)" in text
+    assert "| `account_ownership` | 4 | 4 | non mesuré |" in text
+    assert "**4/4 valeurs identiques**" in text
+    assert "Contrôle en direct (10 questions fixes" in text and "non mesuré" in text
+    assert text.count("\n## ") == 1 + len(dl.AGENTS) + 2  # fraicheur, synthese, un par agent, reference
+    ctx.manual = {"minutes_per_kpi": {"account_ownership": 12.5}}
+    assert "| `account_ownership` | 4 | 4 | 12.5 min |" in dl.render_evaluation(ctx)
+
+
+def test_evaluation_reports_live_ask_check(ctx):
+    ctx.ask_live = {"status": "mesuré", "model": "groq (m)", "run_at": "2026-11-05T10:00:00", "questions": 2,
+                    "grounded": 1, "llm_answers": 2, "method": "m", "results": [
+                        {"question": "q1", "mode": "llm", "grounded": True, "unknown": [], "answer": "37.8 %"},
+                        {"question": "q2", "mode": "llm", "grounded": False, "unknown": ["12"], "answer": "12"}]}
+    text = dl.render_evaluation(ctx)
+    assert "**1/2 réponses fondées**" in text and "groq (m)" in text
+    assert "| q2 | llm | non | 12 | 12 |" in text

@@ -1,6 +1,6 @@
 # Architecture multi-agents — FinOVA / BIFlow
 
-- **Généré le** : 2026-11-05T18:07:56
+- **Généré le** : 2026-11-05T18:36:18
 - **Run audité (Route 1)** : `part_d_audit_report`
 - **Snapshot** : `v5`
 - **Version du catalogue KPI** : 1.7.0
@@ -37,16 +37,16 @@ Durées, statuts et appels LLM lus dans les rapports d'agent (`outputs/reports/<
 
 | Agent | Run | Statut | Durée | Sortie clé | Appels LLM mesurés |
 |---|---|---|---|---|---|
-| Collector | `user_delete_20261104T105203` | success | 0.12 s | 3 source(s) collectée(s) | 0 appel |
-| Snapshot | `part_d_audit_report` | success | 0.11 s | snapshot v5 (rebuild) | 0 appel |
-| Profiler | `part_d_audit_report` | success | 2.31 s | findex 8 577 × 36 ; fas 32 209 × 57 ; gdp 19 575 × 6 | 0 appel |
-| Quality | `part_d_audit_report` | success | 1.20 s | score 0.936, gate réussi | 0 appel |
-| ETL | `part_d_audit_report` | success | 2.21 s | 90 732 lignes fact, 263 pays | 0 appel |
-| Semantic & KPI | `part_d_audit_report` | success | 5.55 s | 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue) | 0 appel |
-| Auditor (BI Auditor / XAI) | `part_d_audit_report` | success | 4.53 s | verdict pass_with_warnings (17 réussis, 2 avertissements, 0 échecs) | 0 appel |
-| Analyst (FinOVA) | `route2_20261104T125802503588` | success | 0.01 s | 17 constats sur 96 faits, carte XAI oui | 0 appel |
-| Dashboard spec | `route2_20261104T125802503588` | success | 0.55 s | 6 pages, 96 faits, publication approved | 0 appel |
-| Ask Finova | non disponible | non disponible | non disponible | non disponible | non disponible |
+| Collector | `user_delete_20261104T105203` | réussi | 0.12 s | 3 source(s) collectée(s) | 0 appel |
+| Snapshot | `part_d_audit_report` | réussi | 0.11 s | snapshot v5 (rebuild) | 0 appel |
+| Profiler | `part_d_audit_report` | réussi | 2.31 s | findex 8 577 × 36 ; fas 32 209 × 57 ; gdp 19 575 × 6 | 0 appel |
+| Quality | `part_d_audit_report` | réussi | 1.20 s | score 0.936, gate réussi | 0 appel |
+| ETL | `part_d_audit_report` | réussi | 2.21 s | 90 732 lignes fact, 263 pays | 0 appel |
+| Semantic & KPI | `part_d_audit_report` | réussi | 5.55 s | 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue) | 0 appel |
+| Auditor (BI Auditor / XAI) | `part_d_audit_report` | réussi | 4.53 s | verdict pass_with_warnings (17 réussis, 2 avertissements, 0 échecs) | 0 appel |
+| Analyst (FinOVA) | `route2_20261104T125802503588` | réussi | 0.01 s | 17 constats sur 96 faits, carte XAI oui | 0 appel |
+| Dashboard spec | `route2_20261104T125802503588` | réussi | 0.55 s | 6 pages, 96 faits, publication approved | 0 appel |
+| Ask Finova | non disponible | à la demande | non disponible | réponses à la demande, nombres contrôlés contre les faits | non disponible |
 
 - Collector : run courant reconstruit depuis le snapshot publié : dernier Collector exécuté.
 - Ask Finova : à la demande (POST /api/ask), aucun rapport de run.

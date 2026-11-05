@@ -24,6 +24,7 @@ from biflow.config import ROOT, load_config, path_of, resolve
 from biflow.tools.kpi import DEFAULT_CATALOG, load_catalog
 
 NA = "non disponible"
+STATUS_FR = {"success": "réussi", "failed": "échec", "skipped": "ignoré", "on_demand": "à la demande"}
 SEVERITY = {"critical": "critiques", "high": "élevées", "medium": "moyennes", "low": "faibles"}
 DELIVERABLES_DIR = ROOT / "docs" / "deliverables"
 EVALUATION_DIR = "outputs/evaluation"
@@ -386,12 +387,15 @@ def agent_summaries(ctx: Context) -> list[dict[str, Any]]:
         else:
             report, run_id, note = None, None, "à la demande (POST /api/ask), aucun rapport de run"
         key = _key_output(aid, report or {}, ctx, counts) if report else {"text": NA}
+        status = (report or {}).get("status") if report else None
+        if aid == "ask":
+            status, key = "on_demand", {"text": "réponses à la demande, nombres contrôlés contre les faits"}
         out.append({
             **{k: agent[k] for k in ("id", "route", "label", "role", "inputs", "outputs", "tools", "module")},
             "llm_mode": llm_mode(aid, ctx.cfg),
             "llm_measured": llm_measured(report) if report else NA,
             "llm_usage": (report or {}).get("llm_usage") if report else None,
-            "run_id": run_id, "status": (report or {}).get("status") if report else None,
+            "run_id": run_id, "status": status,
             "started_at": (report or {}).get("started_at"), "duration_s": (report or {}).get("duration_s"),
             "warnings": len((report or {}).get("warnings") or []), "errors": list((report or {}).get("errors") or []),
             "key_output": key.get("text"), "metrics": {k: v for k, v in key.items() if k != "text"},
@@ -448,7 +452,7 @@ def render_architecture(ctx: Context) -> str:
     lines += ["", "## Dernier run mesuré", "",
               "Durées, statuts et appels LLM lus dans les rapports d'agent (`outputs/reports/<run_id>/<agent>.json`).", ""]
     lines += table(["Agent", "Run", "Statut", "Durée", "Sortie clé", "Appels LLM mesurés"],
-                   ([a["label"], f"`{a['run_id']}`" if a["run_id"] else NA, a["status"] or NA,
+                   ([a["label"], f"`{a['run_id']}`" if a["run_id"] else NA, STATUS_FR.get(a["status"], a["status"] or NA),
                      fmt_s(a["duration_s"]), a["key_output"], a["llm_measured"]] for a in agents))
     notes = [f"- {a['label']} : {a['note']}." for a in agents if a["note"]]
     if notes:
@@ -703,11 +707,158 @@ def render_insights(ctx: Context) -> str:
     return "\n".join(lines)
 
 
+def evaluation_freshness(ctx: Context) -> dict[str, Any]:
+    """Dates des evaluations enregistrees et avis « resultat anterieur au dernier audit »."""
+    audit_time = _stamp(ctx.audit.get("created_at"))
+    out = {"audit_created_at": ctx.audit.get("created_at")}
+    for key, data in (("fault_injection", ctx.fault_injection), ("agents", ctx.agents_eval),
+                      ("baseline", ctx.baseline), ("ask_live", ctx.ask_live)):
+        stamp = data.get("created_at") or data.get("run_at")
+        when = _stamp(stamp)
+        out[key] = {"created_at": stamp, "stale": bool(audit_time and when and when < audit_time)}
+    return out
+
+
+STALE = "résultat antérieur au dernier audit"
+
+
+def _dated(label: str, info: Mapping[str, Any]) -> str:
+    if not info.get("created_at"):
+        return f"{label} : {NA}"
+    return f"{label} : {info['created_at']}" + (f" — **{STALE}**" if info.get("stale") else "")
+
+
+def manual_minutes(ctx: Context, kpi_id: str) -> str:
+    value = ((ctx.manual.get("minutes_per_kpi") or {}) if isinstance(ctx.manual, dict) else {}).get(kpi_id)
+    return f"{fmt_num(value, 1)} min" if isinstance(value, (int, float)) else "non mesuré"
+
+
+def render_evaluation(ctx: Context) -> str:
+    fresh = evaluation_freshness(ctx)
+    agents = {a["id"]: a for a in agent_summaries(ctx)}
+    lines = header(ctx, "Évaluation des agents et approche de référence",
+                   ["outputs/reports/<run>/*.json", "data/audit/evaluation.json", "data/audit/audit_report.json",
+                    "outputs/evaluation/agents.json", "outputs/evaluation/ask_live.json",
+                    "outputs/evaluation/baseline.json", "docs/deliverables/manual_baseline.yaml"])
+    lines += [
+        "## Fraîcheur des mesures", "",
+        f"- Dernier audit : {ctx.audit.get('created_at', NA)}",
+        f"- {_dated('Injection de fautes', fresh['fault_injection'])}",
+        f"- {_dated('Évaluation des agents (scripts/evaluate_agents.py)', fresh['agents'])}",
+        f"- {_dated('Contrôle en direct d’Ask Finova', fresh['ask_live'])}",
+        f"- {_dated('Approche de référence (scripts/baseline_reference.py)', fresh['baseline'])}", "",
+        "## Synthèse par agent", "",
+    ]
+    lines += table(["Agent", "Mode", "Statut", "Durée", "Lignes entrée → sortie", "Sortie clé", "Appels LLM"],
+                   ([a["label"], a["llm_mode"].split(" (")[0], STATUS_FR.get(a["status"], a["status"] or NA),
+                     fmt_s(a["duration_s"]),
+                     f"{fmt_int(a['metrics'].get('rows_in'))} → {fmt_int(a['metrics'].get('rows_out'))}",
+                     a["key_output"], a["llm_measured"]] for a in agents.values()))
+
+    def section(aid: str, extra: list[str]) -> list[str]:
+        a = agents[aid]
+        return ["", f"## {a['label']}", "", f"*{a['role']}*", "",
+                f"- Mode : {a['llm_mode']}",
+                *([f"- Run : `{a['run_id'] or NA}` — statut {STATUS_FR.get(a['status'], a['status'] or NA)}, "
+                   f"durée {fmt_s(a['duration_s'])}, {a['warnings']} avertissement(s), {len(a['errors'])} erreur(s)",
+                   f"- Sortie clé : {a['key_output']}", f"- Appels LLM mesurés : {a['llm_measured']}"]
+                  if a["status"] != "on_demand" else ["- Exécution : à la demande (`POST /api/ask`), pas de rapport de run"]),
+                *extra]
+
+    run = (ctx.route1 or {}).get("run") or {}
+    q = ctx.quality
+    lines += section("collector", [f"- {a}" for a in [agents["collector"]["note"]] if a])
+    lines += section("snapshot", [f"- Snapshot publié après l'audit : `{(run.get('snapshot') or {}).get('snapshot_id', NA)}` "
+                                  f"({(run.get('snapshot') or {}).get('status', NA)})"])
+    lines += section("profiler", [f"- Lignes profilées : {fmt_int(agents['profiler']['metrics'].get('rows_in'))}"])
+    lines += section("quality", [
+        f"- Score global {fmt_num(q.get('overall_score'), 3)} (seuil {fmt_num((ctx.cfg.get('quality') or {}).get('score_threshold'), 2)}), "
+        f"gate {'réussi' if q.get('passed') else 'échoué'}",
+        f"- Anomalies : " + ", ".join(f"{SEVERITY.get(k, k)} {v}" for k, v in (q.get("issue_counts") or {}).items()),
+        f"- Diagnostics : {fmt_int(len(q.get('diagnostics') or []))} ; sources utilisateur exclues : "
+        f"{fmt_int(len(q.get('excluded_sources') or []))}"])
+    lines += section("etl", [f"- Lignes fact par source : " + ", ".join(
+        f"{k} {fmt_int(v)}" for k, v in (warehouse_counts(ctx).get("by_source") or {}).items())])
+    lines += section("semantic_kpi", [])
+    counts = ctx.audit.get("counts") or {}
+    publication = (ctx.audit.get("publication") or {}).get("by_status") or {}
+    fi = ctx.fault_injection
+    lines += section("auditor", [
+        f"- Contrôles : {counts.get('pass', NA)} réussis, {counts.get('warn', NA)} avertissements, "
+        f"{counts.get('fail', NA)} échecs sur {fmt_int(ctx.audit.get('rows'))} lignes",
+        f"- Publication : {fmt_int(publication.get('approved'))} approuvées, "
+        f"{fmt_int(publication.get('approved_with_review_note'))} avec réserve, {fmt_int(publication.get('blocked'))} bloquées",
+        "", f"### Injection de fautes ({fi.get('detected', NA)}/{fi.get('total', NA)} détectées)", "",
+        _dated("Mesure", fresh["fault_injection"]), "",
+        *(table(["Faute injectée", "Contrôle attendu", "Détectée", "Verdict"],
+                ([f.get("label"), f"`{f.get('expected_check')}`", "oui" if f.get("detected") else "non",
+                  f.get("verdict")] for f in fi.get("faults") or [])) if fi else [f"Injection de fautes : {NA}."])])
+    insight = ctx.audit.get("route2_insight_audit") or {}
+    lines += section("analyst", [
+        f"- Audit des constats (run `{insight.get('run_id', NA)}`) : {fmt_int(insight.get('audited'))} audités, "
+        f"{fmt_int(insight.get('accepted'))} acceptés, {fmt_int(insight.get('rejected'))} rejetés, "
+        f"{fmt_int(insight.get('not_auditable'))} non auditables"])
+    lines += section("dashboard_spec", [])
+    unit = ctx.agents_eval.get("ask_unit_tests") or {}
+    live = ctx.ask_live
+    ask_extra = [
+        f"- Tests unitaires (LLM simulé), `{unit.get('file', 'tests/test_ask_chat.py')}` : "
+        + (f"{unit.get('passed')}/{unit.get('total')} réussis, dont {unit.get('grounding_passed')}/"
+           f"{len(unit.get('grounding_tests') or [])} tests de grounding (exécutés le {unit.get('run_at', NA)})"
+           if unit.get("total") else "non mesuré")]
+    if live.get("status") == "mesuré":
+        ask_extra += [
+            f"- Contrôle en direct : **{live.get('grounded')}/{live.get('questions')} réponses fondées**, "
+            f"{live.get('llm_answers')} rédigées par le LLM (les autres en repli déterministe) ; modèle "
+            f"{live.get('model')}, le {live.get('run_at')}.",
+            f"- Méthode : {live.get('method', NA)}.", "",
+            *table(["Question", "Mode", "Fondée", "Nombres hors faits", "Réponse"],
+                   ([r["question"], r["mode"], "oui" if r["grounded"] else "non", ", ".join(r["unknown"]) or "—",
+                     (r.get("answer") or "")[:220]] for r in live.get("results") or []))]
+    else:
+        ask_extra += ["- Contrôle en direct (10 questions fixes, `config/ask_eval_questions.yaml`) : non mesuré "
+                      f"({live.get('reason', 'scripts/evaluate_agents.py --ask-live non exécuté')})."]
+    lines += section("ask", ask_extra)
+
+    base = ctx.baseline
+    lines += ["", "## Approche de référence", "",
+              "Recalcul naïf de 4 indicateurs directement depuis les CSV bruts (`scripts/baseline_reference.py`), "
+              "comme un analyste le ferait dans un tableur : filtrer le pays et l'année, lire la colonne, multiplier "
+              "par 100 ou soustraire deux groupes. Comparaison avec `kpi_values` à la tolérance de l'Auditor.", "",
+              _dated("Mesure", fresh["baseline"]), ""]
+    if base:
+        timing = base.get("timing_s") or {}
+        lines += table(["Indicateur", "Valeurs comparées", "Identiques", "Temps Excel (manuel)"],
+                       ([f"`{k}`", fmt_int(v.get("compared")), fmt_int(v.get("matched")), manual_minutes(ctx, k)]
+                        for k, v in (base.get("by_kpi") or {}).items()))
+        semantic, auditor = agents["semantic_kpi"], agents["auditor"]
+        lines += ["", *table(["Approche", "Périmètre", "Temps mesuré"], [
+            ["Recalcul naïf (pandas)", f"4 indicateurs, {len(base.get('countries') or [])} pays, toutes années",
+             fmt_s(timing.get("naive_pandas"))],
+            ["Lecture de `kpi_values`", "mêmes valeurs, déjà calculées et auditées", fmt_s(timing.get("kpi_values_read"))],
+            ["Agent Semantic & KPI", f"{semantic['key_output']}", fmt_s(semantic["duration_s"])],
+            ["Agent Auditor", "recalcul indépendant et contrôles de toutes les lignes", fmt_s(auditor["duration_s"])],
+            ["Excel (manuel)", "4 indicateurs", "non mesuré" if not any(
+                isinstance(v, (int, float)) for v in (ctx.manual.get("minutes_per_kpi") or {}).values())
+             else f"{fmt_num(sum(v for v in ctx.manual['minutes_per_kpi'].values() if isinstance(v, (int, float))), 1)} min"],
+        ])]
+        lines += ["", f"Résultat : **{base.get('matched')}/{base.get('compared')} valeurs identiques** "
+                      f"(tolérance {base.get('tolerance')}), {len(base.get('mismatched') or [])} écart(s), "
+                      f"{len(base.get('missing_in_naive') or [])} valeur(s) publiée(s) introuvable(s) dans le calcul naïf. "
+                      "Le pipeline ajoute ce que le calcul naïf n'apporte pas : statut de publication, moyenne des "
+                      "pairs avec couverture, traçabilité jusqu'au fichier brut et audit indépendant."]
+    else:
+        lines += [f"Approche de référence : {NA} (lancer `python scripts/baseline_reference.py`)."]
+    lines += [""]
+    return "\n".join(lines)
+
+
 RENDERERS = {
     "ARCHITECTURE.md": render_architecture,
     "DATA_QUALITY_REPORT.md": render_quality,
     "KPI_CATALOG.md": render_kpi_catalog,
     "INSIGHTS_ET_RECOMMANDATIONS.md": render_insights,
+    "EVALUATION.md": render_evaluation,
 }
 
 
@@ -717,4 +868,4 @@ def stable(text: str) -> str:
 
 
 __all__ = ["AGENTS", "Context", "DELIVERABLES_DIR", "NA", "RENDERERS", "agent_summaries", "load_context",
-           "scope_recommendations", "stable", "warehouse_counts"]
+           "evaluation_freshness", "scope_recommendations", "stable", "warehouse_counts"]

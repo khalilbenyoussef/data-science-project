@@ -1,0 +1,12 @@
+# Mesure manuelle de l'approche de reference (Excel), a remplir a la main.
+# Laisser vide (null) ce qui n'a pas ete mesure : EVALUATION.md affiche alors « non mesuré ».
+# Relancer ensuite : python scripts/build_deliverables.py
+measured_by: null        # nom de la personne qui a chronometre
+measured_on: null        # date de la mesure (AAAA-MM-JJ)
+tool: Excel              # outil utilise
+minutes_per_kpi:         # temps passe pour obtenir la valeur (ouvrir le fichier, filtrer, calculer)
+  account_ownership: null
+  gender_gap: null
+  digital_payment_rate: null
+  branch_density: null
+notes: null
