@@ -690,7 +690,13 @@ def render_insights(ctx: Context) -> str:
     lines += table(["Règle", "Condition", "Indicateurs"],
                    ([f"`{r['id']}`", str(r.get("rule_label", "")).format(
                        threshold=r.get("threshold_pct", r.get("threshold_pp"))),
-                     ", ".join(f"`{k}`" for k in r["kpis"])] for r in rules["rules"]))
+                     ", ".join(f"`{k}`" for k in r["kpis"])] for r in rules["rules"] if "kpis" in r))
+    user_rules = [r for r in rules["rules"] if r.get("kind") == "user_vs_official"]
+    if user_rules:
+        lines += ["", f"La règle `{user_rules[0]['id']}` (vos données de « Mes données » face à l'indicateur "
+                  "officiel déclaré comparable) n'est jamais appliquée dans ce document : ses pistes, étiquetées "
+                  "« à partir de vos données », ne s'affichent que dans l'application et dans l'annexe facultative "
+                  "du PDF des constats."]
     lines += ["", "### Pistes retenues", ""]
     if not result["recommendations"]:
         lines += ["Aucune règle déclenchée pour ce périmètre."]

@@ -23,7 +23,9 @@ from biflow.tools.insights import audit_insights, insight_details, insights_from
 from biflow.tools.kpi import DEFAULT_CATALOG, load_catalog
 from biflow.tools.user_sources.comparisons import INDICATIVE, comparisons, official_kpis
 from biflow.tools.user_sources.data import UserData
-from biflow.tools.recommendations import RULES_PATH, RulesError, recommendations_for
+from biflow.tools.recommendations import (
+    RULES_PATH, RulesError, load_rules, recommendations_for, user_recommendations,
+)
 from dashboard_app.api.audit import audit_views
 
 SpecFor = Callable[[str, int], tuple[dict[str, Any], str]]
@@ -75,13 +77,25 @@ def create_reports_router(*, warehouse: Path, audit_dir: Path, spec_file: Path,
             raise HTTPException(status_code=503, detail="Entrepôt indisponible.") from exc
         return result
 
+    def user_recs(iso3: str, year: int) -> dict[str, Any]:
+        """Pistes « à partir de vos données » (règle user_vs_official), séparées des officielles."""
+        if user_data is None:
+            return {"recommendations": [], "rejected": [], "rules_checked": 0}
+        try:
+            rules = load_rules(rules_path)
+        except RulesError as exc:
+            raise HTTPException(status_code=503, detail=f"Règles de recommandation invalides : {exc}") from exc
+        return user_recommendations(comparisons(user_data, warehouse, iso3, year, official_kpis()), rules)
+
     @router.get("/api/recommendations")
     def get_recommendations(iso3: str = Query(..., min_length=3, max_length=3),
                             year: int = Query(..., ge=2000, le=2100)) -> dict[str, Any]:
         result = recommendations(iso3, year)
+        mine = user_recs(result["iso3"], result["year"])
         return {**{k: result[k] for k in ("iso3", "year", "country", "rules_version", "rules_checked",
                                           "recommendations")},
-                "rejected": len(result["rejected"])}
+                "rejected": len(result["rejected"]),
+                "user_recommendations": mine["recommendations"], "user_rejected": len(mine["rejected"])}
 
     @router.get("/api/reports/evaluation.pdf")
     def evaluation_report() -> Response:
@@ -121,6 +135,8 @@ def create_reports_router(*, warehouse: Path, audit_dir: Path, spec_file: Path,
         scope_info = {"iso3": code, "year": year, "country": (spec.get("country") or {}).get("name"),
                       "generated_at": spec.get("generated_at")}
         annex = user_annex(user_data, warehouse, code, year) if annexe else None
+        if annex is not None:
+            annex["recommendations"] = user_recs(code, year)["recommendations"]
         content = insights_pdf(context(), scope_info, insights, recommendations(code, year), annex=annex)
         suffix = "_avec_vos_donnees" if annexe else ""
         return _pdf(content, f"finova_constats_{code}_{year}{suffix}.pdf")

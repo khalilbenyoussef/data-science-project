@@ -17,12 +17,13 @@ import duckdb
 import yaml
 
 from biflow.config import ROOT
-from biflow.tools.audit_text import UNIT_LABELS
+from biflow.tools.audit_text import UNIT_LABELS, grounding
 from biflow.tools.dashboard_spec import COUNTRY_LABELS
 from biflow.tools.insights import audit_insights
 
 RULES_PATH = ROOT / "config" / "recommendations.yaml"
-KINDS = ("subgroup_gap", "above_peers", "below_peers", "below_peers_relative")
+KINDS = ("subgroup_gap", "above_peers", "below_peers", "below_peers_relative", "user_vs_official")
+USER_KIND = "user_vs_official"  # vos donnees face au KPI officiel declare comparable (jamais dans les livrables)
 # KPI d'ecart -> (KPI du groupe favorise, KPI du groupe cible), selon la definition du catalogue
 GAP_COMPONENTS = {
     "gender_gap": ("account_ownership_men", "account_ownership_women"),
@@ -46,6 +47,13 @@ def load_rules(path: str | Path = RULES_PATH) -> dict[str, Any]:
     for rule in data["rules"]:
         if rule.get("kind") not in KINDS:
             raise RulesError(f"regle {rule.get('id')} : type inconnu {rule.get('kind')}")
+        if rule["kind"] == USER_KIND:
+            for key in ("threshold_pp", "threshold_pct"):
+                if not isinstance(rule.get(key), (int, float)) or rule[key] <= 0:
+                    raise RulesError(f"regle {rule.get('id')} : {key} positif attendu")
+            if not rule.get("piste_below") or not rule.get("piste_above"):
+                raise RulesError(f"regle {rule.get('id')} : piste_below et piste_above attendues")
+            continue
         key = "threshold_pct" if rule["kind"] == "below_peers_relative" else "threshold_pp"
         if not isinstance(rule.get(key), (int, float)) or rule[key] <= 0:
             raise RulesError(f"regle {rule.get('id')} : {key} positif attendu")
@@ -129,6 +137,8 @@ def evaluate(rows: Iterable[Mapping[str, Any]], iso3: str, year: int, rules: Map
 
     for rule in rules["rules"]:
         kind = rule["kind"]
+        if kind == USER_KIND:  # regle sur vos donnees : user_recommendations uniquement
+            continue
         threshold = rule.get("threshold_pct" if kind == "below_peers_relative" else "threshold_pp")
         for kpi_id, spec in rule["kpis"].items():
             row, peers = usable.get((kpi_id, iso3)), usable.get((kpi_id, "PEERS"))
@@ -204,10 +214,76 @@ def evaluate(rows: Iterable[Mapping[str, Any]], iso3: str, year: int, rules: Map
             "rules_checked": checked, "recommendations": out, "rejected": rejected}
 
 
+def user_recommendations(comparison: Mapping[str, Any], rules: Mapping[str, Any]) -> dict[str, Any]:
+    """Pistes « à partir de vos données » : valeur utilisateur face au KPI officiel déclaré
+    comparable (sortie de biflow.tools.user_sources.comparisons). Déclenchées seulement si
+    l'année utilisateur est l'année officielle utilisée et si l'écart atteint le seuil ;
+    chaque nombre du texte est la valeur officielle, la valeur utilisateur, l'écart ou
+    l'année. Jamais écrites dans docs/deliverables (lecture à la demande uniquement)."""
+    iso3, year = comparison["iso3"], int(comparison["year"])
+    out, rejected, checked = [], [], 0
+    forbidden = [p.lower() for p in rules.get("forbidden_phrases") or []]
+    caveat = rules.get("caveat", "Association, pas causalité.")
+    for rule in rules["rules"]:
+        if rule["kind"] != USER_KIND:
+            continue
+        prefix = rule.get("prefix", "Piste à explorer (à partir de vos données) : ")
+        for row in comparison.get("rows") or []:
+            if row.get("status") != "ok" or not row.get("same_year"):
+                continue  # annees differentes ou valeur absente : ligne affichee, aucune piste
+            checked += 1
+            user, official = float(row["user"]["value"]), float(row["official"]["value"])
+            percent = row["unit"] == "percent"
+            if percent:
+                gap = abs(user - official)
+                threshold, size = rule["threshold_pp"], f"{_r1(gap)} pts"
+                trigger_value = gap
+            else:
+                if not official:
+                    continue
+                gap = 100 * abs(user - official) / official
+                threshold, size = rule["threshold_pct"], f"{_r1(gap)} %"
+                trigger_value = gap
+            if trigger_value < threshold:
+                continue
+            below = user < official
+            unit = UNIT_TEXT.get(row["unit"], row["unit"])
+            piste = str(rule["piste_below" if below else "piste_above"]).format(label=row["label"], kpi=row["kpi"])
+            when = int(row["user"]["year"])
+            text = (f"{prefix}{piste}. Constat : en {when}, {_in_country(iso3)}, votre indicateur « {row['label']} » "
+                    f"vaut {_r1(user)} {unit} (données utilisateur, non vérifiées par BIFlow), contre {_r1(official)} "
+                    f"{unit} pour l'indicateur officiel « {row['kpi']} », soit {size} "
+                    f"{'de moins' if below else 'de plus'}"
+                    + (" en valeur relative" if not percent else "") + ". "
+                    f"{comparison.get('note') or ''} {caveat}").replace("  ", " ")
+            rec = {
+                "id": f"REC-{rule['id']}-{row['indicator_code']}-{iso3}-{when}", "rule_id": rule["id"],
+                "kind": USER_KIND, "kpi_id": row["kpi_id"], "kpi": row["kpi"], "indicator_code": row["indicator_code"],
+                "label": row["label"], "iso3": iso3, "year": when, "text": text, "user_data": True,
+                "target_group": rule.get("target", "clients et zones couverts par vos données"),
+                "rule": str(rule.get("rule_label", "")).format(
+                    threshold=f"{rule['threshold_pp']} pts (en %) ou {rule['threshold_pct']} % (autres unités)"),
+                "trigger": {"value": trigger_value, "threshold": threshold, "unit": "pts" if percent else "%"},
+                "evidence": [{"source": "vos données", "value": user, "year": when, "unit": row["unit"]},
+                             {"source": row["kpi"], "kpi_id": row["kpi_id"], "value": official,
+                              "year": int(row["official"]["year"]), "unit": row["unit"],
+                              "publication_status": row["official"].get("publication_status")}],
+            }
+            # nombres du texte (hors libelles) : valeur utilisateur, valeur officielle, ecart, annee
+            audited = _strip_labels(text, [row["label"], row["kpi"], unit, prefix])
+            reference = " ".join([_r1(user), _r1(official), _r1(gap), str(when)])
+            accepted, unsupported = grounding(audited, reference)
+            reasons = [f"nombre '{n}' du texte non justifié" for n in unsupported]
+            reasons += [f"formulation interdite : {p.strip()}" for p in forbidden if p in text.lower()]
+            rec["audit"] = {"accepted": not reasons, "reasons": reasons, "notes": []}
+            (out if not reasons else rejected).append(rec)
+    return {"iso3": iso3, "year": year, "rules_checked": checked, "recommendations": out, "rejected": rejected}
+
+
 def recommendations_for(warehouse: str | Path, iso3: str, year: int, catalog_kpis: Mapping[str, Any],
                         rules_path: str | Path = RULES_PATH) -> dict[str, Any]:
     return evaluate(read_rows(warehouse, iso3, year), iso3, year, load_rules(rules_path), catalog_kpis)
 
 
-__all__ = ["GAP_COMPONENTS", "RULES_PATH", "RulesError", "evaluate", "load_rules", "read_rows",
-           "recommendations_for"]
+__all__ = ["GAP_COMPONENTS", "RULES_PATH", "RulesError", "USER_KIND", "evaluate", "load_rules", "read_rows",
+           "recommendations_for", "user_recommendations"]

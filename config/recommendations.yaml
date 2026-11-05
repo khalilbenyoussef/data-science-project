@@ -93,6 +93,20 @@ rules:
         target: "adultes qui épargnent hors des institutions financières"
         piste: "étudier des produits d'épargne formelle simples pour les {target}"
 
+  # Vos donnees (page « Mes donnees ») face au KPI officiel que vous avez declare comparable
+  # (meme unite, meme definition cochee). Ne se declenche que si l'annee de votre valeur est
+  # l'annee officielle utilisee ; seuil en points pour les %, relatif pour les autres unites.
+  # Toujours etiquetee « a partir de vos donnees » ; jamais ecrite dans docs/deliverables.
+  - id: user_vs_official
+    kind: user_vs_official
+    threshold_pp: 5
+    threshold_pct: 10
+    prefix: "Piste à explorer (à partir de vos données) : "
+    rule_label: "écart avec l'indicateur officiel comparable ≥ {threshold}"
+    target: "clients et zones couverts par vos données"
+    piste_below: "vérifier que « {label} » suit bien la définition de « {kpi} », puis examiner les segments où votre valeur reste en dessous de la référence officielle"
+    piste_above: "vérifier que « {label} » suit bien la définition de « {kpi} », puis examiner ce qui distingue votre valeur de la référence officielle"
+
   # Reseau physique nettement moins dense que la moyenne des pairs (ecart relatif).
   - id: network_below_peers
     kind: below_peers_relative

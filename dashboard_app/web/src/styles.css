@@ -3105,3 +3105,13 @@ select {
     align-items: flex-start;
   }
 }
+
+/* Pistes « à partir de vos données » : sous-liste separee des pistes officielles */
+.user-recommendations {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(21, 128, 61, 0.5);
+}
+.user-recommendations h4 {
+  margin: 0;
+}

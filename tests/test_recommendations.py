@@ -51,7 +51,8 @@ def test_config_thresholds_are_the_agreed_ones():
     assert by_id["network_below_peers"]["threshold_pct"] == 10
     assert set(by_id["network_below_peers"]["kpis"]) == {"branch_density", "atm_density"}
     assert RULES["publication_statuses"] == ["approved", "approved_with_review_note"]
-    assert all(k in KPIS for r in RULES["rules"] for k in r["kpis"])
+    assert all(k in KPIS for r in RULES["rules"] if "kpis" in r for k in r["kpis"])
+    assert (by_id["user_vs_official"]["threshold_pp"], by_id["user_vs_official"]["threshold_pct"]) == (5, 10)
 
 
 def test_subgroup_gap_threshold_is_inclusive():

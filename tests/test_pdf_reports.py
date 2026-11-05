@@ -195,7 +195,18 @@ def test_insights_pdf_annex_labels_every_user_value(env):
     assert annex.count("Données utilisateur") >= 3
     assert "Comparaison indicative : définition déclarée par l'utilisateur" in annex
     assert "35.44 pour 100 000 adultes (2024)" in annex  # KPI officiel compare, meme annee
+    assert "Pistes à partir de vos données" in annex and "à partir de vos données) :" in annex
+    assert "à partir de vos données" not in official
     assert snapshot(root) == before
+
+
+def test_recommendations_api_keeps_user_pistes_apart(env):
+    client, _ = env
+    body = client.get("/api/recommendations", params={"iso3": "TUN", "year": 2024}).json()
+    assert all(not rec.get("user_data") for rec in body["recommendations"])
+    assert [rec["kind"] for rec in body["user_recommendations"]] == ["user_vs_official"]
+    assert body["user_recommendations"][0]["text"].startswith("Piste à explorer (à partir de vos données) : ")
+    assert body["user_rejected"] == 0
 
 
 @pytest.mark.parametrize("query", ["iso3=TU&year=2024", "iso3=TUN&year=1800", "iso3=..%2F&year=2024", "year=2024"])

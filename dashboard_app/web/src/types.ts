@@ -591,6 +591,22 @@ export interface RecommendationsResult {
   rules_checked: number;
   recommendations: Recommendation[];
   rejected: number;
+  user_recommendations?: UserRecommendation[];
+  user_rejected?: number;
+}
+
+// Pistes « à partir de vos données » (règle user_vs_official), jamais mêlées aux officielles
+export interface UserRecommendation {
+  id: string;
+  kind: "user_vs_official";
+  text: string;
+  label: string;
+  kpi: string;
+  year: number;
+  rule: string;
+  target_group: string;
+  user_data: true;
+  evidence: { source: string; value: number; year: number; unit: string; publication_status?: string | null }[];
 }
 
 // ------------------------------------------------------------ Agents (page Sources et qualité)

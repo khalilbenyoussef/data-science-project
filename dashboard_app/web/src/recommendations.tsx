@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { RecommendationsResult } from "./types";
 import { fetchRecommendations } from "./api";
 import { fmtUnit } from "./format";
+import { UserChip } from "./ui";
 
 // Pistes de recommandation de Vue d'ensemble : regles deterministes appliquees aux
 // valeurs auditees du pays et de l'annee affiches (GET /api/recommendations).
@@ -74,6 +75,39 @@ export function Recommendations({ iso3, year }: { iso3: string; year: number }) 
             </li>
           ))}
         </ul>
+      )}
+      {data && (data.user_recommendations?.length ?? 0) > 0 && (
+        <div className="user-recommendations">
+          <div className="panel-head">
+            <h4>À partir de vos données</h4>
+            <UserChip />
+          </div>
+          <p className="muted small">
+            Même logique de règles fixes, appliquée à vos indicateurs déclarés comparables, seulement quand
+            votre année est celle de la valeur officielle. Comparaison indicative.
+          </p>
+          <ul className="insight-list">
+            {data.user_recommendations!.map((rec) => (
+              <li key={rec.id} className="sev-info user-reco">
+                <span className="dot" />
+                <div>
+                  <p>{rec.text}</p>
+                  <div className="reco-meta">
+                    <span className="reco-target">Groupe cible : {rec.target_group}</span>
+                    <span className="muted small">Règle : {rec.rule}</span>
+                  </div>
+                  <div className="tag-row" aria-label="Sources">
+                    {rec.evidence.map((ev) => (
+                      <code key={ev.source} className={ev.source === "vos données" ? "user-fact" : undefined}>
+                        {ev.source} · {ev.year} · {fmtUnit(ev.value, ev.unit)}
+                      </code>
+                    ))}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   );
