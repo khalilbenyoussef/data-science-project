@@ -1,3 +1,4 @@
+import { PdfDownload } from "./pdf";
 import { useEffect, useState } from "react";
 import { ApiError } from "./api";
 
@@ -147,6 +148,10 @@ export function AuditPage() {
             Comment chaque chiffre publié est vérifié : contrôles indépendants, publication, constats
             et test de l'Auditor par injection de fautes. Les sources utilisateur ne sont pas comptées ici.
           </p>
+        </div>
+        <div className="page-head-badges">
+          <PdfDownload href="/api/reports/evaluation.pdf"
+                       title="Rapport d'évaluation et d'explicabilité, construit à partir des données courantes" />
         </div>
       </header>
       {error && <div className="error-card"><p>{error}</p></div>}

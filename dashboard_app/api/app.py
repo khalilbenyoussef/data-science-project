@@ -319,7 +319,8 @@ def create_app(
     audit_root = resolve(audit_dir if audit_dir is not None else paths.get("audit", "data/audit"))
     app.include_router(create_audit_router(audit_dir=audit_root, warehouse=warehouse, spec_file=spec_file))
     # pistes de recommandation (regles deterministes sur kpi_values auditees), lecture seule
-    app.include_router(create_reports_router(warehouse=warehouse, audit_dir=audit_root, spec_file=spec_file))
+    app.include_router(create_reports_router(warehouse=warehouse, audit_dir=audit_root, spec_file=spec_file,
+                                             spec_for=resolve_spec))
 
     settings = ask_settings(cfg)
     budget = SessionBudget(settings["max_calls_per_session"])

@@ -1,20 +1,30 @@
-"""Pistes de recommandation et rapports de la plateforme (lecture seule).
+"""Pistes de recommandation et rapports PDF de la plateforme (lecture seule).
 
 ``GET /api/recommendations`` applique les regles de config/recommendations.yaml aux
-lignes kpi_values auditees du pays et de l'annee choisis. Rien n'est ecrit : ni
-l'entrepot, ni les rapports, ni le cache.
+lignes kpi_values auditees du pays et de l'annee choisis.
+``GET /api/reports/evaluation.pdf`` et ``GET /api/reports/insights.pdf`` construisent
+les rapports a la demande, en memoire, depuis l'etat courant : les chiffres d'audit
+sont ceux de /api/audit/summary, le statut des constats est recalcule contre
+kpi_values. Aucun fichier n'est ecrit ; jamais genere par ``main.py run``.
 """
 from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import duckdb
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 
+from biflow.tools.audit_checks import read_kpi_rows
+from biflow.tools.deliverables import Context, evaluation_freshness, load_context
+from biflow.tools.insights import audit_insights, insight_details, insights_from_finova
 from biflow.tools.kpi import DEFAULT_CATALOG, load_catalog
 from biflow.tools.recommendations import RULES_PATH, RulesError, recommendations_for
+from dashboard_app.api.audit import audit_views
+
+SpecFor = Callable[[str, int], tuple[dict[str, Any], str]]
 
 ISO3 = re.compile(r"^[A-Z]{3}$")
 
@@ -26,10 +36,19 @@ def scope(iso3: str, year: int) -> tuple[str, int]:
     return code, int(year)
 
 
+def _pdf(content: bytes, filename: str) -> Response:
+    return Response(content=content, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"})
+
+
 def create_reports_router(*, warehouse: Path, audit_dir: Path, spec_file: Path,
                           catalog_path: str | Path = DEFAULT_CATALOG,
-                          rules_path: str | Path = RULES_PATH) -> APIRouter:
+                          rules_path: str | Path = RULES_PATH,
+                          context: Callable[[], Context] | None = None,
+                          spec_for: SpecFor | None = None) -> APIRouter:
     router = APIRouter(tags=["reports"])
+    views = audit_views(audit_dir=audit_dir, warehouse=warehouse, spec_file=spec_file, catalog_path=catalog_path)
+    context = context or load_context
 
     def recommendations(iso3: str, year: int) -> dict[str, Any]:
         code, year = scope(iso3, year)
@@ -48,6 +67,45 @@ def create_reports_router(*, warehouse: Path, audit_dir: Path, spec_file: Path,
         return {**{k: result[k] for k in ("iso3", "year", "country", "rules_version", "rules_checked",
                                           "recommendations")},
                 "rejected": len(result["rejected"])}
+
+    @router.get("/api/reports/evaluation.pdf")
+    def evaluation_report() -> Response:
+        from dashboard_app.api.pdf_reports import evaluation_pdf
+
+        ctx = context()
+        summary = views.summary()  # 503 si le rapport d'audit manque
+        content = evaluation_pdf(ctx, summary, views.checks()["checks"], evaluation_freshness(ctx))
+        return _pdf(content, f"finova_evaluation_{ctx.snapshot_id}.pdf")
+
+    @router.get("/api/reports/insights.pdf")
+    def insights_report(iso3: str = Query(..., min_length=3, max_length=3),
+                        year: int = Query(..., ge=2000, le=2100)) -> Response:
+        from dashboard_app.api.pdf_reports import insights_pdf
+
+        code, year = scope(iso3, year)
+        if spec_for is None:
+            raise HTTPException(status_code=503, detail="Spec indisponible.")
+        spec, _ = spec_for(code, year)
+        code = str((spec.get("country") or {}).get("iso3") or code)
+        year = int(spec.get("year") or year)
+        kpis = load_catalog(catalog_path)["kpis"]
+        by_page = {page.get("id"): page.get("insights") or [] for page in spec.get("pages") or []}
+        claims, not_auditable = insights_from_finova(by_page, spec.get("facts") or [], kpis)
+        rows = []
+        if warehouse.is_file():
+            try:
+                with duckdb.connect(str(warehouse), read_only=True) as con:
+                    rows = read_kpi_rows(con)
+            except duckdb.Error as exc:
+                raise HTTPException(status_code=503, detail="Entrepôt indisponible.") from exc
+        audit = {"results": audit_insights(claims, rows), "not_auditable_ids": not_auditable}
+        titles = {page.get("id"): page.get("title") or page.get("id") for page in spec.get("pages") or []}
+        insights = [{**item, "page": titles.get(item["insight_id"].split(":", 1)[0], "")}
+                    for item in insight_details(spec, audit, kpis)]
+        scope_info = {"iso3": code, "year": year, "country": (spec.get("country") or {}).get("name"),
+                      "generated_at": spec.get("generated_at")}
+        content = insights_pdf(context(), scope_info, insights, recommendations(code, year))
+        return _pdf(content, f"finova_constats_{code}_{year}.pdf")
 
     return router
 

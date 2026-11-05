@@ -1,6 +1,7 @@
 import type { Chart, InfoBlock, Page, Spec } from "./types";
 import { ChartView } from "./charts";
 import { PAGE_COPY, plainText } from "./copy";
+import { PdfDownload } from "./pdf";
 import { Recommendations } from "./recommendations";
 import { prettyDate } from "./format";
 import {
@@ -184,6 +185,12 @@ function PageHead({ page, spec }: { page: Page; spec: Spec }) {
           {page.available ? "Données réelles" : "Indisponible"}
         </span>
         <span className="muted small">Mise à jour du {prettyDate(spec.generated_at)}</span>
+        {page.id === "overview" && (
+          <PdfDownload
+            href={`/api/reports/insights.pdf?iso3=${encodeURIComponent(spec.country.iso3)}&year=${spec.year}`}
+            title={`Constats et pistes de recommandation — ${spec.country.name}, ${spec.year}`}
+          />
+        )}
       </div>
     </header>
   );

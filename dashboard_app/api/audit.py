@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime
+from types import SimpleNamespace
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -75,6 +76,14 @@ def _name_fr(catalog: Mapping[str, Any], kpi_id: str) -> str:
 
 def create_audit_router(*, audit_dir: Path, warehouse: Path, spec_file: Path,
                         catalog_path: str | Path = DEFAULT_CATALOG) -> APIRouter:
+    return audit_views(audit_dir=audit_dir, warehouse=warehouse, spec_file=spec_file,
+                       catalog_path=catalog_path).router
+
+
+def audit_views(*, audit_dir: Path, warehouse: Path, spec_file: Path,
+                catalog_path: str | Path = DEFAULT_CATALOG) -> SimpleNamespace:
+    """Routes de la page d'audit et vues reutilisables (summary, checks) : le rapport
+    PDF d'evaluation lit exactement les memes chiffres que /api/audit/summary."""
     router = APIRouter(prefix="/api/audit", tags=["audit"])
     report_path = audit_dir / "audit_report.json"
     evaluation_path = audit_dir / "evaluation.json"
@@ -211,7 +220,7 @@ def create_audit_router(*, audit_dir: Path, warehouse: Path, spec_file: Path,
         return {"kpis": [{"kpi_id": k, "label": _name_fr(catalog, k)} for k in kpis],
                 "countries": countries, "years": years}
 
-    return router
+    return SimpleNamespace(router=router, summary=summary, checks=checks)
 
 
-__all__ = ["CHECK_DESCRIPTIONS", "create_audit_router"]
+__all__ = ["CHECK_DESCRIPTIONS", "audit_views", "create_audit_router"]

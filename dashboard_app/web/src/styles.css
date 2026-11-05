@@ -1148,6 +1148,14 @@ code,
 .insight-list .sev-info .dot,
 .notice-list .sev-info .dot { background: var(--series); }
 
+.pdf-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 .reco-meta {
   display: flex;
   flex-wrap: wrap;
