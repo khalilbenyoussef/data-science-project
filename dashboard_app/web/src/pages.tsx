@@ -2,7 +2,7 @@ import type { Chart, InfoBlock, Page, Spec } from "./types";
 import { ChartView } from "./charts";
 import { PAGE_COPY, plainText } from "./copy";
 import { AgentsTimeline } from "./agents";
-import { PdfDownload } from "./pdf";
+import { InsightsPdf } from "./pdf";
 import { Recommendations } from "./recommendations";
 import { UserComparisons } from "./comparisons";
 import { prettyDate } from "./format";
@@ -190,8 +190,9 @@ function PageHead({ page, spec }: { page: Page; spec: Spec }) {
         </span>
         <span className="muted small">Mise à jour du {prettyDate(spec.generated_at)}</span>
         {page.id === "overview" && (
-          <PdfDownload
-            href={`/api/reports/insights.pdf?iso3=${encodeURIComponent(spec.country.iso3)}&year=${spec.year}`}
+          <InsightsPdf
+            iso3={spec.country.iso3}
+            year={spec.year}
             title={`Constats et pistes de recommandation — ${spec.country.name}, ${spec.year}`}
           />
         )}

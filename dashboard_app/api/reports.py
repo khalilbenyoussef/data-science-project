@@ -21,6 +21,8 @@ from biflow.tools.audit_checks import read_kpi_rows
 from biflow.tools.deliverables import Context, evaluation_freshness, load_context
 from biflow.tools.insights import audit_insights, insight_details, insights_from_finova
 from biflow.tools.kpi import DEFAULT_CATALOG, load_catalog
+from biflow.tools.user_sources.comparisons import INDICATIVE, comparisons, official_kpis
+from biflow.tools.user_sources.data import UserData
 from biflow.tools.recommendations import RULES_PATH, RulesError, recommendations_for
 from dashboard_app.api.audit import audit_views
 
@@ -41,11 +43,24 @@ def _pdf(content: bytes, filename: str) -> Response:
         "Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"})
 
 
+def user_annex(user_data: UserData | None, warehouse: Path, iso3: str, year: int) -> dict[str, Any]:
+    """Annexe « vos données » : valeurs utilisateur du pays (année choisie ou dernière
+    année antérieure) et comparaisons déclarées ; jamais mélangées aux constats officiels."""
+    if user_data is None:
+        return {"values": [], "comparisons": {"rows": [], "note": INDICATIVE}}
+    values = []
+    for item in user_data.indicators():
+        row = user_data.latest(item["code"], iso3, year)
+        values.append({"label": item["label"], "unit": item["unit"], "row": row})
+    return {"values": values, "comparisons": comparisons(user_data, warehouse, iso3, year, official_kpis())}
+
+
 def create_reports_router(*, warehouse: Path, audit_dir: Path, spec_file: Path,
                           catalog_path: str | Path = DEFAULT_CATALOG,
                           rules_path: str | Path = RULES_PATH,
                           context: Callable[[], Context] | None = None,
-                          spec_for: SpecFor | None = None) -> APIRouter:
+                          spec_for: SpecFor | None = None,
+                          user_data: UserData | None = None) -> APIRouter:
     router = APIRouter(tags=["reports"])
     views = audit_views(audit_dir=audit_dir, warehouse=warehouse, spec_file=spec_file, catalog_path=catalog_path)
     context = context or load_context
@@ -79,7 +94,8 @@ def create_reports_router(*, warehouse: Path, audit_dir: Path, spec_file: Path,
 
     @router.get("/api/reports/insights.pdf")
     def insights_report(iso3: str = Query(..., min_length=3, max_length=3),
-                        year: int = Query(..., ge=2000, le=2100)) -> Response:
+                        year: int = Query(..., ge=2000, le=2100),
+                        annexe: bool = Query(False, description="ajoute « Annexe : vos données »")) -> Response:
         from dashboard_app.api.pdf_reports import insights_pdf
 
         code, year = scope(iso3, year)
@@ -104,8 +120,10 @@ def create_reports_router(*, warehouse: Path, audit_dir: Path, spec_file: Path,
                     for item in insight_details(spec, audit, kpis)]
         scope_info = {"iso3": code, "year": year, "country": (spec.get("country") or {}).get("name"),
                       "generated_at": spec.get("generated_at")}
-        content = insights_pdf(context(), scope_info, insights, recommendations(code, year))
-        return _pdf(content, f"finova_constats_{code}_{year}.pdf")
+        annex = user_annex(user_data, warehouse, code, year) if annexe else None
+        content = insights_pdf(context(), scope_info, insights, recommendations(code, year), annex=annex)
+        suffix = "_avec_vos_donnees" if annexe else ""
+        return _pdf(content, f"finova_constats_{code}_{year}{suffix}.pdf")
 
     return router
 

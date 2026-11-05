@@ -9,11 +9,13 @@ from pathlib import Path
 
 import duckdb
 import pytest
+import yaml
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from biflow.config import ROOT, load_config
 from biflow.tools import deliverables as dl
+from biflow.tools.user_sources.data import UserData
 from dashboard_app.api.audit import create_audit_router
 from dashboard_app.api.pdf_reports import n
 from dashboard_app.api.reports import create_reports_router
@@ -82,7 +84,25 @@ def env(tmp_path):
             ("gender_gap", "TUN", 2024, 22.96, "percentage_points", "approved", [], None, None, None),
             ("account_ownership", "PEERS", 2011, 30.0, "percent", "approved_with_review_note",
              ["partial_peer_coverage"], "partial", ["DZA"], ["MAR"]),
+            ("atm_density", "TUN", 2024, 35.44, "per_100k_adults", "approved", [], None, None, None),
         ])
+        con.execute("CREATE TABLE fact (source VARCHAR, indicator_code VARCHAR, iso3 VARCHAR, year INTEGER, "
+                    "dimension VARCHAR, dimension_value VARCHAR, value DOUBLE, unit VARCHAR)")
+        con.executemany("INSERT INTO fact VALUES ('user:banque', ?, 'TUN', ?, 'all', 'all', ?, ?)", [
+            ("banque.atm", 2024, 30.8, "per_100k_adults"), ("banque.mobile", 2023, 26.4, "percent")])
+    sources = tmp_path / "sources"
+    sources.mkdir()
+    (sources / "banque.yaml").write_text(yaml.safe_dump({
+        "schema_version": 1, "name": "banque", "fingerprint": "c" * 64, "file": "data/uploads/banque.csv",
+        "read": {"encoding": "utf-8", "separator": ";", "decimal": ",", "header_row": 0},
+        "layout": "wide_by_indicator",
+        "columns": {"country": {"column": "Pays", "kind": "name"}, "year": "Annee",
+                    "indicator_columns": {"a": "atm", "b": "mobile"}},
+        "indicators": {"atm": {"label": "ATM du reseau (exemple fictif)", "unit": "per_100k_adults",
+                               "comparable_kpi": "atm_density"},
+                       "mobile": {"label": "Banque mobile (exemple fictif)", "unit": "percent"}}},
+        allow_unicode=True), encoding="utf-8")
+    user_data = UserData({"uploads": {"mappings_dir": str(sources)}}, warehouse)
     cfg = load_config()
     cfg["paths"] = {**cfg["paths"], "reports": str(tmp_path / "reports"), "audit": str(audit),
                     "quality": str(tmp_path / "quality"), "processed": str(warehouse.parent)}
@@ -92,7 +112,8 @@ def env(tmp_path):
     app = FastAPI()
     app.include_router(create_audit_router(audit_dir=audit, warehouse=warehouse, spec_file=spec_file))
     app.include_router(create_reports_router(warehouse=warehouse, audit_dir=audit, spec_file=spec_file,
-                                             context=context, spec_for=lambda iso3, year: (spec, "file")))
+                                             context=context, spec_for=lambda iso3, year: (spec, "file"),
+                                             user_data=user_data))
     return TestClient(app), tmp_path
 
 
@@ -146,6 +167,34 @@ def test_insights_pdf_for_the_scope(env):
     assert "Tunisie (TUN), 2024" in joined
     assert "accepté" in joined and "rejeté" in joined and "non auditable" in joined  # statut calcule a la demande
     assert "Piste à explorer" in joined and "23.0 pts" in joined
+    assert snapshot(root) == before
+
+
+def test_insights_pdf_has_no_user_data_by_default(env):
+    client, _ = env
+    response = client.get("/api/reports/insights.pdf", params={"iso3": "TUN", "year": 2024})
+    joined = " ".join(pdf_strings(response.content))
+    assert "Annexe" not in joined and "exemple fictif" not in joined and "30.8" not in joined
+    assert response.headers["content-disposition"].endswith('finova_constats_TUN_2024.pdf"')
+
+
+def test_insights_pdf_annex_labels_every_user_value(env):
+    client, root = env
+    before = snapshot(root)
+    response = client.get("/api/reports/insights.pdf", params={"iso3": "TUN", "year": 2024, "annexe": "true"})
+    assert response.status_code == 200
+    assert response.headers["content-disposition"].endswith('finova_constats_TUN_2024_avec_vos_donnees.pdf"')
+    strings = pdf_strings(response.content)
+    joined = " ".join(strings)
+    annex = joined[joined.index("Annexe : vos données"):]
+    official = joined[:joined.index("Annexe : vos données")]
+    assert "30.8" not in official and "exemple fictif" not in official  # jamais dans les constats officiels
+    assert "BIFlow ne les vérifie pas" in annex
+    assert "30.8 pour 100 000 adultes (2024)" in annex and "26.4 % (2023)" in annex  # annee anterieure indiquee
+    # chaque ligne de valeurs porte l'etiquette (cellule « Étiquette »), plus le chapeau de section
+    assert annex.count("Données utilisateur") >= 3
+    assert "Comparaison indicative : définition déclarée par l'utilisateur" in annex
+    assert "35.44 pour 100 000 adultes (2024)" in annex  # KPI officiel compare, meme annee
     assert snapshot(root) == before
 
 

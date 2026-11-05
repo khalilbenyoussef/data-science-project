@@ -326,7 +326,7 @@ def create_app(
     app.include_router(create_audit_router(audit_dir=audit_root, warehouse=warehouse, spec_file=spec_file))
     # pistes de recommandation (regles deterministes sur kpi_values auditees), lecture seule
     app.include_router(create_reports_router(warehouse=warehouse, audit_dir=audit_root, spec_file=spec_file,
-                                             spec_for=resolve_spec))
+                                             spec_for=resolve_spec, user_data=UserData(cfg, warehouse)))
 
     settings = ask_settings(cfg)
     user_data = UserData(cfg, warehouse)  # « Mes donnees » : lecture seule, toujours etiquetee

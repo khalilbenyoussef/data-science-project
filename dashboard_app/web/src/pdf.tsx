@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 // Lien de telechargement d'un rapport PDF construit a la demande par l'API (meme origine,
 // compatible avec la CSP : simple navigation, aucun script ni objet embarque).
 export function PdfDownload({ href, title }: { href: string; title: string }) {
@@ -9,5 +11,21 @@ export function PdfDownload({ href, title }: { href: string; title: string }) {
       </svg>
       Télécharger le rapport (PDF)
     </a>
+  );
+}
+
+// Rapport des constats (Vue d'ensemble) : case facultative « Annexe : vos données »
+// (valeurs de « Mes données », etiquetees, dans une section separee du PDF).
+export function InsightsPdf({ iso3, year, title }: { iso3: string; year: number; title: string }) {
+  const [annex, setAnnex] = useState(false);
+  const href = `/api/reports/insights.pdf?iso3=${encodeURIComponent(iso3)}&year=${year}${annex ? "&annexe=true" : ""}`;
+  return (
+    <div className="pdf-with-annex">
+      <PdfDownload href={href} title={title} />
+      <label className="inline-check small" title="Ajoute une annexe séparée avec vos données, étiquetées « non vérifiée par BIFlow »">
+        <input type="checkbox" checked={annex} onChange={(event) => setAnnex(event.target.checked)} />
+        Inclure l'annexe : vos données
+      </label>
+    </div>
   );
 }

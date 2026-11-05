@@ -3092,3 +3092,16 @@ select {
     max-width: 100%;
   }
 }
+
+/* Vue d'ensemble : bouton PDF et case « Inclure l'annexe : vos données » */
+.pdf-with-annex {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+@media (max-width: 900px) {
+  .pdf-with-annex {
+    align-items: flex-start;
+  }
+}

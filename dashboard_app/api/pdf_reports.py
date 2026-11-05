@@ -27,6 +27,7 @@ from reportlab.platypus import (
 )
 
 from biflow.tools.deliverables import NA, STALE, STATUS_FR, Context, agent_summaries
+from biflow.tools.user_sources.data import USER_CHIP
 
 INK, MUTED, LINE, ACCENT, SOFT = (colors.HexColor(c) for c in ("#14213d", "#5b6577", "#d7dde8", "#1f5fbf", "#eef3fb"))
 WARN = colors.HexColor("#b45309")
@@ -236,11 +237,13 @@ def evaluation_pdf(ctx: Context, summary: Mapping[str, Any], checks: Sequence[Ma
 
 # ------------------------------------------------------------------ insights.pdf
 def insights_pdf(ctx: Context, scope: Mapping[str, Any], insights: Sequence[Mapping[str, Any]],
-                 recommendations: Mapping[str, Any]) -> bytes:
-    """Constats et pistes du perimetre choisi."""
+                 recommendations: Mapping[str, Any], annex: Mapping[str, Any] | None = None) -> bytes:
+    """Constats et pistes du perimetre choisi ; annexe facultative « vos données »."""
     label = f"{scope.get('country') or scope.get('iso3')} ({scope.get('iso3')}), {scope.get('year')}"
-    story = _cover("Constats et pistes de recommandation", label, ctx,
-                   [("Périmètre", label), ("Spec", f"générée le {scope.get('generated_at') or NA}")])
+    extra = [("Périmètre", label), ("Spec", f"générée le {scope.get('generated_at') or NA}")]
+    if annex is not None:
+        extra.append(("Annexe", f"vos données ({USER_CHIP})"))
+    story = _cover("Constats et pistes de recommandation", label, ctx, extra)
     accepted = sum(1 for i in insights if i.get("accepted") is True)
     story += [P("1. Constats", "h1"),
               P(f"{n(len(insights))} constats ; {n(accepted)} acceptés par l'audit des nombres (chaque nombre est une "
@@ -275,7 +278,48 @@ def insights_pdf(ctx: Context, scope: Mapping[str, Any], insights: Sequence[Mapp
                    f"{n(e['value'], 1)} {UNITS.get(e['unit'], e['unit'])}",
                    PUBLICATION.get(e["publication_status"], e["publication_status"])] for e in rec["evidence"]],
                  [70, 30, 14, 32, 28]), Spacer(1, 3 * mm)])]
+    if annex is not None:
+        story += _annex(annex, scope)
     return _build(story, f"FinOVA - Constats {label}", f"FinOVA - constats {label} - run {ctx.run_id}")
+
+
+def _user_value(value: Mapping[str, Any] | None) -> str:
+    if not value:
+        return "-"
+    return f"{value['display']} ({value['year']})"
+
+
+def _annex(annex: Mapping[str, Any], scope: Mapping[str, Any]) -> list[Any]:
+    """Annexe : vos données. Section separee, chaque valeur etiquetee ; aucune n'entre
+    dans les constats ni dans les pistes officiels."""
+    year = scope.get("year")
+    story: list[Any] = [PageBreak(), P("Annexe : vos données", "h1"),
+                        P(f"{USER_CHIP}. Valeurs importées sur la page « Mes données » : BIFlow ne les vérifie pas "
+                          "et elles ne font partie ni des constats ni des pistes officiels ci-dessus. Pour chaque "
+                          f"indicateur : valeur de {year}, sinon de la dernière année antérieure (année indiquée).")]
+    values = annex.get("values") or []
+    if not values:
+        story.append(P("Aucune donnée utilisateur intégrée."))
+    else:
+        story += [P("Vos indicateurs", "h2"),
+                  grid(["Indicateur (vos données)", "Valeur (année)", "Étiquette"],
+                       [[v["label"], _user_value(v.get("row")), USER_CHIP] for v in values], [80, 40, 54])]
+    comp = annex.get("comparisons") or {}
+    rows = comp.get("rows") or []
+    if rows:
+        story += [P("Vos indicateurs face aux données officielles", "h2"), P(comp.get("note") or "", "small")]
+        story.append(grid(["Votre indicateur (non vérifié)", "Valeur", "Indicateur officiel", "Valeur", "Note"],
+                          [[r["label"], _user_value(r.get("user")), r["kpi"], _user_value(r.get("official")),
+                            "; ".join(r.get("notes") or []) or "-"] for r in rows], [44, 26, 44, 26, 34]))
+        for r in rows:
+            if r.get("definition"):
+                story.append(P(f"{r['kpi']} - définition officielle : {r['definition']}"
+                               + (f" Dénominateur : {r['denominator']}." if r.get("denominator") else ""), "small"))
+    recs = annex.get("recommendations") or []
+    if recs:
+        story += [P("Pistes à partir de vos données", "h2")]
+        story += [P(f"{index}. {rec['text']}", "body") for index, rec in enumerate(recs, 1)]
+    return story
 
 
 __all__ = ["evaluation_pdf", "insights_pdf"]
