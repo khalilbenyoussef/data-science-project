@@ -373,6 +373,68 @@ kpis:
 L'Auditor relit chaque cellule source dans le snapshot selon le mapping (A5) et
 compare tous les faits utilisateur aux observations du mapping (A6).
 
+## Mode banquier
+
+Un banquier dépose ses propres indicateurs (niveau pays) et les lit à côté des
+chiffres officiels, sans jamais les mélanger : les données officielles ne sont pas
+modifiées et chaque valeur utilisateur porte la puce **« Données utilisateur ·
+non vérifiée par BIFlow »**. Fichier de démonstration :
+`docs/examples/banque_fictive_exemple.csv` (**données fictives**, « exemple
+fictif » dans chaque libellé ; Tunisie et Maroc, 2021-2024).
+
+1. **Mes données → « Ajouter un fichier »** : structure détectée, rôles proposés.
+2. **Étape 3 « Indicateurs »** : unité obligatoire (jamais devinée), puis, si
+   vous le souhaitez, un **indicateur officiel comparable**. La liste ne propose
+   que les KPI du catalogue de **même unité** (après conversion) ; le choix affiche
+   la définition officielle et le dénominateur, et la case **« Mon indicateur
+   mesure la même chose (même population, même définition) »** est obligatoire :
+   sans elle, le KPI comparable n'est pas enregistré. Même unité ne veut pas dire
+   même définition : c'est vous qui la déclarez. Dans l'exemple : « Distributeurs
+   (ATM) du réseau pour 100 000 adultes » → `atm_density`, « Agences pour 100 000
+   adultes » → `branch_density`, et un indicateur en % sans comparable.
+3. **Vérification, confirmation** : le fichier est copié dans `data/uploads/`, le
+   pipeline est recalculé hors ligne (sources officielles reprises du snapshot).
+4. **Vue d'ensemble → « Vos indicateurs face aux données officielles »** : bloc
+   séparé des cartes officielles. Votre valeur de l'année choisie (sinon la
+   dernière année antérieure, année affichée) à côté du KPI officiel approuvé de
+   la même année (sinon la dernière vague, année affichée) ; définition
+   officielle sous chaque ligne ; « années différentes : comparaison indicative »
+   si les années diffèrent ; aucune valeur si les unités ne correspondent plus.
+   Note permanente : « Comparaison indicative : définition déclarée par
+   l'utilisateur ».
+5. **Pistes « à partir de vos données »** (règle `user_vs_official` de
+   `config/recommendations.yaml`, 5 pts pour les %, 10 % relatif sinon) : sous-liste
+   séparée des pistes officielles, seulement quand votre année est l'année
+   officielle utilisée. Jamais écrites dans `docs/deliverables/`.
+6. **Ask Finova** : l'outil `get_user_indicator` lit vos données en lecture
+   seule ; toute réponse qui les cite commence par « D'après vos données (non
+   vérifiées par BIFlow) ». Avec `llm.ask.allow_user_data_to_llm: false` (défaut),
+   une question sur vos données reçoit une réponse en mode simple, calculée
+   localement, et le panneau explique pourquoi ; aucune valeur utilisateur n'est
+   envoyée au LLM (ni outil, ni historique).
+7. **PDF** : la case « Inclure l'annexe : vos données » ajoute une section
+   séparée « Annexe : vos données » au rapport des constats (valeurs,
+   comparaisons, pistes « à partir de vos données »), chaque valeur étiquetée.
+8. **Retirer la source** (Mes données → « Supprimer ») : ses lignes quittent
+   l'entrepôt au recalcul suivant.
+
+### Limites
+
+- **Connexion de démonstration** : l'écran d'accueil n'authentifie personne ; il
+  n'y a ni comptes, ni droits, ni séparation entre utilisateurs. À ne pas exposer
+  sur un réseau partagé avec des données réelles.
+- **Niveau pays uniquement** : un fichier doit avoir une colonne pays et une
+  colonne année. Pas encore de gouvernorat, d'agence ni de client.
+- **Données locales** : fichiers, mappings et entrepôt restent sur la machine
+  (`data/`, `config/sources/`, ignorés par Git). Exception : si vous activez
+  `llm.ask.allow_user_data_to_llm`, les valeurs lues par Ask Finova sont envoyées
+  au fournisseur LLM configuré (Groq ou Gemini).
+- **Définitions déclarées, pas vérifiées** : BIFlow vérifie l'unité et la
+  structure, pas que votre indicateur mesure la même population que le KPI
+  officiel ; la comparaison reste indicative.
+- **Formats** : CSV texte uniquement (pas d'Excel), une valeur par pays, année et
+  indicateur.
+
 ## Route 2 — BI Analyst et Dashboard
 
 La Route 2 lit le warehouse en **lecture seule** et passe uniquement par les
@@ -780,6 +842,10 @@ Le login est une démonstration d'interface (aucune authentification réelle).
 | GET | `/api/sources` | sources utilisateur : lignes, années, pays, score qualité, statut |
 | DELETE | `/api/sources/{name}` | retire la source (copie conservée) et lance le recalcul |
 | GET | `/api/sources/{name}/data` | valeurs publiées de la source (`fact`, source `user:<nom>`), lecture seule |
+| GET | `/api/sources/comparable-kpis` | KPI officiels proposés à l'étape « Indicateurs » (unité, définition, dénominateur) |
+| GET | `/api/sources/comparisons?iso3=&year=` | vos indicateurs face aux KPI officiels déclarés comparables, lecture seule |
+| GET | `/api/recommendations?iso3=&year=` | pistes officielles, et à part les pistes « à partir de vos données » |
+| GET | `/api/reports/insights.pdf?iso3=&year=&annexe=true` | rapport des constats ; `annexe=true` ajoute « Annexe : vos données » |
 | GET | `/api/audit/summary` | page « Audit et confiance » : verdict, publication, motifs de réserve, audit des constats, évaluation |
 | GET | `/api/audit/checks` | contrôles A1…C4 décrits en français, lignes concernées |
 | GET | `/api/audit/explain?kpi_id=&iso3=&year=` | explication d'une valeur (même lecture que `main.py explain`) |
@@ -799,7 +865,10 @@ sur les faits des vues Finova (`get_kpi`, `compare_countries`, `compare_years`,
 `explain` sur `kpi_explanations`, `list_kpis`, `current_scope`) ; tout nombre
 absent des résultats d'outils du tour déclenche une régénération puis la réponse
 déterministe. Le navigateur envoie les 10 derniers messages de la session et un
-budget d'appels LLM est tenu par session. Sans clé : salutations, suggestions,
+budget d'appels LLM est tenu par session. Vos données (« Mes données ») ne sont lues
+que par l'outil `get_user_indicator` et toujours annoncées « D'après vos données (non
+vérifiées par BIFlow) » ; avec `llm.ask.allow_user_data_to_llm: false` (défaut), ces
+questions restent en mode simple, sans appel au LLM (voir « Mode banquier »). Sans clé : salutations, suggestions,
 relances (« et en 2021 ? », « et le Maroc ? ») et formulations FR / EN / darija.
 
 Page « Mes données » (sources CSV de l'utilisateur, API locale) : le fichier
@@ -809,8 +878,10 @@ par un tableur. Le recalcul (un seul à la fois, état dans `outputs/jobs/`, dé
 `uploads.job_timeout_min`) lance `python main.py run --no-llm --offline-official`
 puis Route 2 : avec `--offline-official`, Findex, FAS et PIB sont repris du
 snapshot publié, sans réseau, et seule la source utilisateur peut changer. Les
-données utilisateur n'entrent ni dans les cartes KPI officielles ni dans les
-réponses d'Ask Finova. Les CSV exportés (rapports qualité, profils) préfixent
+données utilisateur n'entrent jamais dans les cartes KPI officielles ni dans les
+constats et pistes officiels ; elles apparaissent seulement, étiquetées, dans le
+bloc « Vos indicateurs face aux données officielles », la sous-liste « À partir de
+vos données », Ask Finova et l'annexe facultative du PDF. Les CSV exportés (rapports qualité, profils) préfixent
 d'une apostrophe les cellules texte commençant par `=`, `+`, `-` ou `@` (S6).
 
 Démonstration : `docs/examples/user_source_example.csv` contient des **données

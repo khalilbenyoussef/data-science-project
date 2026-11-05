@@ -972,7 +972,36 @@ def render_demo(ctx: Context) -> str:
         "| 9:30–10:00 | Conclusion | — | Recalcul naïf depuis les CSV : mêmes valeurs ; le pipeline ajoute statut, "
         "pairs, traçabilité et audit. | "
         + (f"{base.get('matched')}/{base.get('compared')} valeurs identiques" if base else NA) + " |",
-        "", "## Si une question arrive", "",
+        "", "## Mode banquier (2 minutes, facultatif)", "",
+        "Fichier : `docs/examples/banque_fictive_exemple.csv` (**données fictives**, « exemple fictif » dans chaque "
+        "libellé). Les valeurs utilisateur ne sont pas reprises ici : ce document ne contient que des données "
+        "officielles.", "",
+        "| Étape | Ce que je clique | Ce que je dis |", "|---|---|---|",
+        "| 1 | Mes données → « Ajouter un fichier », déposer l'exemple, « Continuer » | Structure détectée ; les "
+        "chiffres officiels ne seront pas modifiés. |",
+        "| 2 | Étape « Indicateurs » : unités « par 100 000 adultes » et « % » ; distributeurs → "
+        "`atm_density`, agences → `branch_density` ; cocher « Mon indicateur mesure la même chose » | Seuls les KPI "
+        "de même unité sont proposés ; même unité n'est pas même définition : je la déclare, avec la définition "
+        "officielle sous les yeux. |",
+        "| 3 | « Ajouter et recalculer » | Recalcul hors ligne : sources officielles reprises du snapshot. |",
+        f"| 4 | Vue d'ensemble ({COUNTRY_LABELS.get(iso3, iso3)}, {year}) → « Vos indicateurs face aux données "
+        "officielles » | Chaque valeur porte « Données utilisateur · non vérifiée par BIFlow » ; les agences "
+        "s'arrêtent en 2023 : « années différentes : comparaison indicative », et aucune piste. |",
+        "| 5 | « Pistes de recommandation » → « À partir de vos données » | Même règle fixe, seulement à année "
+        "identique : ici les distributeurs. |",
+        "| 6 | Ask Finova : « Quel est le taux de clients utilisant la banque mobile de ma banque ? » | Réponse "
+        "« D'après vos données », en mode simple : rien n'est envoyé au LLM tant que "
+        "`llm.ask.allow_user_data_to_llm` est désactivé. |",
+        "| 7 | Cocher « Inclure l'annexe : vos données », « Télécharger le rapport (PDF) » | L'annexe est une "
+        "section séparée, chaque valeur étiquetée. |",
+        "| 8 | Mes données → « Supprimer » | Les lignes quittent l'entrepôt au recalcul. |", "",
+        "## Limites (à dire si on demande)", "",
+        "- Connexion de démonstration : aucune authentification réelle, aucun compte ni droit.",
+        "- Niveau pays uniquement : pas encore de gouvernorat, d'agence ni de client.",
+        "- Données locales, sauf si `llm.ask.allow_user_data_to_llm` est activé : Ask Finova envoie alors les "
+        "valeurs lues au fournisseur LLM configuré.",
+        "- Définition déclarée par l'utilisateur : comparaison indicative, pas vérifiée par BIFlow.", "",
+        "## Si une question arrive", "",
         "- *Le LLM invente-t-il des chiffres ?* Non : tout nombre est vérifié contre les faits ; voir EVALUATION.md.",
         "- *Pourquoi « association, pas causalité » ?* Les données Findex sont des enquêtes transversales : elles "
         "décrivent des écarts, pas leurs causes.",

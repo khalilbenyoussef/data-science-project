@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ComparisonRow, ComparisonsResult } from "./types";
 import { fetchComparisons } from "./api";
 import { UserChip } from "./ui";
+import { fmtUnit } from "./format";
 
 // « Vos indicateurs face aux données officielles » (Vue d'ensemble) : bloc séparé des
 // cartes officielles ; chaque valeur utilisateur porte la puce « Données utilisateur ·
@@ -45,7 +46,7 @@ function ComparisonItem({ row }: { row: ComparisonRow }) {
           <strong>{row.label}</strong>
           {comparable && (row.user ? (
             <span className="comparison-value">
-              {row.user.display} <span className="muted">({row.user.year})</span>
+              {fmtUnit(row.user.value, row.user.unit)} <span className="muted">({row.user.year})</span>
             </span>
           ) : <span className="muted small">aucune valeur</span>)}
           <UserChip />
@@ -55,7 +56,7 @@ function ComparisonItem({ row }: { row: ComparisonRow }) {
           <strong>{row.kpi}</strong>
           {comparable && (row.official ? (
             <span className="comparison-value">
-              {row.official.display} <span className="muted">({row.official.year})</span>
+              {fmtUnit(row.official.value, row.official.unit)} <span className="muted">({row.official.year})</span>
             </span>
           ) : <span className="muted small">aucune valeur approuvée</span>)}
         </div>

@@ -1,10 +1,10 @@
 # Rapport de qualité des données
 
-- **Généré le** : 2026-11-05T18:07:56
-- **Run audité (Route 1)** : `part_d_audit_report`
-- **Snapshot** : `v5`
+- **Généré le** : 2026-11-05T22:20:39
+- **Run audité (Route 1)** : `user_delete_20261105T221858`
+- **Snapshot** : `v9`
 - **Version du catalogue KPI** : 1.7.0
-- **Run Route 2 (spec publiée)** : `route2_20261104T125802503588`
+- **Run Route 2 (spec publiée)** : `route2_20261105T221924144045`
 - **Sources lues** : `data/quality/quality_report.json`, `outputs/reports/<run>/quality.json`
 - Document généré par `scripts/build_deliverables.py` : ne pas modifier à la main.
 
@@ -12,7 +12,7 @@
 
 | Mesure | Valeur |
 |---|---|
-| Run qualité | `part_d_audit_report` (2026-11-04T12:57:37) |
+| Run qualité | `user_delete_20261105T221858` (2026-11-05T22:19:06) |
 | Score global | 0.936 |
 | Seuil du gate (`quality.score_threshold`) | 0.70 |
 | Gate | réussi |
@@ -21,7 +21,7 @@
 | Anomalies moyennes | 2 |
 | Anomalies faibles | 0 |
 | Diagnostics (sans effet sur le score) | 25 |
-| Durée de l'agent Quality | 1.20 s |
+| Durée de l'agent Quality | 1.33 s |
 
 ## Score et gate par source
 

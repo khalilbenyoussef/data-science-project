@@ -224,6 +224,8 @@ def user_recommendations(comparison: Mapping[str, Any], rules: Mapping[str, Any]
     out, rejected, checked = [], [], 0
     forbidden = [p.lower() for p in rules.get("forbidden_phrases") or []]
     caveat = rules.get("caveat", "Association, pas causalité.")
+    note = str(comparison.get("note") or "").strip()
+    note = note if not note or note.endswith(".") else f"{note}."
     for rule in rules["rules"]:
         if rule["kind"] != USER_KIND:
             continue
@@ -255,7 +257,7 @@ def user_recommendations(comparison: Mapping[str, Any], rules: Mapping[str, Any]
                     f"{unit} pour l'indicateur officiel « {row['kpi']} », soit {size} "
                     f"{'de moins' if below else 'de plus'}"
                     + (" en valeur relative" if not percent else "") + ". "
-                    f"{comparison.get('note') or ''} {caveat}").replace("  ", " ")
+                    f"{note} {caveat}").replace("  ", " ")
             rec = {
                 "id": f"REC-{rule['id']}-{row['indicator_code']}-{iso3}-{when}", "rule_id": rule["id"],
                 "kind": USER_KIND, "kpi_id": row["kpi_id"], "kpi": row["kpi"], "indicator_code": row["indicator_code"],

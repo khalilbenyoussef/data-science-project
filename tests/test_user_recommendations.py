@@ -39,7 +39,7 @@ def test_relative_threshold_for_non_percent_units():
     assert rec["text"].startswith("Piste à explorer (à partir de vos données) : ")
     assert "30.8 pour 100 000 adultes (données utilisateur, non vérifiées par BIFlow)" in rec["text"]
     assert "35.4 pour 100 000 adultes" in rec["text"] and "13.1 % de moins en valeur relative" in rec["text"]
-    assert INDICATIVE in rec["text"] and "Association, pas causalité." in rec["text"]
+    assert rec["text"].endswith(f"{INDICATIVE}. Association, pas causalité.")
     assert rec["trigger"]["threshold"] == 10
     assert run(comp_row("atm", "per_100k_adults", 33.0, 35.44))["recommendations"] == []
 

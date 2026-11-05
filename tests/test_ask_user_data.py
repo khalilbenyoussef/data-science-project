@@ -103,6 +103,9 @@ def test_reader_matches_codes_and_labels_without_the_parenthesis(user_data):
     assert [i["code"] for i in user_data.match("Quel est le taux de clients digitaux ?")] == ["banque.taux_digital"]
     assert [i["code"] for i in user_data.match("combien de clients actifs en 2023")] == ["banque.clients_actifs"]
     assert user_data.match("Combien d'adultes ont un compte ?") == []
+    # mots du libelle dans un autre ordre / avec d'autres mots : « clients digitaux de ma banque »
+    assert [i["code"] for i in user_data.match("part de clients digitaux de ma banque")] == ["banque.taux_digital"]
+    assert user_data.match("combien de clients ?") == []  # un seul mot significatif : pas de correspondance
 
 
 # ------------------------------------------------------------ parametre desactive

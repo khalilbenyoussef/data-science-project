@@ -20,6 +20,7 @@ from biflow.tools.user_sources.registry import list_mappings
 
 USER_CHIP = "Données utilisateur · non vérifiée par BIFlow"
 USER_MARKER = "D'après vos données (non vérifiées par BIFlow)"
+STOP_WORDS = {"pour", "adultes", "exemple", "fictif", "dans", "avec", "des", "les", "taux", "part", "nombre"}
 UNIT_TEXT = {"percent": "%", "fraction": "(fraction)", "per_100k_adults": "pour 100 000 adultes",
              "per_1k_adults": "pour 1 000 adultes", "count": "", "percentage_points": "pts"}
 
@@ -104,13 +105,17 @@ class UserData:
         return {**row, "year_requested": int(year), "same_year": row["year"] == int(year)}
 
     def match(self, text: str) -> list[dict[str, Any]]:
-        """Indicateurs utilisateur cites dans une question (code ou libelle, sans la parenthese)."""
+        """Indicateurs utilisateur cites dans une question : code ou libelle (sans la
+        parenthese), ou au moins 70 % des mots significatifs du libelle (2 au minimum)."""
         norm = f" {normalize_name(text)} "
+        words = set(norm.split())
         found = []
         for item in self.indicators():
             short = normalize_name(item["code"].split(".", 1)[1].replace("_", " "))
             label = normalize_name(re.sub(r"\([^)]*\)", " ", item["label"]))
-            if (label and f" {label} " in norm) or (short and f" {short} " in norm):
+            significant = {w for w in label.split() if len(w) >= 4 and w not in STOP_WORDS}
+            if ((label and f" {label} " in norm) or (short and f" {short} " in norm)
+                    or (len(significant) >= 2 and len(significant & words) >= 0.7 * len(significant))):
                 found.append(item)
         return found
 

@@ -1,10 +1,10 @@
 # Catalogue des KPI
 
-- **Généré le** : 2026-11-05T18:07:56
-- **Run audité (Route 1)** : `part_d_audit_report`
-- **Snapshot** : `v5`
+- **Généré le** : 2026-11-05T22:20:39
+- **Run audité (Route 1)** : `user_delete_20261105T221858`
+- **Snapshot** : `v9`
 - **Version du catalogue KPI** : 1.7.0
-- **Run Route 2 (spec publiée)** : `route2_20261104T125802503588`
+- **Run Route 2 (spec publiée)** : `route2_20261105T221924144045`
 - **Sources lues** : `config/kpi_catalog.v1.yaml`, `table kpi_values`, `data/audit/audit_report.json (A1)`
 - Document généré par `scripts/build_deliverables.py` : ne pas modifier à la main.
 

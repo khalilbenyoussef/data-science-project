@@ -1,16 +1,16 @@
 # Constats et pistes de recommandation
 
-- **Généré le** : 2026-11-05T18:22:23
-- **Run audité (Route 1)** : `part_d_audit_report`
-- **Snapshot** : `v5`
+- **Généré le** : 2026-11-05T22:20:39
+- **Run audité (Route 1)** : `user_delete_20261105T221858`
+- **Snapshot** : `v9`
 - **Version du catalogue KPI** : 1.7.0
-- **Run Route 2 (spec publiée)** : `route2_20261104T125802503588`
+- **Run Route 2 (spec publiée)** : `route2_20261105T221924144045`
 - **Sources lues** : `dashboard_app/public/data/finova.json`, `data/audit/audit_report.json (route2_insight_audit)`, `table kpi_values`, `config/recommendations.yaml`
 - Document généré par `scripts/build_deliverables.py` : ne pas modifier à la main.
 
 ## Constats audités
 
-Constats du run Route 2 `route2_20261104T125802503588` (audit du 2026-11-04T12:58:31) : 15 audités, 15 acceptés, 0 rejetés, 2 non auditables (aucun fait KPI derrière la phrase, par exemple une référence statique).
+Constats du run Route 2 `route2_20261105T221924144045` (audit du 2026-11-05T22:19:59) : 15 audités, 15 acceptés, 0 rejetés, 2 non auditables (aucun fait KPI derrière la phrase, par exemple une référence statique).
 
 Un constat est accepté quand chaque nombre de la phrase est une valeur publiée de `kpi_values`, une année ou une différence entre deux valeurs citées du même indicateur, au même arrondi.
 
@@ -48,6 +48,8 @@ Chaque piste est une **piste à explorer**, pas une conclusion : elle décrit un
 | `barrier_above_peers` | pays − moyenne des pairs ≥ 5 pts | `barrier_too_far`, `barrier_too_expensive`, `barrier_no_documents`, `barrier_insufficient_funds`, `barrier_family_has_account`, `barrier_no_trust` |
 | `usage_below_peers` | moyenne des pairs − pays ≥ 5 pts | `account_ownership`, `digital_payment_rate`, `formal_saving_rate` |
 | `network_below_peers` | densité inférieure d'au moins 10 % à la moyenne des pairs | `branch_density`, `atm_density` |
+
+La règle `user_vs_official` (vos données de « Mes données » face à l'indicateur officiel déclaré comparable) n'est jamais appliquée dans ce document : ses pistes, étiquetées « à partir de vos données », ne s'affichent que dans l'application et dans l'annexe facultative du PDF des constats.
 
 ### Pistes retenues
 

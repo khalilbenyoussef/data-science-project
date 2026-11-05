@@ -774,7 +774,11 @@ function ConfirmStep({ dry, name, replace }: { dry: DryRunResult; name: string; 
         <li>{dry.mapped} valeur(s), {dry.countries.length} pays, années {dry.year_range ? `${dry.year_range[0]}–${dry.year_range[1]}` : "—"}.</li>
         <li>Indicateurs : {dry.indicators.map((item) => `${item.label} (${unitText(item.unit)})`).join(" · ")}.</li>
         <li>Le fichier est copié dans data/uploads/, puis le pipeline est recalculé (contrôle qualité, entrepôt, audit, tableau de bord). Les sources officielles ne sont pas retéléchargées.</li>
-        <li>Les chiffres officiels du tableau de bord ne changent pas : vos données restent sur cette page.</li>
+        <li>
+          Les chiffres officiels du tableau de bord ne changent pas : vos données restent étiquetées « Données
+          utilisateur · non vérifiée par BIFlow » et séparées (cette page, le bloc « Vos indicateurs face aux données
+          officielles », Ask Finova en mode local).
+        </li>
       </ul>
     </div>
   );

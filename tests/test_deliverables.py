@@ -211,7 +211,12 @@ def test_demo_script_reads_its_numbers(ctx, monkeypatch):
     ctx.audit.update({"counts": {"pass": 18, "warn": 1, "fail": 0}})
     ctx.fault_injection = {"detected": 9, "total": 9}
     text = dl.render_demo(ctx)
-    assert text.count("\n| ") == 1 + 9  # en-tete et 9 etapes (le separateur commence par |---)
+    main, banker = text.split("## Mode banquier", 1)
+    assert main.count("\n| ") == 1 + 9  # en-tete et 9 etapes (le separateur commence par |---)
+    assert banker.count("\n| ") == 1 + 8 and "banque_fictive_exemple.csv" in banker
+    assert "données fictives" in banker and "Mon indicateur mesure la même chose" in banker
+    for limit in ("aucune authentification réelle", "Niveau pays uniquement", "llm.ask.allow_user_data_to_llm"):
+        assert limit in banker
     assert "Détention d'un compte : 37.8 %" in text and "MAR 44.4 %" in text
     assert "Écart hommes − femmes : 23.0 pts ; revenu : 27.0 pts" in text
     assert "1 pistes ; ex. groupe cible « femmes »" in text
