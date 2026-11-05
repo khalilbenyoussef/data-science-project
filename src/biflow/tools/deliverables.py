@@ -21,7 +21,7 @@ import duckdb
 import yaml
 
 from biflow.config import ROOT, load_config, path_of, resolve
-from biflow.tools.audit_text import fr_number
+from biflow.tools.audit_text import VERDICTS_FR, check_name, fr_number, insight_faults_note
 from biflow.tools.dashboard_spec import COUNTRY_LABELS
 from biflow.tools.kpi import DEFAULT_CATALOG, load_catalog
 
@@ -799,8 +799,11 @@ def render_evaluation(ctx: Context) -> str:
         "", f"### Injection de fautes ({fi.get('detected', NA)}/{fi.get('total', NA)} détectées)", "",
         _dated("Mesure", fresh["fault_injection"]), "",
         *(table(["Faute injectée", "Contrôle attendu", "Détectée", "Verdict"],
-                ([f.get("label"), f"`{f.get('expected_check')}`", "oui" if f.get("detected") else "non",
-                  f.get("verdict")] for f in fi.get("faults") or [])) if fi else [f"Injection de fautes : {NA}."])])
+                ([f"{i}. {f.get('label')}", f"{check_name(f.get('expected_check'))}<br><sub>`{f.get('expected_check')}`</sub>",
+                  "oui" if f.get("detected") else "non", VERDICTS_FR.get(f.get("verdict"), f.get("verdict"))]
+                 for i, f in enumerate(fi.get("faults") or [], 1)))
+          + ([""] + [insight_faults_note(fi.get("faults") or [])] if insight_faults_note(fi.get("faults") or []) else [])
+          if fi else [f"Injection de fautes : {NA}."])])
     insight = ctx.audit.get("route2_insight_audit") or {}
     lines += section("analyst", [
         f"- Audit des constats (run `{insight.get('run_id', NA)}`) : {fmt_int(insight.get('audited'))} audités, "

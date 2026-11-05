@@ -28,6 +28,55 @@ STATUS_LABELS = {
 }
 
 
+# --------------------------------------------------------------------------- controles
+# Nom court en francais de chaque controle de l'Auditor (l'identifiant technique reste
+# affiche a cote, en petit). Un controle inconnu garde son identifiant.
+CHECK_NAMES = {
+    "A1_recomputed_values": "Valeurs recalculées",
+    "A2_unavailable_rows_are_null": "Valeurs indisponibles vides",
+    "A3_peers_recomputed": "Moyennes des pairs recalculées",
+    "A4_row_completeness": "Lignes attendues présentes",
+    "A5_raw_to_fact": "Fichiers bruts fidèles à l'entrepôt",
+    "A6_user_source_facts": "Sources utilisateur fidèles au fichier",
+    "B1_one_unit_per_kpi": "Une unité par indicateur",
+    "B2_value_ranges": "Valeurs dans les bornes",
+    "B3_country_entities_only": "Pays uniquement, sans agrégat",
+    "B4_peers_are_configured_peers": "Pairs conformes à la configuration",
+    "B5_snapshot_and_run_ids": "Version et run cohérents",
+    "B6_source_hashes": "Empreintes des sources",
+    "B7_warehouse_content_digest": "Empreinte de l'entrepôt",
+    "B8_catalog_definitions": "Définitions du catalogue",
+    "B9_quality_gate": "Contrôle qualité réussi",
+    "C1_partial_survey_wave": "Vagues d'enquête partielles",
+    "C2_partial_peer_coverage": "Moyennes de pairs incomplètes",
+    "C3_input_quality_findings": "Constats qualité sur les entrées",
+    "C4_within_survey_noise": "Variations dans le bruit d'enquête",
+    "F1_insights_grounded": "Constats fondés sur les chiffres",
+}
+VERDICTS_FR = {"pass": "conforme", "pass_with_warnings": "conforme avec avertissements", "fail": "non conforme"}
+
+
+def check_name(check_id: str | None) -> str:
+    """« A2 – Valeurs indisponibles vides » ; identifiant seul si le controle est inconnu."""
+    code = str(check_id or "")
+    name = CHECK_NAMES.get(code)
+    return f"{code.split('_')[0]} – {name}" if name else code
+
+
+def insight_faults_note(faults: list[dict[str, Any]]) -> str | None:
+    """Ligne sous le tableau d'injection de fautes : les fautes portant sur les constats
+    (controle F*) sont arretees par le rejet du constat, pas par le verdict des donnees."""
+    numbers = [i for i, fault in enumerate(faults, 1) if str(fault.get("expected_check") or "").startswith("F")]
+    if not numbers:
+        return None
+    verdicts = {VERDICTS_FR.get(f.get("verdict"), f.get("verdict")) for f in faults
+                if str(f.get("expected_check") or "").startswith("F")}
+    label = f"{numbers[0]}–{numbers[-1]}" if len(numbers) > 1 else str(numbers[0])
+    verdict = next(iter(verdicts)) if len(verdicts) == 1 else "inchangé"
+    return (f"Fautes {label} (constats) : elles sont détectées par le rejet du constat concerné ; les données "
+            f"restent exactes, donc le verdict des données reste « {verdict} ».")
+
+
 # --------------------------------------------------------------------------- nombres
 def fr_number(value: float | int, decimals: int = 1, signed: bool = False, thousands: str = "\u202f") -> str:
     """Nombre au format francais : virgule decimale, milliers separes par ``thousands``

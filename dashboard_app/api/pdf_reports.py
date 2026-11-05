@@ -23,10 +23,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    Flowable, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
 
-from biflow.tools.audit_text import fr_number
+from biflow.tools.audit_text import check_name, fr_number, insight_faults_note
 from biflow.tools.deliverables import NA, STALE, STATUS_FR, Context, agent_summaries
 from biflow.tools.user_sources.data import USER_CHIP
 
@@ -68,9 +68,12 @@ def _styles() -> dict[str, ParagraphStyle]:
                              spaceBefore=6, spaceAfter=4),
         "body": body,
         "small": ParagraphStyle("small", parent=body, fontSize=8, leading=10.5, textColor=MUTED),
-        "cell": ParagraphStyle("cell", parent=body, fontSize=8, leading=10, spaceAfter=0),
+        # cellules : un mot n'est jamais coupe en fin de ligne (« non disp onible »)
+        "cell": ParagraphStyle("cell", parent=body, fontSize=8, leading=10, spaceAfter=0, splitLongWords=0),
         "cellb": ParagraphStyle("cellb", parent=body, fontName="Helvetica-Bold", fontSize=8, leading=10,
-                                spaceAfter=0),
+                                spaceAfter=0, splitLongWords=0),
+        "cellid": ParagraphStyle("cellid", parent=body, fontName="Helvetica", fontSize=6.5, leading=8,
+                                 textColor=MUTED, spaceAfter=0, splitLongWords=0),
         "warn": ParagraphStyle("warn", parent=body, textColor=WARN, fontName="Helvetica-Bold"),
     }
 
@@ -83,7 +86,8 @@ def P(text: Any, style: str = "body") -> Paragraph:
 
 
 def grid(headers: Sequence[str], rows: Iterable[Sequence[Any]], widths: Sequence[float]) -> Table:
-    data = [[P(h, "cellb") for h in headers]] + [[P(c, "cell") for c in row] for row in rows]
+    data = [[P(h, "cellb") for h in headers]] + [
+        [c if isinstance(c, (Flowable, list)) else P(c, "cell") for c in row] for row in rows]
     table = Table(data, colWidths=[w * mm for w in widths], repeatRows=1)
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), SOFT), ("LINEBELOW", (0, 0), (-1, 0), 0.6, ACCENT),
@@ -91,6 +95,11 @@ def grid(headers: Sequence[str], rows: Iterable[Sequence[Any]], widths: Sequence
         ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
     return table
+
+
+def named_check(check_id: Any) -> list[Paragraph]:
+    """Cellule « A2 – Valeurs indisponibles vides » avec l'identifiant technique en petit dessous."""
+    return [P(check_name(check_id), "cell"), P(check_id or NA, "cellid")]
 
 
 def _cover(title: str, subtitle: str, ctx: Context, extra: Sequence[tuple[str, str]] = (),
@@ -180,17 +189,21 @@ def evaluation_pdf(ctx: Context, summary: Mapping[str, Any], checks: Sequence[Ma
                   grid(["Motif", "Lignes"], [[r.get("label"), n(r.get("rows"))] for r in reasons], [90, 40])]
     story += [P("2. Contrôles, en clair", "h1"),
               grid(["Contrôle", "Résultat", "Ce qui est vérifié", "Lignes signalées"],
-                   [[c.get("check_id"), RESULTS.get(c.get("result"), c.get("result")), c.get("description"),
-                     n(c.get("affected_count"))] for c in checks], [38, 22, 90, 24])]
+                   [[named_check(c.get("check_id")), RESULTS.get(c.get("result"), c.get("result")),
+                     c.get("description"), n(c.get("affected_count"))] for c in checks], [52, 22, 78, 22])]
     story += [P(f"3. Injection de fautes : {n(evaluation.get('detected'))}/{n(evaluation.get('total'))} "
                 "fautes détectées", "h1"),
               P("Chaque faute est injectée dans une copie des données ; l'Auditor doit la détecter avec le contrôle "
                 f"attendu. Mesure du {evaluation.get('created_at') or NA}."
                 + (f" Attention : {STALE}." if evaluation.get("stale") else ""), "body"),
               grid(["Faute injectée", "Contrôle attendu", "Détectée", "Verdict obtenu"],
-                   [[f.get("label"), f.get("expected_check"), "oui" if f.get("detected") else "non",
-                     VERDICTS.get(f.get("verdict"), f.get("verdict"))] for f in evaluation.get("faults") or []],
-                   [62, 52, 20, 40])]
+                   [[f"{i}. {f.get('label')}", named_check(f.get("expected_check")),
+                     "oui" if f.get("detected") else "non", VERDICTS.get(f.get("verdict"), f.get("verdict"))]
+                    for i, f in enumerate(evaluation.get("faults") or [], 1)],
+                   [60, 56, 18, 40])]
+    note = insight_faults_note(evaluation.get("faults") or [])
+    if note:
+        story += [Spacer(1, 2 * mm), P(note, "small")]
     rows = insight.get("insights") or []
     story += [P("4. Audit des constats", "h1"),
               P(f"Run {insight.get('run_id') or NA} : {n(insight.get('audited'))} constats audités, "
@@ -205,7 +218,7 @@ def evaluation_pdf(ctx: Context, summary: Mapping[str, Any], checks: Sequence[Ma
               grid(["Agent", "Mode", "Statut", "Durée", "Sortie clé", "LLM"],
                    [[a["label"], a["llm_mode"].split(" (")[0], STATUS_FR.get(a["status"], a["status"] or NA),
                      f"{n(a['duration_s'], 2)} s" if a["duration_s"] is not None else NA, a["key_output"],
-                     a["llm_measured"]] for a in agent_summaries(ctx)], [30, 34, 16, 16, 58, 20])]
+                     a["llm_measured"]] for a in agent_summaries(ctx)], [28, 30, 17, 15, 54, 30])]
     unit = ctx.agents_eval.get("ask_unit_tests") or {}
     live = ctx.ask_live
     story += [P("Ask Finova", "h2"),

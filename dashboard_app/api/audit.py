@@ -18,6 +18,7 @@ from typing import Any, Mapping
 import duckdb
 from fastapi import APIRouter, HTTPException, Query
 
+from biflow.tools.audit_text import check_name, insight_faults_note
 from biflow.tools.insights import insight_details
 from biflow.tools.kpi import DEFAULT_CATALOG, load_catalog
 
@@ -142,7 +143,9 @@ def audit_views(*, audit_dir: Path, warehouse: Path, spec_file: Path,
                 "baseline": evaluation.get("baseline"),
                 "faults": [{key: fault.get(key) for key in ("id", "label", "expected_check", "detected",
                                                             "verdict", "failing_checks")}
+                           | {"expected_check_name": check_name(fault.get("expected_check"))}
                            for fault in evaluation.get("faults") or []],
+                "insight_faults_note": insight_faults_note(evaluation.get("faults") or []),
             },
         }
 
@@ -153,7 +156,8 @@ def audit_views(*, audit_dir: Path, warehouse: Path, spec_file: Path,
         for check in data.get("checks") or []:
             rows = check.get("affected_rows") or []
             out.append({
-                "check_id": check.get("check_id"), "category": check.get("category"), "result": check.get("result"),
+                "check_id": check.get("check_id"), "name": check_name(check.get("check_id")),
+                "category": check.get("category"), "result": check.get("result"),
                 "description": CHECK_DESCRIPTIONS.get(check.get("check_id"), check.get("detail")),
                 "detail": check.get("detail"), "affects_publication": check.get("affects_publication"),
                 "user_sources": check.get("check_id") in USER_CHECKS,

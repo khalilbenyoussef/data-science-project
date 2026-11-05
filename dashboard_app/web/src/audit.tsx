@@ -26,12 +26,17 @@ interface AuditSummary {
   };
   evaluation: {
     available: boolean; created_at: string | null; stale: boolean; detected: number | null; total: number | null;
-    faults: { id: string; label: string; expected_check: string; detected: boolean; verdict: string; failing_checks: string[] }[];
+    faults: {
+      id: string; label: string; expected_check: string; expected_check_name?: string; detected: boolean;
+      verdict: string; failing_checks: string[];
+    }[];
+    insight_faults_note?: string | null;
   };
 }
 
 interface AuditCheck {
   check_id: string;
+  name?: string;
   category: string;
   result: "pass" | "warn" | "fail";
   description: string;
@@ -233,7 +238,10 @@ function ChecksPanel({ checks }: { checks: AuditCheck[] }) {
         <tbody>
           {checks.map((check) => (
             <tr key={check.check_id}>
-              <td><code>{check.check_id.split("_")[0]}</code></td>
+              <td className="check-cell">
+                <span className="check-name">{check.name ?? check.check_id}</span>
+                <small className="check-id">{check.check_id}</small>
+              </td>
               <td>
                 {check.description}
                 {check.user_sources && <span className="chip chip-user">Sources utilisateur</span>}
@@ -400,16 +408,22 @@ function EvaluationPanel({ summary }: { summary: AuditSummary }) {
         <table className="data-table">
           <thead><tr><th>Faute injectée</th><th>Contrôle attendu</th><th>Détectée</th><th>Verdict obtenu</th></tr></thead>
           <tbody>
-            {evaluation.faults.map((fault) => (
+            {evaluation.faults.map((fault, index) => (
               <tr key={fault.id}>
-                <td>{fault.label}</td>
-                <td><code>{fault.expected_check}</code></td>
+                <td>{index + 1}. {fault.label}</td>
+                <td className="check-cell">
+                  <span className="check-name">{fault.expected_check_name ?? fault.expected_check}</span>
+                  <small className="check-id">{fault.expected_check}</small>
+                </td>
                 <td><span className={`status ${fault.detected ? "status-available" : "status-removed"}`}>{fault.detected ? "Oui" : "Non"}</span></td>
                 <td>{VERDICTS[fault.verdict] ?? fault.verdict}{fault.failing_checks.length ? ` (${fault.failing_checks.join(", ")})` : ""}</td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+      {evaluation.available && evaluation.insight_faults_note && (
+        <p className="muted small faults-note">{evaluation.insight_faults_note}</p>
       )}
     </section>
   );
