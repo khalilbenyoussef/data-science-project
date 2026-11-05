@@ -423,6 +423,15 @@ export interface IndicatorChoice {
   same_definition?: boolean;
 }
 
+export interface UserDataMode {
+  enabled: boolean;
+  switch_available: boolean;
+  llm_available: boolean;
+  provider: string | null;
+  suggested: boolean;
+  reason: string | null;
+}
+
 export interface ComparableKpi {
   id: string;
   name_fr: string;

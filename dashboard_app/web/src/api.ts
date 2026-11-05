@@ -1,7 +1,7 @@
 import type {
   AgentsTimeline, AskResult, ComparableKpi, ComparisonsResult, DetectResult, DryRunResult, RecommendationsResult, RunSummary, SourceData, SourceJob,
   SourceMappingInput,
-  SourcesList, Spec,
+  SourcesList, Spec, UserDataMode,
 } from "./types";
 
 export class ApiError extends Error {
@@ -93,6 +93,19 @@ function sourceBody(upload_id: string, name: string, mapping: SourceMappingInput
 
 export function dryRunSource(uploadId: string, name: string, mapping: SourceMappingInput): Promise<DryRunResult> {
   return request<DryRunResult>("/api/sources/dry-run", sourceBody(uploadId, name, mapping));
+}
+
+// « Vos données : IA externe » (choix par session, consentement obligatoire pour activer)
+export function fetchUserDataMode(sessionId: string): Promise<UserDataMode> {
+  return request<UserDataMode>(`/api/ask/user-data-mode?session_id=${encodeURIComponent(sessionId)}`);
+}
+
+export function setUserDataMode(sessionId: string, enabled: boolean, consent: boolean): Promise<UserDataMode> {
+  return request<UserDataMode>("/api/ask/user-data-mode", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, enabled, consent }),
+  });
 }
 
 export function confirmSource(

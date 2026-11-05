@@ -8,6 +8,7 @@ import {
   shortHash, statusLabel, unitLabel,
 } from "./format";
 import { SeeWaveButton } from "./waveNav";
+import { UserDataSwitch, type UserDataControl } from "./userDataMode";
 import {
   DEFINITION_STATUS, INFO_LABELS, METRIC_LABELS,
   PIPELINE_NODES, REVIEW_REASONS, chipLabel, chipNeedsReview, chipTitle, friendlyCaveat, friendlyDefinition,
@@ -777,8 +778,9 @@ export interface ChatMessage {
 }
 
 export function AskDock({
-  open, onClose, messages, busy, onAsk, suggestions, rules,
+  open, onClose, messages, busy, onAsk, suggestions, rules, userData,
 }: {
+  userData: UserDataControl;
   open: boolean;
   onClose: () => void;
   messages: ChatMessage[];
@@ -805,6 +807,7 @@ export function AskDock({
         <div>
           <strong>Ask Finova</strong>
           <span className="muted small">Réponses fondées sur les chiffres du tableau de bord</span>
+          <UserDataSwitch control={userData} />
         </div>
         <button className="icon-btn" onClick={onClose} aria-label="Fermer le chat">
           ×

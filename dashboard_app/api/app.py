@@ -23,13 +23,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from biflow.agents.ask import (
-    ChatRequest, SessionBudget, answer_chat, ask_settings, build_ask_llm,
+    ChatRequest, SessionBudget, answer_chat, ask_settings, available_ask_provider, build_ask_llm,
 )
 from biflow.config import ROOT, load_config, resolve
 from biflow.tools.dashboard_spec import COUNTRY_LABELS, PEERS, REFERENCE_PATH
 from biflow.tools.audit_text import template_text
 from biflow.tools.deliverables import load_context
 from biflow.tools.user_sources.data import UserData
+from dashboard_app.api.ask_mode import UserDataModes, create_ask_mode_router
 from dashboard_app.api.audit import create_audit_router
 from dashboard_app.api.pipeline import create_pipeline_router
 from dashboard_app.api.reports import create_reports_router
@@ -92,8 +93,12 @@ def create_app(
     ask_model: Any | None = None,
     sources_runner: Any | None = None,
     audit_dir: str | Path | None = None,
+    config: Mapping[str, Any] | None = None,
+    ask_user_model: Any | None = None,
+    ask_provider: str | None = None,
+    consent_log: str | Path | None = None,
 ) -> FastAPI:
-    cfg = load_config()
+    cfg = dict(config) if config is not None else load_config()
     dashboard = cfg.get("dashboard") or {}
     paths = cfg.get("paths") or {}
     spec_file = resolve(
@@ -333,10 +338,25 @@ def create_app(
     budget = SessionBudget(settings["max_calls_per_session"])
     chat_llm: dict[str, Any] = {}
 
-    def ask_llm() -> Any | None:
-        if "model" not in chat_llm:
-            chat_llm["model"] = ask_model if ask_model is not None else build_ask_llm(cfg)
-        return chat_llm["model"]
+    def ask_llm(with_user_tool: bool = False) -> Any | None:
+        """Deux modeles : sans l'outil utilisateur (defaut) et avec, pour les seules
+        sessions qui ont donne leur consentement."""
+        key = "user" if with_user_tool else "model"
+        if key not in chat_llm:
+            if with_user_tool:
+                chat_llm[key] = (ask_user_model if ask_user_model is not None else ask_model if ask_model is not None
+                                 else build_ask_llm(cfg, with_user_tool=True))
+            else:
+                chat_llm[key] = ask_model if ask_model is not None else build_ask_llm(cfg)
+        return chat_llm[key]
+
+    # « Vos donnees : IA externe » : choix par session, consentement obligatoire, en memoire
+    modes = UserDataModes(
+        switch_available=settings["user_data_llm_switch"], suggested=settings["suggest_user_data_llm"],
+        provider=(lambda: ask_provider) if ask_model is not None else (lambda: available_ask_provider(cfg)),
+        log_path=resolve(consent_log if consent_log is not None
+                         else Path(paths.get("logs", "outputs/logs")) / "user_data_consent.log"))
+    app.include_router(create_ask_mode_router(modes))
 
     def explain_reader(kpi_id: str, iso3: str, year: int, lang: str) -> str | None:
         """Explication stockee par l'Auditor (kpi_explanations), lecture seule."""
@@ -355,10 +375,13 @@ def create_app(
     def ask(payload: ChatRequest) -> dict[str, Any]:
         spec, source = resolve_spec(payload.iso3, payload.year)
         country = (spec.get("country") or {}).get("name") or "Tunisie"
+        # donnees utilisateur vers le LLM : uniquement si CETTE session a donne son consentement
+        consented = modes.enabled(payload.session_id) and modes.provider() is not None
         result = answer_chat(
             payload, lambda code, year: resolve_spec(code, year)[0],
-            iso3=_current_iso3(spec), year=_current_year(spec), llm=ask_llm(),
-            budget=budget, settings=settings, explain_reader=explain_reader, user_data=user_data,
+            iso3=_current_iso3(spec), year=_current_year(spec), llm=ask_llm(with_user_tool=consented),
+            budget=budget, settings={**settings, "allow_user_data_to_llm": consented},
+            explain_reader=explain_reader, user_data=user_data,
         )
         result.update({
             "iso3": _current_iso3(spec),

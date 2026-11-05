@@ -5,6 +5,7 @@ import {
 } from "./api";
 import { ChartView } from "./charts";
 import { UserChip } from "./ui";
+import { UserDataSwitch, type UserDataControl } from "./userDataMode";
 
 export { USER_CHIP_TEXT, UserChip } from "./ui";
 import type {
@@ -90,7 +91,7 @@ function StatusChip({ source }: { source: UserSource }) {
 // ------------------------------------------------------------------ page
 type View = { kind: "list" } | { kind: "wizard"; replace?: string } | { kind: "job"; jobId: string } | { kind: "data"; name: string };
 
-export function MyDataPage() {
+export function MyDataPage({ userData }: { userData: UserDataControl }) {
   const [view, setView] = useState<View>({ kind: "list" });
   const [list, setList] = useState<SourcesList | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -118,8 +119,14 @@ export function MyDataPage() {
           <h2>Mes données</h2>
           <p className="page-sub">
             Ajoutez vos propres fichiers CSV. Ils restent séparés des chiffres officiels : jamais
-            mélangés aux cartes, à l'audit officiel ni aux réponses d'Ask Finova.
+            mélangés aux cartes ni à l'audit officiel. Ask Finova peut y répondre, toujours étiquetés
+            « non vérifiée par BIFlow », en local par défaut.
           </p>
+          <p className="muted small mydata-hint">
+            Pour comparer vos chiffres aux données officielles, choisissez un indicateur officiel comparable
+            à l'étape 3.
+          </p>
+          <UserDataSwitch control={userData} />
         </div>
         <div className="page-head-badges">
           <UserChip />

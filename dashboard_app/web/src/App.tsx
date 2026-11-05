@@ -4,6 +4,7 @@ import { ApiError, askFinova, fetchSpec } from "./api";
 import { PageView } from "./pages";
 import { AskDock, ChatMessage, NoticeList } from "./ui";
 import { MyDataPage } from "./sources";
+import { ConsentDialog, useUserDataMode } from "./userDataMode";
 import { AuditPage } from "./audit";
 import { prettyDate } from "./format";
 import { WaveNavContext } from "./waveNav";
@@ -29,6 +30,7 @@ const NAV = [
 // conversation Ask Finova gardee pour la session du navigateur (sessionStorage)
 const CHAT_KEY = "finova.chat";
 const SESSION_KEY = "finova.session";
+const PROPOSED_KEY = "finova.userDataProposed";
 
 function readStored<T>(key: string, fallback: T): T {
   try {
@@ -88,6 +90,15 @@ export function App() {
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [askOpen, setAskOpen] = useState(false);
+  const userData = useUserDataMode(sessionId());
+  // configuration « suggérée » : la boîte de consentement est proposée une fois par session
+  // à l'ouverture d'Ask Finova ; la session reste locale tant que l'utilisateur n'a pas accepté
+  useEffect(() => {
+    if (!askOpen || !userData.mode?.suggested || userData.mode.enabled) return;
+    if (readStored<boolean>(PROPOSED_KEY, false)) return;
+    writeStored(PROPOSED_KEY, true);
+    userData.requestOn();
+  }, [askOpen, userData.mode]); // eslint-disable-line react-hooks/exhaustive-deps
   const [messages, setMessages] = useState<ChatMessage[]>(() => readStored(CHAT_KEY, []));
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
@@ -321,7 +332,7 @@ export function App() {
         </header>
 
         <main className="content">
-          {pageId === MYDATA && <MyDataPage />}
+          {pageId === MYDATA && <MyDataPage userData={userData} />}
           {pageId === AUDIT && <AuditPage />}
           {!LOCAL_PAGES.has(pageId) && loading && !spec && (
             <LoadingScreen
@@ -407,7 +418,9 @@ export function App() {
         onAsk={submitAsk}
         suggestions={suggestions}
         rules={rules}
+        userData={userData}
       />
+      <ConsentDialog control={userData} />
       {!askOpen && (
         <button className="ask-fab" onClick={() => setAskOpen(true)} aria-label="Ouvrir Ask Finova">
           Ask Finova

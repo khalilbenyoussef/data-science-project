@@ -408,10 +408,23 @@ fictif » dans chaque libellé ; Tunisie et Maroc, 2021-2024).
    officielle utilisée. Jamais écrites dans `docs/deliverables/`.
 6. **Ask Finova** : l'outil `get_user_indicator` lit vos données en lecture
    seule ; toute réponse qui les cite commence par « D'après vos données (non
-   vérifiées par BIFlow) ». Avec `llm.ask.allow_user_data_to_llm: false` (défaut),
-   une question sur vos données reçoit une réponse en mode simple, calculée
-   localement, et le panneau explique pourquoi ; aucune valeur utilisateur n'est
-   envoyée au LLM (ni outil, ni historique).
+   vérifiées par BIFlow) ». Par défaut, une question sur vos données reçoit une
+   réponse en mode simple, calculée localement, et le panneau explique pourquoi ;
+   aucune valeur utilisateur n'est envoyée au LLM (ni outil, ni historique). Le
+   badge « Vos données : traitement local » le rappelle en permanence.
+   **Interrupteur « Vos données : IA externe »** (panneau Ask Finova et page « Mes
+   données ») : l'activer ouvre une boîte de consentement (ce qui est envoyé : la
+   question et les valeurs de vos indicateurs utilisées pour répondre ; à qui : le
+   fournisseur configuré, Groq ou Gemini ; ce qui ne l'est pas : fichiers complets,
+   autres sources) ; il faut cocher « J'accepte… » puis « Activer ». Le choix vaut
+   pour cette session (l'onglet) seulement, reste en mémoire du serveur (perdu au
+   redémarrage, jamais écrit dans `config.yaml`) et se désactive d'un clic. Sans clé
+   IA, l'interrupteur est grisé. Chaque changement est consigné dans
+   `outputs/logs/user_data_consent.log` (date, session hachée, état, fournisseur ;
+   jamais la question ni une valeur). Administration : `llm.ask.allow_user_data_to_llm:
+   true` ne fait que *suggérer* l'option (la boîte est proposée à l'ouverture d'Ask
+   Finova, la session reste locale sans consentement) ; `llm.ask.user_data_llm_switch:
+   false` masque l'interrupteur.
 7. **PDF** : la case « Inclure l'annexe : vos données » ajoute une section
    séparée « Annexe : vos données » au rapport des constats (valeurs,
    comparaisons, pistes « à partir de vos données »), chaque valeur étiquetée.
@@ -427,8 +440,9 @@ fictif » dans chaque libellé ; Tunisie et Maroc, 2021-2024).
   colonne année. Pas encore de gouvernorat, d'agence ni de client.
 - **Données locales** : fichiers, mappings et entrepôt restent sur la machine
   (`data/`, `config/sources/`, ignorés par Git). Exception : si vous activez
-  `llm.ask.allow_user_data_to_llm`, les valeurs lues par Ask Finova sont envoyées
-  au fournisseur LLM configuré (Groq ou Gemini).
+  « Vos données : IA externe » (avec consentement, pour la session), la question
+  et les valeurs lues par Ask Finova sont envoyées au fournisseur LLM configuré
+  (Groq ou Gemini).
 - **Définitions déclarées, pas vérifiées** : BIFlow vérifie l'unité et la
   structure, pas que votre indicateur mesure la même population que le KPI
   officiel ; la comparaison reste indicative.
@@ -842,6 +856,8 @@ Le login est une démonstration d'interface (aucune authentification réelle).
 | GET | `/api/sources` | sources utilisateur : lignes, années, pays, score qualité, statut |
 | DELETE | `/api/sources/{name}` | retire la source (copie conservée) et lance le recalcul |
 | GET | `/api/sources/{name}/data` | valeurs publiées de la source (`fact`, source `user:<nom>`), lecture seule |
+| GET | `/api/ask/user-data-mode?session_id=` | « Vos données : IA externe » pour la session : état, fournisseur, raison si indisponible |
+| POST | `/api/ask/user-data-mode` | active (`consent: true` obligatoire) ou désactive l'option pour la session |
 | GET | `/api/sources/comparable-kpis` | KPI officiels proposés à l'étape « Indicateurs » (unité, définition, dénominateur) |
 | GET | `/api/sources/comparisons?iso3=&year=` | vos indicateurs face aux KPI officiels déclarés comparables, lecture seule |
 | GET | `/api/recommendations?iso3=&year=` | pistes officielles, et à part les pistes « à partir de vos données » |
@@ -867,8 +883,9 @@ absent des résultats d'outils du tour déclenche une régénération puis la r�
 déterministe. Le navigateur envoie les 10 derniers messages de la session et un
 budget d'appels LLM est tenu par session. Vos données (« Mes données ») ne sont lues
 que par l'outil `get_user_indicator` et toujours annoncées « D'après vos données (non
-vérifiées par BIFlow) » ; avec `llm.ask.allow_user_data_to_llm: false` (défaut), ces
-questions restent en mode simple, sans appel au LLM (voir « Mode banquier »). Sans clé : salutations, suggestions,
+vérifiées par BIFlow) » ; par défaut, ces questions restent en mode simple, sans appel
+au LLM, sauf si la session a activé « Vos données : IA externe » avec consentement
+(`GET`/`POST /api/ask/user-data-mode`, voir « Mode banquier »). Sans clé : salutations, suggestions,
 relances (« et en 2021 ? », « et le Maroc ? ») et formulations FR / EN / darija.
 
 Page « Mes données » (sources CSV de l'utilisateur, API locale) : le fichier
