@@ -116,7 +116,7 @@ def test_missing_unit_blocks_confirm_and_unknown_country_mapping(cfg, tmp_path):
     fixed = client.post("/api/sources/dry-run", json=request).json()
     assert fixed["missing_fields"] == [] and fixed["unmapped_countries"] == {} and fixed["mapped"] == 11
     assert fixed["indicators"][0] == {"code": "clients_exemple_fictif", "label": "Clients",
-                                      "unit": "count", "transform": "none"}
+                                      "unit": "count", "transform": "none", "comparable_kpi": None}
     bad = dict(request, mapping={**request["mapping"], "country_names": {"Royaume de Nulle Part": "XYZ"}})
     assert client.post("/api/sources/dry-run", json=bad).status_code == 400
 

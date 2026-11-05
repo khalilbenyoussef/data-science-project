@@ -419,6 +419,48 @@ export interface IndicatorChoice {
   label?: string;
   unit?: string | null;
   transform?: "none" | "percent_to_fraction";
+  comparable_kpi?: string | null;
+  same_definition?: boolean;
+}
+
+export interface ComparableKpi {
+  id: string;
+  name_fr: string;
+  unit: string;
+  definition: string | null;
+  denominator: string | null;
+}
+
+export interface ComparisonValue {
+  value: number;
+  display: string;
+  year: number;
+  unit: string;
+  chip?: string;
+  publication_status?: string;
+}
+
+export interface ComparisonRow {
+  indicator_code: string;
+  label: string;
+  unit: string;
+  kpi_id: string;
+  kpi: string;
+  definition: string | null;
+  denominator: string | null;
+  user: ComparisonValue | null;
+  official: ComparisonValue | null;
+  status: "ok" | "unit_mismatch" | "unknown_kpi" | "no_user_value" | "no_official_value";
+  same_year: boolean;
+  notes: string[];
+}
+
+export interface ComparisonsResult {
+  iso3: string;
+  year: number;
+  chip: string;
+  note: string;
+  rows: ComparisonRow[];
 }
 
 export interface SourceMappingInput {
@@ -434,7 +476,7 @@ export interface DryRunResult {
   name: string;
   layout: string;
   roles: Record<string, ColumnRole>;
-  indicators: { code: string; label: string; unit: string | null; transform: string }[];
+  indicators: { code: string; label: string; unit: string | null; transform: string; comparable_kpi?: string | null }[];
   country_names: Record<string, string>;
   missing_fields: { indicator: string; label: string; field: string }[];
   blocking: string[];

@@ -1,5 +1,5 @@
 import type {
-  AgentsTimeline, AskResult, DetectResult, DryRunResult, RecommendationsResult, RunSummary, SourceData, SourceJob,
+  AgentsTimeline, AskResult, ComparableKpi, ComparisonsResult, DetectResult, DryRunResult, RecommendationsResult, RunSummary, SourceData, SourceJob,
   SourceMappingInput,
   SourcesList, Spec,
 } from "./types";
@@ -121,6 +121,15 @@ export function fetchSourceData(name: string): Promise<SourceData> {
 
 export function fetchRuns(): Promise<{ runs: RunSummary[]; count: number }> {
   return request<{ runs: RunSummary[]; count: number }>("/api/runs");
+}
+
+export function fetchComparableKpis(): Promise<{ kpis: ComparableKpi[] }> {
+  return request<{ kpis: ComparableKpi[] }>("/api/sources/comparable-kpis");
+}
+
+export function fetchComparisons(iso3: string, year: number, signal?: AbortSignal): Promise<ComparisonsResult> {
+  return request<ComparisonsResult>(
+    `/api/sources/comparisons?iso3=${encodeURIComponent(iso3)}&year=${year}`, { signal });
 }
 
 export function fetchRecommendations(iso3: string, year: number, signal?: AbortSignal): Promise<RecommendationsResult> {

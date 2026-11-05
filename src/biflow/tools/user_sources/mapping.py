@@ -72,6 +72,9 @@ class IndicatorSpec(BaseModel):
     label: str = Field(min_length=1)
     unit: str = Field(min_length=1)          # unite des valeurs telles qu'ecrites dans le fichier
     transform: Literal["none", "percent_to_fraction", "fraction_to_percent"] = "none"
+    # KPI officiel declare comparable (meme unite apres conversion, meme definition
+    # confirmee par l'utilisateur) ; facultatif, sert seulement a l'affichage cote a cote
+    comparable_kpi: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{1,60}$")
 
     @model_validator(mode="after")
     def transform_matches_unit(self):
@@ -143,6 +146,8 @@ def fingerprint(columns) -> str:
 def slug(text: str) -> str:
     code = normalize_name(text).replace(" ", "_")
     code = re.sub(r"[^a-z0-9_]", "", code)
+    if len(code) > 61:  # libelle long : code tronque (les codes valides restent inchanges)
+        code = code[:58].rstrip("_")
     return code if re.match(r"[a-z]", code or "") else f"i_{code}" if code else "indicator"
 
 

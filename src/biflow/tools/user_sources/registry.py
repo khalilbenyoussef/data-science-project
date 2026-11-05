@@ -94,6 +94,9 @@ def register(mapping: SourceMapping, source_file: str | Path, cfg: Mapping[str, 
         shutil.copyfile(source_file, tmp)
         os.replace(tmp, target)
     data = mapping.model_dump(mode="json")
+    for spec in data["indicators"].values():  # champ facultatif : absent du YAML s'il est vide
+        if spec.get("comparable_kpi") is None:
+            spec.pop("comparable_kpi", None)
     data.update(file=_relative(target), confirmed_at=datetime.now().isoformat(timespec="seconds"))
     validate_mapping(data)
     path = mapping_path(mapping.name, cfg)

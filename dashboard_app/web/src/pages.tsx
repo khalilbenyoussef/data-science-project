@@ -4,6 +4,7 @@ import { PAGE_COPY, plainText } from "./copy";
 import { AgentsTimeline } from "./agents";
 import { PdfDownload } from "./pdf";
 import { Recommendations } from "./recommendations";
+import { UserComparisons } from "./comparisons";
 import { prettyDate } from "./format";
 import {
   AskInline, ChangesPanel, Insights, MetricStrip, MetricsGrid, NoticeList,
@@ -95,6 +96,7 @@ export function PageView({
           <Insights items={page.insights} />
           <ChangesPanel changes={page.changes} />
           {blockById("macro_context") && <Block block={blockById("macro_context")!} onAsk={onAsk} />}
+          <UserComparisons iso3={spec.country.iso3} year={spec.year} />
           <Recommendations iso3={spec.country.iso3} year={spec.year} />
         </>
       )}

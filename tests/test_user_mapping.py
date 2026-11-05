@@ -1,6 +1,8 @@
 """Proposition et validation du mapping des sources utilisateur (LLM simule)."""
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from biflow.tools.user_sources import UserSourceError
@@ -137,3 +139,5 @@ def test_fingerprint_ignores_order_and_case_but_not_names():
     assert fingerprint(["Pays", "Annee", "Valeur"]) == fingerprint(["valeur", "PAYS", "Année", "_line"])
     assert fingerprint(["Pays", "Annee", "Valeur"]) != fingerprint(["Pays", "Annee", "Montant"])
     assert slug("Clients microfinance (milliers)") == "clients_microfinance_milliers" and slug("2024") == "i_2024"
+    long = slug("Distributeurs (ATM) du réseau pour 100 000 adultes (exemple fictif)")
+    assert len(long) <= 58 and re.fullmatch(r"[a-z][a-z0-9_]{0,60}", long) and not long.endswith("_")

@@ -2990,3 +2990,105 @@ select {
   border-left: 3px solid rgba(21, 128, 61, 0.5);
   padding-left: 8px;
 }
+
+/* Etape « Indicateurs » : indicateur officiel comparable (facultatif) */
+.comparable-cell select {
+  max-width: 260px;
+}
+.comparable-definition {
+  margin-top: 6px;
+  max-width: 340px;
+}
+.comparable-definition p {
+  margin: 2px 0;
+}
+.required-check {
+  margin-top: 6px;
+  font-weight: 600;
+}
+.warning-text {
+  color: var(--accent-ink);
+}
+
+/* Vue d'ensemble : vos indicateurs face aux donnees officielles (bloc separe) */
+.user-comparisons {
+  border: 1px dashed rgba(21, 128, 61, 0.5);
+}
+.comparison-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.comparison-item {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.comparison-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.comparison-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.comparison-caption {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+.comparison-value {
+  font-size: 20px;
+  font-weight: 600;
+}
+.comparison-definition,
+.comparison-notes {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+.comparison-notes {
+  color: var(--accent-ink);
+}
+@media (max-width: 640px) {
+  .comparison-values {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Etape « Indicateurs » sur ecran etroit : une carte par indicateur */
+@media (max-width: 900px) {
+  .indicator-step .data-table thead {
+    display: none;
+  }
+  .indicator-step .data-table,
+  .indicator-step .data-table tbody,
+  .indicator-step .data-table tr,
+  .indicator-step .data-table td {
+    display: block;
+    width: 100%;
+  }
+  .indicator-step .data-table tr {
+    border-bottom: 1px solid var(--border);
+    padding: 8px 0;
+  }
+  .indicator-step .data-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  .indicator-step .data-table td code {
+    overflow-wrap: anywhere;
+  }
+  .indicator-step .comparable-cell select,
+  .indicator-step .comparable-definition {
+    max-width: 100%;
+  }
+}

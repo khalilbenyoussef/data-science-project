@@ -198,6 +198,26 @@ def _unit(value: Any) -> str | None:
                           "par 1 000 adultes, nombre ou monnaie).")
 
 
+def _comparable(spec: Mapping[str, Any], code: str, unit: str | None, transform: str) -> str | None:
+    """KPI officiel comparable : enregistre seulement si la case « même définition » est
+    cochee, si le KPI est officiel et si l'unite stockee est identique."""
+    kpi_id = spec.get("comparable_kpi")
+    if not kpi_id:
+        return None
+    if spec.get("same_definition") is not True:
+        return None  # case non cochee : le KPI comparable n'est pas enregistre
+    from biflow.tools.user_sources.comparisons import official_kpis
+
+    kpi = official_kpis().get(str(kpi_id))
+    if kpi is None:
+        raise UserSourceError(f"KPI officiel inconnu pour « {code} » : {kpi_id}")
+    stored = "fraction" if transform == "percent_to_fraction" else unit
+    if unit is not None and kpi["unit"] != stored:
+        raise UserSourceError(f"« {code} » ({stored}) et le KPI officiel {kpi_id} ({kpi['unit']}) n'ont pas la "
+                              "même unité : comparaison impossible.")
+    return str(kpi_id)
+
+
 def build_mapping(name: str, path: Path, df, detection: Mapping[str, Any], payload: Mapping[str, Any],
                   resolver: CountryResolver, cfg: Mapping[str, Any]) -> tuple[dict[str, Any], list[dict[str, str]]]:
     """(mapping dict, champs manquants). Unite jamais devinee : sans unite, le champ
@@ -285,6 +305,9 @@ def build_mapping(name: str, path: Path, df, detection: Mapping[str, Any], paylo
         if unit is None:
             missing.append({"indicator": code, "label": new_label, "field": "unit"})
         indicators[code] = {"label": new_label, "unit": unit or MISSING_UNIT, "transform": transform}
+        comparable = _comparable(spec, code, unit, transform)
+        if comparable:
+            indicators[code]["comparable_kpi"] = comparable
         if ind_cols:
             indicator_columns[label] = code
         elif indicator:
@@ -333,7 +356,8 @@ def evaluate(upload_path: Path, name: str, payload: Mapping[str, Any], cfg: Mapp
         "name": name, "layout": mapping.layout, "roles": _roles_from_mapping(data, columns),
         "indicators": [{"code": code, "label": spec["label"],
                         "unit": None if spec["unit"] == MISSING_UNIT else spec["unit"],
-                        "transform": spec["transform"]} for code, spec in data["indicators"].items()],
+                        "transform": spec["transform"], "comparable_kpi": spec.get("comparable_kpi")}
+                       for code, spec in data["indicators"].items()],
         "country_names": data["country_names"],
         "missing_fields": missing, "blocking": blocking,
         "rows_mapped_pct": report["mapped_pct"], "observations": report["observations"],

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ApiError, confirmSource, deleteSource, detectSource, dryRunSource, fetchSourceData, fetchSourceJob,
-  fetchSources,
+  ApiError, confirmSource, deleteSource, detectSource, dryRunSource, fetchComparableKpis, fetchSourceData,
+  fetchSourceJob, fetchSources,
 } from "./api";
 import { ChartView } from "./charts";
 import { UserChip } from "./ui";
 
 export { USER_CHIP_TEXT, UserChip } from "./ui";
 import type {
-  Chart, ColumnRole, DetectResult, DryRunResult, IndicatorChoice, SourceData, SourceJob,
+  Chart, ColumnRole, ComparableKpi, DetectResult, DryRunResult, IndicatorChoice, SourceData, SourceJob,
   SourceMappingInput, SourcesList, UserSource,
 } from "./types";
 
@@ -289,7 +289,12 @@ function Wizard({
     const chosen: Record<string, IndicatorChoice> = {};
     Object.entries(indicators).forEach(([code, item]) => {
       const unit = item.unit === "currency" ? (item.currency ? `currency:${item.currency.trim()}` : null) : item.unit;
-      chosen[code] = { label: item.label, unit, transform: item.transform ?? "none" };
+      chosen[code] = {
+        label: item.label, unit, transform: item.transform ?? "none",
+        // KPI comparable : envoye seulement avec la case « même définition » cochee
+        ...(item.comparable_kpi && item.same_definition
+          ? { comparable_kpi: item.comparable_kpi, same_definition: true } : {}),
+      };
     });
     return { roles, indicators: chosen, country_names: countryNames, replace: Boolean(replace) };
   };
@@ -563,6 +568,10 @@ function IndicatorStep({
   indicators: Record<string, IndicatorChoice & { currency?: string }>;
   setIndicators: (value: Record<string, IndicatorChoice & { currency?: string }>) => void;
 }) {
+  const [kpis, setKpis] = useState<ComparableKpi[] | null>(null);
+  useEffect(() => {
+    fetchComparableKpis().then((body) => setKpis(body.kpis)).catch(() => setKpis([]));
+  }, []);
   const update = (code: string, patch: Partial<IndicatorChoice & { currency?: string }>) =>
     setIndicators({ ...indicators, [code]: { ...indicators[code], ...patch } });
   return (
@@ -573,16 +582,19 @@ function IndicatorStep({
       </p>
       <table className="data-table">
         <thead>
-          <tr><th>Code</th><th>Libellé</th><th>Unité (obligatoire)</th><th>Conversion</th></tr>
+          <tr>
+            <th>Code</th><th>Libellé</th><th>Unité (obligatoire)</th><th>Conversion</th>
+            <th>Indicateur officiel comparable (facultatif)</th>
+          </tr>
         </thead>
         <tbody>
           {Object.entries(indicators).map(([code, item]) => (
             <tr key={code}>
-              <td><code>{code}</code></td>
-              <td>
+              <td data-label="Code"><code>{code}</code></td>
+              <td data-label="Libellé">
                 <input aria-label={`Libellé de ${code}`} value={item.label ?? ""} onChange={(event) => update(code, { label: event.target.value })} />
               </td>
-              <td>
+              <td data-label="Unité (obligatoire)">
                 <div className="unit-cell">
                   <select
                     aria-label={`Unité de ${code}`}
@@ -591,6 +603,7 @@ function IndicatorStep({
                     onChange={(event) => update(code, {
                       unit: event.target.value || null,
                       transform: event.target.value === "percent" ? item.transform : "none",
+                      comparable_kpi: null, same_definition: false,
                     })}
                   >
                     <option value="">— à choisir —</option>
@@ -602,21 +615,81 @@ function IndicatorStep({
                   )}
                 </div>
               </td>
-              <td>
+              <td data-label="Conversion">
                 {item.unit === "percent" ? (
                   <label className="inline-check">
                     <input type="checkbox" checked={item.transform === "percent_to_fraction"}
-                      onChange={(event) => update(code, { transform: event.target.checked ? "percent_to_fraction" : "none" })} />
+                      onChange={(event) => update(code, {
+                        transform: event.target.checked ? "percent_to_fraction" : "none",
+                        comparable_kpi: null, same_definition: false,
+                      })} />
                     pourcentage → fraction
                   </label>
                 ) : (
                   <span className="muted small">aucune</span>
                 )}
               </td>
+              <td data-label="Indicateur officiel comparable (facultatif)">
+                <ComparableChoice code={code} item={item} kpis={kpis} update={update} />
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// Unite stockee apres conversion : seule une unite identique permet une comparaison
+function storedUnit(item: IndicatorChoice & { currency?: string }): string | null {
+  if (!item.unit) return null;
+  if (item.unit === "currency") return item.currency ? `currency:${item.currency.trim()}` : null;
+  return item.transform === "percent_to_fraction" ? "fraction" : item.unit;
+}
+
+function ComparableChoice({
+  code, item, kpis, update,
+}: {
+  code: string;
+  item: IndicatorChoice & { currency?: string };
+  kpis: ComparableKpi[] | null;
+  update: (code: string, patch: Partial<IndicatorChoice & { currency?: string }>) => void;
+}) {
+  const unit = storedUnit(item);
+  if (!unit) return <span className="muted small">choisissez d'abord l'unité</span>;
+  if (kpis === null) return <span className="muted small">chargement…</span>;
+  const options = kpis.filter((kpi) => kpi.unit === unit);
+  if (options.length === 0) {
+    return <span className="muted small">aucun indicateur officiel dans cette unité</span>;
+  }
+  const chosen = options.find((kpi) => kpi.id === item.comparable_kpi) ?? null;
+  return (
+    <div className="comparable-cell">
+      <select
+        aria-label={`Indicateur officiel comparable à ${code}`}
+        value={chosen?.id ?? ""}
+        onChange={(event) => update(code, { comparable_kpi: event.target.value || null, same_definition: false })}
+      >
+        <option value="">aucun</option>
+        {options.map((kpi) => <option key={kpi.id} value={kpi.id}>{kpi.name_fr}</option>)}
+      </select>
+      {chosen && (
+        <div className="comparable-definition">
+          <p className="small"><strong>{chosen.name_fr}</strong> ({unitText(chosen.unit)})</p>
+          {chosen.definition && <p className="small muted">Définition officielle : {chosen.definition}</p>}
+          {chosen.denominator && <p className="small muted">Dénominateur : {chosen.denominator}</p>}
+          <label className="inline-check required-check">
+            <input type="checkbox" checked={item.same_definition === true}
+              onChange={(event) => update(code, { same_definition: event.target.checked })} />
+            Mon indicateur mesure la même chose (même population, même définition)
+          </label>
+          {!item.same_definition && (
+            <p className="small warning-text">
+              Case non cochée : l'indicateur comparable ne sera pas enregistré.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

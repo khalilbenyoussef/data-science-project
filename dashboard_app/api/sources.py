@@ -13,6 +13,8 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
 from biflow.tools.user_sources import UserSourceError
+from biflow.tools.user_sources.comparisons import comparisons, official_kpis
+from biflow.tools.user_sources.data import UserData
 from biflow.tools.user_sources.jobs import JobBusy, JobManager, Runner, pipeline_runner
 from biflow.tools.user_sources.service import (
     DEFAULT_PENDING_DIR, PendingUploads, SourceConflict, SourceNotFound, check_name, confirm,
@@ -100,6 +102,17 @@ def create_sources_router(cfg: Mapping[str, Any], *, warehouse: Path,
             return {"job_id": job["job_id"], "name": payload.name, "replaced": done["replaced"]}
 
         return guarded(run)
+
+    @router.get("/comparable-kpis")
+    def comparable_kpis() -> dict[str, Any]:
+        """KPI officiels proposes a l'etape « Indicateurs » (definition et denominateur)."""
+        return {"kpis": sorted(official_kpis().values(), key=lambda kpi: kpi["name_fr"])}
+
+    @router.get("/comparisons")
+    def user_comparisons(iso3: str = Query(..., pattern=r"^[A-Za-z]{3}$"),
+                         year: int = Query(..., ge=2000, le=2100)) -> dict[str, Any]:
+        """Vos indicateurs face aux KPI officiels declares comparables (lecture seule)."""
+        return comparisons(UserData(cfg, warehouse), warehouse, iso3.upper(), year, official_kpis())
 
     @router.get("/jobs/{job_id}")
     def job_status(job_id: str) -> dict[str, Any]:
