@@ -57,13 +57,13 @@ def test_widening_gap_difference_between_two_years_is_accepted():
 
 @pytest.mark.parametrize("text,claims,reason", [
     ("37,9 % des adultes avaient un compte en 2024.", [claim("account_ownership", "TUN", 2024, 37.9, "percent")],
-     "different de 37.8 publie"),
+     "différent de 37.8 publié"),
     ("En 2024, 37,8 % des adultes avaient un compte, et 52 % des femmes.", [ACCOUNT],
-     "nombre '52' du texte non justifie"),
-    ("L'ecart s'est creuse de 6,6 points.", [GAP24], "nombre '6,6' du texte non justifie"),
+     "nombre '52' du texte non justifié"),
+    ("L'ecart s'est creuse de 6,6 points.", [GAP24], "nombre '6,6' du texte non justifié"),
     ("Ecart de revenu 27,0 pts contre ecart de genre 23,0 pts : 4,0 pts de difference.",
      [claim("income_gap", "TUN", 2024, 27.0, "percentage_points"), GAP24], "nombre '4,0'"),
-    ("37,8 % en 2024.", [claim("account_ownership", "TUN", 2024, 37.8, "percentage_points")], "unite"),
+    ("37,8 % en 2024.", [claim("account_ownership", "TUN", 2024, 37.8, "percentage_points")], "unité"),
     ("37,8 % en 2023.", [claim("account_ownership", "TUN", 2023, 37.8, "percent")], "aucune ligne"),
     ("22,4 agences.", [claim("branch_density", "TUN", 2024, 22.4, "per_100k_adults")], "ligne blocked"),
     ("Epargne 40 %.", [claim("saving_rate", "TUN", 2024, 40.0, "percent")], "valeur indisponible"),

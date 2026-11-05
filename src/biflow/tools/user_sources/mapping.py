@@ -80,7 +80,7 @@ class IndicatorSpec(BaseModel):
     def transform_matches_unit(self):
         expected = TRANSFORMS[self.transform]
         if expected and self.unit != expected[0]:
-            raise ValueError(f"transform {self.transform} exige unit: {expected[0]} (declare : {self.unit})")
+            raise ValueError(f"transform {self.transform} exige unit: {expected[0]} (déclaré : {self.unit})")
         return self
 
     @property
@@ -132,7 +132,7 @@ class SourceMapping(BaseModel):
         targets = set(self.indicator_values.values()) | set(c.indicator_columns.values())
         unknown = sorted(targets - set(self.indicators))
         if unknown:
-            raise ValueError(f"indicateurs references sans definition (unite) : {unknown}")
+            raise ValueError(f"indicateurs références sans définition (unité) : {unknown}")
         return self
 
 
@@ -167,7 +167,7 @@ def _validate_role(df: pd.DataFrame, role: str, column: str, decimal: str, resol
         return None if ok >= 0.5 else f"{column!r} : seulement {ok:.0%} de pays reconnus"
     if role == "year":
         ok = sum(bool(YEAR_NAME.match(v)) for v in values) / len(values)
-        return None if ok >= 0.95 else f"{column!r} : {ok:.0%} d'annees a 4 chiffres"
+        return None if ok >= 0.95 else f"{column!r} : {ok:.0%} d'années à 4 chiffres"
     if role == "value":
         def numeric(v):
             try:
@@ -175,7 +175,7 @@ def _validate_role(df: pd.DataFrame, role: str, column: str, decimal: str, resol
             except ValueError:
                 return False
         ok = sum(numeric(v) for v in values) / len(values)
-        return None if ok >= 0.5 else f"{column!r} : {ok:.0%} de valeurs numeriques"
+        return None if ok >= 0.5 else f"{column!r} : {ok:.0%} de valeurs numériques"
     return None
 
 
@@ -205,10 +205,10 @@ def propose_mapping(name: str, file: str, df: pd.DataFrame, detection: Mapping[s
         evidence = [c["column"] for c in cand.get(role, []) if c["column"] not in roles.values()]
         chosen = next((c for c in by_name if c in evidence or role == "indicator"), None)
         if chosen:
-            origins[role] = "regle : synonyme de nom de colonne"
+            origins[role] = "règle : synonyme de nom de colonne"
         elif len(evidence) == 1 or (evidence and role == "country"):
             chosen = evidence[0]
-            origins[role] = "regle : valeurs reconnues"
+            origins[role] = "règle : valeurs reconnues"
         roles[role] = chosen
 
     needed = {"long": ("country", "year", "indicator", "value"), "wide_by_year": ("country",),
@@ -222,23 +222,23 @@ def propose_mapping(name: str, file: str, df: pd.DataFrame, detection: Mapping[s
             if not isinstance(column, str):
                 continue
             if column in roles.values():
-                origins[role] = f"suggestion LLM rejetee : colonne {column!r} deja utilisee"
+                origins[role] = f"suggestion LLM rejetée : colonne {column!r} déjà utilisée"
             else:
                 problem = _validate_role(df, role, column, decimal, resolver)
                 if problem is None:
                     roles[role] = column
-                    origins[role] = "LLM (valide par regles)"
+                    origins[role] = "LLM (validé par règles)"
                 else:
-                    origins[role] = f"suggestion LLM rejetee : {problem}"
+                    origins[role] = f"suggestion LLM rejetée : {problem}"
 
     questions: list[str] = []
     if layout is None:
-        raise UserSourceError("Structure non reconnue : il faut une colonne pays et une colonne annee "
-                              "(ou des colonnes nommees comme des annees). " + detection["evidence"])
+        raise UserSourceError("Structure non reconnue : il faut une colonne pays et une colonne année "
+                              "(ou des colonnes nommées comme des années). " + detection["evidence"])
     if not roles.get("country"):
         raise UserSourceError("Aucune colonne pays detectable (codes ISO3 ou noms de pays).")
     if layout != "wide_by_year" and not roles.get("year"):
-        raise UserSourceError("Aucune colonne annee detectable (annees a 4 chiffres).")
+        raise UserSourceError("Aucune colonne année détectable (années à 4 chiffres).")
 
     kind = next((c["kind"] for c in cand["country"] if c["column"] == roles["country"]), "name")
     mapping: dict[str, Any] = {
@@ -269,8 +269,8 @@ def propose_mapping(name: str, file: str, df: pd.DataFrame, detection: Mapping[s
         mapping["indicators"][code] = {"label": label, "unit": None, "transform": "none"}
         if layout != "wide_by_indicator" and (roles.get("indicator") or layout == "long"):
             mapping["indicator_values"][label] = code
-        questions.append(f"Unite de l'indicateur '{label}' ({code}) ? (ex. percent, fraction, count, usd) "
-                         "- jamais devinee")
+        questions.append(f"Unité de l'indicateur '{label}' ({code}) ? (ex. percent, fraction, count, usd) "
+                         "- jamais devinée")
     resolved, unresolved = resolver.resolve_all(df[roles["country"]].tolist(), kind)
     for value, reason in unresolved.items():
         questions.append(f"Pays non reconnu : {value!r} ({reason}) - indiquer le code ISO3 ou laisser exclu")
@@ -329,12 +329,12 @@ def llm_role_suggester(ask_json: Callable[..., Any]) -> Callable[[dict[str, Any]
     """Suggestion LLM limitee aux roles de colonnes (jamais d'unite ni de valeur)."""
     def suggest(context: dict[str, Any]) -> Mapping[str, str] | None:
         answer = ask_json(
-            "Voici les colonnes et un extrait d'un CSV. Pour chaque role manquant parmi "
+            "Voici les colonnes et un extrait d'un CSV. Pour chaque rôle manquant parmi "
             f"{context['missing_roles']}, donne le nom EXACT d'une colonne existante ou null. "
             'Reponds en JSON : {"country": ..., "year": ..., "indicator": ..., "value": ...}. '
             "Ne propose jamais d'unite.\n"
             f"Colonnes : {context['columns']}\nExtrait : {json.dumps(context['sample'], ensure_ascii=False)[:2000]}",
-            system="Tu identifies seulement le role des colonnes d'un fichier de donnees.", fallback=None)
+            system="Tu identifies seulement le rôle des colonnes d'un fichier de données.", fallback=None)
         if not isinstance(answer, dict):
             return None
         return {role: col for role, col in answer.items() if role in SYNONYMS and isinstance(col, str)}

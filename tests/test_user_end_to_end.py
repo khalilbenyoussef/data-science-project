@@ -69,7 +69,7 @@ def test_missing_unit_is_asked_never_guessed(cfg):
     report, script = dry(cfg, "wide_by_indicator_en.csv", "network", assume_yes=True)
     assert report["units_missing"] == ["bank_agents", "atm_count"]
     assert {i["unit"] for i in report["indicators"].values()} == {"A_DECLARER"}
-    assert "? Unite de l'indicateur 'bank_agents' (bank_agents) ? (ex. percent, fraction, count, usd) - jamais devinee" \
+    assert "? Unité de l'indicateur 'bank_agents' (bank_agents) ? (ex. percent, fraction, count, usd) - jamais devinée" \
         in script.lines
 
 

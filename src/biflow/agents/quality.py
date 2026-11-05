@@ -83,7 +83,7 @@ def _check_ranges(name: str, df: pd.DataFrame, cfg: dict) -> list[dict]:
                     _issue(
                         "negative_values",
                         "medium",
-                        f"[{name}] {negative} valeurs negatives dans les colonnes annees",
+                        f"[{name}] {negative} valeurs négatives dans les colonnes années",
                         count=negative,
                     )
                 )
@@ -192,7 +192,7 @@ def _check_schema(name: str, df: pd.DataFrame, source_cfg: dict) -> tuple[list[d
         years = [c for c in df.columns if YEAR_RE.fullmatch(str(c))]
         if not years:
             issues.append(_issue(
-                "missing_year_columns", "critical", "[fas] aucune colonne annee exploitable",
+                "missing_year_columns", "critical", "[fas] aucune colonne année exploitable",
             ))
         codes = df["SERIES_CODE"].astype("string").str.strip().str.upper() if "SERIES_CODE" in df else pd.Series(dtype="string")
         suffixes = set(codes.str.split(".", n=1).str[1].str.rsplit(".", n=1).str[0].dropna())
@@ -206,7 +206,7 @@ def _check_schema(name: str, df: pd.DataFrame, source_cfg: dict) -> tuple[list[d
     if not available:
         issues.append(_issue(
             "missing_indicator_coverage", "critical",
-            f"[{name}] aucun indicateur requis present (minimum : 1)",
+            f"[{name}] aucun indicateur requis présent (minimum : 1)",
         ))
     return issues, {
         "missing_required_columns": missing_columns,
@@ -296,7 +296,7 @@ def check_frame(
             _issue(
                 "duplicate_rows",
                 severity,
-                f"[{name}] {duplicates} lignes dupliquees ({dup_pct:.2f} %)",
+                f"[{name}] {duplicates} lignes dupliquées ({dup_pct:.2f} %)",
                 count=duplicates,
                 pct=dup_pct,
             )
@@ -403,7 +403,7 @@ def check_user_source(name: str, frame: pd.DataFrame, dry: Mapping[str, Any], cf
     conflicts = (dry.get("duplicates") or {}).get("conflicting_keys") or 0
     if conflicts:
         issues.append(_issue("duplicate_key", "critical",
-                             f"[{name}] {conflicts} cle(s) pays/annee/indicateur avec valeurs differentes",
+                             f"[{name}] {conflicts} clé(s) pays/année/indicateur avec valeurs différentes",
                              count=conflicts))
     counts: dict[str, int] = {}
     for issue in issues:
@@ -468,7 +468,7 @@ def _markdown(report: dict) -> str:
         "# Data Quality Report",
         "",
         f"Run : `{report.get('run_id')}` - snapshot `{report.get('snapshot_id')}` - "
-        f"cree le {report.get('created_at')}",
+        f"créé le {report.get('created_at')}",
         "",
         f"Score global : **{report['overall_score']:.2%}**",
         f"Quality gate : **{'PASS' if report['passed'] else 'FAIL'}**",
@@ -484,7 +484,7 @@ def _markdown(report: dict) -> str:
         )
     lines += ["", "## Issues", ""]
     if not report["issues"]:
-        lines.append("Aucune anomalie bloquante detectee.")
+        lines.append("Aucune anomalie bloquante détectée.")
     for issue in report["issues"]:
         lines.append(
             f"- **{issue['source']}** `{issue['code']}` ({issue['severity']}) : "
@@ -526,17 +526,17 @@ class QualityAgent(BaseAgent):
             for issue in report["issues"][:30]
         ]
         result = self.ask_json(
-            "Voici les anomalies detectees par le controle qualite. Propose un plan "
+            "Voici les anomalies détectées par le contrôle qualité. Propose un plan "
             'de remediation prioritaire en francais. Reponds en JSON : {"plan": ["etape 1", ...]}. '
             f"Score global : {report['overall_score']}. Anomalies : "
             f"{json.dumps(summary, ensure_ascii=False)}",
-            system="Tu es data steward. Tu priorises des corrections de qualite de donnees.",
+            system="Tu es data steward. Tu priorises des corrections de qualité de données.",
             fallback={},
         )
         if isinstance(result, dict) and isinstance(result.get("plan"), list):
             return [str(step) for step in result["plan"]][:8]
         fallback = [
-            "Corriger en priorite les anomalies critiques (cles dupliquees, source vide).",
+            "Corriger en priorité les anomalies critiques (clés dupliquées, source vide).",
             "Documenter les colonnes structurellement vides au lieu de les supprimer.",
             "Verifier les codes pays inconnus et les valeurs hors plage avant l'ETL.",
         ]

@@ -13,6 +13,7 @@ from typing import Any, Mapping
 
 import duckdb
 
+from biflow.tools.audit_text import fr_number
 from biflow.tools.user_sources import UserSourceError
 from biflow.tools.user_sources.canonical import indicator_code
 from biflow.tools.user_sources.countries import normalize_name
@@ -35,7 +36,8 @@ def unit_text(unit: str | None) -> str:
 
 def display(value: float, unit: str | None) -> str:
     """Valeur telle que stockee (arrondie a 2 decimales pour l'affichage), suivie de l'unite."""
-    number = f"{round(float(value), 2):.2f}".rstrip("0").rstrip(".")
+    text = f"{round(float(value), 2):.2f}".rstrip("0").rstrip(".")
+    number = fr_number(float(value), len(text.split(".")[1]) if "." in text else 0)
     suffix = unit_text(unit)
     return f"{number} {suffix}".strip()
 

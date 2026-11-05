@@ -57,7 +57,7 @@ def make_check(check_id: str, category: str, result: str, detail: str,
     """affects_publication=False : information (ex. variation entre vagues),
     sans effet sur le statut de publication des lignes citees."""
     if result not in ("pass", "warn", "fail"):
-        raise ValueError(f"resultat de controle invalide : {result}")
+        raise ValueError(f"résultat de contrôle invalide : {result}")
     return {"check_id": check_id, "category": category, "result": result,
             "detail": detail, "affected_rows": [dict(row) for row in affected_rows],
             "affects_publication": affects_publication}
@@ -118,7 +118,7 @@ def kpi_inputs(kpi: Mapping[str, Any]) -> list[dict[str, str]]:
     kind, args = parse_formula(kpi)
     values = list(args) if kind == "gap" else [w["dimension_value"]]
     if kind == "gap" and values != [w["dimension_value"], w.get("subtrahend_dimension_value")]:
-        raise ValueError("formule d'ecart incoherente avec warehouse")
+        raise ValueError("formule d'écart incohérente avec warehouse")
     return [{"source": w["source"], "indicator_code": w["indicator_code"],
              "dimension": w["dimension"], "dimension_value": value} for value in values]
 
@@ -190,17 +190,17 @@ def recompute_checks(con, catalog: Mapping[str, Any], rows: list[dict[str, Any]]
         if found is None:
             if exp["value"] is not None:
                 null_issues.append(_ref(row, expected=exp["value"], found=None,
-                                        reason="valeur calculable mais publiee NULL"))
+                                        reason="valeur calculable mais publiée NULL"))
             elif published:
                 null_issues.append(_ref(row, found=None, reason="statut available sans valeur"))
         elif exp["value"] is None:
             null_issues.append(_ref(row, expected=None, found=found,
-                                    reason=f"valeur publiee sans observation valide ({exp['reason']})"))
+                                    reason=f"valeur publiée sans observation valide ({exp['reason']})"))
         else:
             if abs(found - exp["value"]) > tolerance:
                 mismatched.append(_ref(row, expected=exp["value"], found=found))
             if not published:
-                null_issues.append(_ref(row, found=found, reason="valeur presente mais statut "
+                null_issues.append(_ref(row, found=found, reason="valeur présente mais statut "
                                         f"{row.get('availability_status')}"))
 
     configured = [p for p in peers if p != focus]
@@ -239,8 +239,8 @@ def recompute_checks(con, catalog: Mapping[str, Any], rows: list[dict[str, Any]]
 
     checks = [
         make_check("A1_recomputed_values", "recomputation", "fail" if mismatched or formula_issues else "pass",
-                   f"{len(recomputed)} lignes pays recalculees depuis fact (tolerance {tolerance:g}) ; "
-                   f"{len(mismatched)} ecart(s), {len(formula_issues)} formule(s) non reconnue(s)",
+                   f"{len(recomputed)} lignes pays recalculées depuis fact (tolérance {tolerance:g}) ; "
+                   f"{len(mismatched)} écart(s), {len(formula_issues)} formule(s) non reconnue(s)",
                    mismatched + formula_issues),
         make_check("A2_unavailable_rows_are_null", "recomputation", "fail" if null_issues else "pass",
                    "Lignes indisponibles : valeur NULL et observation reellement absente ou invalide "
@@ -249,8 +249,8 @@ def recompute_checks(con, catalog: Mapping[str, Any], rows: list[dict[str, Any]]
                    f"Lignes PEERS = moyenne simple des pairs disponibles ({', '.join(configured)}) ; "
                    f"{len(peer_issues)} anomalie(s)", peer_issues),
         make_check("A4_row_completeness", "recomputation", "fail" if completeness else "pass",
-                   f"{len(expected_keys)} lignes attendues (KPI x pays x annees valides), "
-                   f"{len(rows)} presentes ; {len(completeness)} anomalie(s)", completeness),
+                   f"{len(expected_keys)} lignes attendues (KPI x pays x années valides), "
+                   f"{len(rows)} présentes ; {len(completeness)} anomalie(s)", completeness),
     ]
     return checks, recomputed
 
@@ -352,7 +352,7 @@ class RawSources:
         matches = numeric.index == key
         count = int(matches.sum())
         if count != 1:
-            return {**out, "error": f"{count} enregistrement(s) brut(s) pour la cle"}
+            return {**out, "error": f"{count} enregistrement(s) brut(s) pour la clé"}
         raw_value = numeric.loc[matches, column].iloc[0]
         out["raw_text"] = str(text.loc[matches, column].iloc[0])
         for name in ("codewb", "SERIES_CODE"):  # code tel qu'ecrit dans le fichier (alias inclus)
@@ -389,13 +389,13 @@ def _lookup_user(self, fact_key: list) -> dict[str, Any]:
     out.update(key={"line": int(row.line), "column": row.raw_column, "country": row.country_raw},
                column=row.raw_column, raw_text=cell)
     if cell is None or cell != row.raw_value:
-        return {**out, "error": f"cellule ligne {row.line} colonne {row.raw_column!r} differente du mapping"}
+        return {**out, "error": f"cellule ligne {row.line} colonne {row.raw_column!r} différente du mapping"}
     code = indicator.split(".", 1)[1]
     spec = data["mapping"].indicators[code]
     try:
         out["raw_value"] = USER_CONVERSIONS[spec.transform](_parse_declared(cell, data["mapping"].read.decimal))
     except (ValueError, KeyError):
-        return {**out, "error": f"valeur brute non numerique {cell!r}"}
+        return {**out, "error": f"valeur brute non numérique {cell!r}"}
     out["transform"] = spec.transform
     return out
 
@@ -429,7 +429,7 @@ def user_fact_check(con, raw: RawSources, lineage: Mapping[str, Any]) -> dict[st
                                "found": found.get(key)})
     return make_check("A6_user_source_facts", "recomputation", "fail" if issues else "pass",
                       f"Sources utilisateur {', '.join(checked) or 'aucune'} : faits identiques aux observations "
-                      f"du mapping relues dans le snapshot ; {len(issues)} ecart(s)", issues[:50])
+                      f"du mapping relues dans le snapshot ; {len(issues)} écart(s)", issues[:50])
 
 
 def raw_to_fact_check(recomputed: Mapping[tuple, Mapping[str, Any]], raw: RawSources,
@@ -451,12 +451,12 @@ def raw_to_fact_check(recomputed: Mapping[tuple, Mapping[str, Any]], raw: RawSou
             elif transform not in ("identity", "declared_mapping") or found["raw_value"] != item["value"]:
                 issues.append({"kpi_id": kpi_id, "iso3": iso3, "year": year, "fact_key": list(fact_key),
                                "expected": found["raw_value"], "found": item["value"],
-                               "reason": f"fact.value different du brut (transformation {transform})"})
+                               "reason": f"fact.value différent du brut (transformation {transform})"})
     check = make_check(
         "A5_raw_to_fact", "recomputation", "fail" if issues else "pass",
-        f"{len(lookups)} faits d'entree compares au fichier brut du snapshot "
+        f"{len(lookups)} faits d'entrée comparés au fichier brut du snapshot "
         "(Findex : fraction identique ; FAS, WDI : valeur identique) ; "
-        f"{len(issues)} ecart(s)", issues)
+        f"{len(issues)} écart(s)", issues)
     return check, lookups
 
 
@@ -492,14 +492,14 @@ def unit_checks(rows: list[dict[str, Any]], catalog: Mapping[str, Any]) -> list[
         if low is None and user:
             continue  # unite declaree par l'utilisateur : pas de borne connue
         if low is None:
-            unit_issues.append(_ref(row, found=kpi["unit"], reason="unite sans bornes declarees"))
+            unit_issues.append(_ref(row, found=kpi["unit"], reason="unité sans bornes déclarées"))
         elif row["value"] is not None and not (low <= row["value"] <= high):
             range_issues.append(_ref(row, found=row["value"], reason=f"hors [{low}, {high}]"))
     return [
         make_check("B1_one_unit_per_kpi", "units", "fail" if unit_issues else "pass",
-                   f"Unite de chaque ligne = unite du catalogue ; {len(unit_issues)} anomalie(s)", unit_issues),
+                   f"Unité de chaque ligne = unité du catalogue ; {len(unit_issues)} anomalie(s)", unit_issues),
         make_check("B2_value_ranges", "units", "fail" if range_issues else "pass",
-                   "percent dans [0,100], points de % dans [-100,100], densites >= 0 ; "
+                   "percent dans [0,100], points de % dans [-100,100], densités >= 0 ; "
                    f"{len(range_issues)} anomalie(s)", range_issues),
     ]
 
@@ -521,14 +521,14 @@ def entity_checks(con, rows: list[dict[str, Any]], focus: str, peers: list[str])
         if iso3 not in allowed:
             reasons.append("hors pays focus et pairs configures")
         if is_aggregate(iso3) or not is_country(iso3):
-            reasons.append("agregat ou code non-pays")
+            reasons.append("agrégat ou code non-pays")
         if dim.get(iso3) not in (None, (True, False)):
             reasons.append(f"country_dim is_country/is_aggregate = {dim.get(iso3)}")
         if reasons:
             entity_issues.append(_ref(row, reason="; ".join(reasons)))
     return [
         make_check("B3_country_entities_only", "entities", "fail" if entity_issues else "pass",
-                   f"Aucun agregat ni code non-pays hors PEERS ; {len(entity_issues)} ligne(s) en cause",
+                   f"Aucun agrégat ni code non-pays hors PEERS ; {len(entity_issues)} ligne(s) en cause",
                    entity_issues),
         make_check("B4_peers_are_configured_peers", "entities", "fail" if peer_issues else "pass",
                    f"PEERS couvre exactement {', '.join(peers)} ; {len(peer_issues)} anomalie(s)", peer_issues),
@@ -556,7 +556,7 @@ def provenance_checks(con, rows: list[dict[str, Any]], *, run_id: str | None, re
                            "expected": expected_snapshot, "reason": "absent de l'index"})
     elif index_entry.get("status") not in ("pending", "published"):
         ids_issues.append({"artifact": "snapshots/index.json", "field": "status",
-                           "found": index_entry.get("status"), "reason": "candidat ni pending ni publie"})
+                           "found": index_entry.get("status"), "reason": "candidat ni pending ni publié"})
     elif index_entry.get("status") == "pending" and index_entry.get("run_id") != run_id:
         ids_issues.append({"artifact": "snapshots/index.json", "field": "run_id",
                            "expected": run_id, "found": index_entry.get("run_id")})
@@ -590,7 +590,7 @@ def provenance_checks(con, rows: list[dict[str, Any]], *, run_id: str | None, re
     tables = outputs.get("warehouse_content_tables") or []
     digest_issues = []
     if not recorded or not tables:
-        digest_issues.append({"reason": "aucune empreinte de contenu enregistree dans lineage.json"})
+        digest_issues.append({"reason": "aucune empreinte de contenu enregistrée dans lineage.json"})
     else:
         try:
             observed = content_digest(con, tables)
@@ -603,13 +603,13 @@ def provenance_checks(con, rows: list[dict[str, Any]], *, run_id: str | None, re
     return [
         make_check("B5_snapshot_and_run_ids", "provenance", "fail" if ids_issues else "pass",
                    f"snapshot_id {expected_snapshot} et run_id {reference_run} identiques dans index, lineage, "
-                   f"rapport qualite et kpi_values ; {len(ids_issues)} anomalie(s)", ids_issues),
+                   f"rapport qualité et kpi_values ; {len(ids_issues)} anomalie(s)", ids_issues),
         make_check("B6_source_hashes", "provenance", "fail" if hash_issues else "pass",
-                   "SHA-256 des sources identiques : rapport qualite = lineage = manifeste = nom et contenu "
-                   f"du blob ; {len(hash_issues)} source(s) en ecart", hash_issues),
+                   "SHA-256 des sources identiques : rapport qualité = lineage = manifeste = nom et contenu "
+                   f"du blob ; {len(hash_issues)} source(s) en écart", hash_issues),
         make_check("B7_warehouse_content_digest", "provenance", "fail" if digest_issues else "pass",
-                   f"Empreinte du contenu ({', '.join(tables) or 'aucune table'}) recalculee "
-                   f"independamment ; {len(digest_issues)} anomalie(s)", digest_issues),
+                   f"Empreinte du contenu ({', '.join(tables) or 'aucune table'}) recalculée "
+                   f"indépendamment ; {len(digest_issues)} anomalie(s)", digest_issues),
     ]
 
 
@@ -627,7 +627,7 @@ def catalog_checks(rows: list[dict[str, Any]], catalog: Mapping[str, Any], catal
                 or (kpi.get("formula") or {}).get("from_fact") != "value"):
             issues.append({"kpi_id": kpi_id, "reason": "user_declared hors source user:* ou formule autre que value"})
         if kpi["warehouse"]["indicator_code"] in FINDEX_UNVERIFIED:
-            issues.append({"kpi_id": kpi_id, "reason": f"code non verifie {kpi['warehouse']['indicator_code']}"})
+            issues.append({"kpi_id": kpi_id, "reason": f"code non vérifié {kpi['warehouse']['indicator_code']}"})
         evidence = verification.get("evidence") or []
         if not evidence or any(ref not in references for ref in evidence):
             issues.append({"kpi_id": kpi_id, "reason": f"preuve absente ou inconnue : {evidence}"})
@@ -638,11 +638,11 @@ def catalog_checks(rows: list[dict[str, Any]], catalog: Mapping[str, Any], catal
                     or r.get("catalog_version") != catalog.get("catalog_version")
                     or r.get("user_catalog_sha256") != user_catalog_sha256})
     for kpi_id, digest, version in stale:
-        issues.append({"kpi_id": kpi_id, "reason": "kpi_values calcule avec un autre catalogue",
+        issues.append({"kpi_id": kpi_id, "reason": "kpi_values calculé avec un autre catalogue",
                        "expected": [catalog.get("catalog_version"), catalog_sha256], "found": [version, digest]})
     return [make_check("B8_catalog_definitions", "catalog", "fail" if issues else "pass",
-                       f"Catalogue {catalog.get('catalog_version')} : aucune definition provisoire ni code "
-                       f"non verifie, preuves presentes, hash identique a kpi_values ; {len(issues)} anomalie(s)",
+                       f"Catalogue {catalog.get('catalog_version')} : aucune définition provisoire ni code "
+                       f"non vérifié, preuves présentes, hash identique à kpi_values ; {len(issues)} anomalie(s)",
                        issues)]
 
 
@@ -703,12 +703,12 @@ def caveat_checks(rows: list[dict[str, Any]], catalog: Mapping[str, Any], qualit
                    f"Vague Findex partielle {sorted(partial_years)} : couverture pays incomplete ; "
                    f"{len(partial_wave)} valeur(s) concernee(s)", partial_wave),
         make_check("C2_partial_peer_coverage", "caveat", "warn" if partial_peers else "pass",
-                   f"Moyenne des pairs calculee sans tous les pairs ; {len(partial_peers)} ligne(s)", partial_peers),
+                   f"Moyenne des pairs calculée sans tous les pairs ; {len(partial_peers)} ligne(s)", partial_peers),
         make_check("C3_input_quality_findings", "caveat", "warn" if findings else "pass",
-                   "Diagnostics du rapport qualite portant exactement sur une entree d'un KPI ; "
+                   "Diagnostics du rapport qualité portant exactement sur une entrée d'un KPI ; "
                    f"{len(findings)} constat(s)", findings),
         make_check("C4_within_survey_noise", "caveat", "warn" if noise else "pass",
-                   f"Variations d'une vague a l'autre inferieures a {min_change_pp:g} pt (Findex : environ "
+                   f"Variations d'une vague à l'autre inférieures à {min_change_pp:g} pt (Findex : environ "
                    "1 000 entretiens par pays, aucune erreur type dans le fichier) : a presenter comme "
                    f"\"dans le bruit d'enquete\" ; {len(noise)} variation(s)", noise, affects_publication=False),
     ]

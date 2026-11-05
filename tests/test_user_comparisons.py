@@ -116,7 +116,7 @@ def test_same_year_comparison_with_chip_and_definition(setup):
     assert set(rows) == {"atm_density", "branch_density", "account_ownership"}  # « sans » : aucun bloc
     atm = rows["atm_density"]
     assert atm["status"] == "ok" and atm["same_year"] and atm["notes"] == []
-    assert atm["user"] == {"value": 33.25, "display": "33.25 pour 100 000 adultes", "year": 2024,
+    assert atm["user"] == {"value": 33.25, "display": "33,25 pour 100 000 adultes", "year": 2024,
                            "unit": "per_100k_adults", "chip": USER_CHIP}
     assert atm["official"]["value"] == 30.1 and atm["official"]["year"] == 2024
     assert atm["definition"] and atm["denominator"]

@@ -145,7 +145,7 @@ def test_spec_exposes_six_pages_and_never_approves(spec):
 def test_catalog_values_deltas_and_review_flags(spec):
     account = spec.metric("account_ownership")
     assert account.value == pytest.approx(37.84)
-    assert account.display == "37.8 %"
+    assert account.display == "37,8 %"
     assert account.provider == "semantic"
     assert account.delta is not None
     assert account.delta.unit == "percentage_points"
@@ -354,11 +354,12 @@ def test_unknown_fact_reference_fails_closed(spec):
 
 
 @pytest.mark.parametrize("value,unit,expected", [
-    (37.84, "percent", "37.8 %"),
-    (1.04, "percentage_points", "+1.0 pt"),
-    (35.44, "per_100k_adults", "35.44 / 100k adultes"),
-    (3.107, "TND_per_USD", "3.107 TND/USD"),
-    (119.0, "index_2017_100", "119.0"),
+    (37.84, "percent", "37,8 %"),
+    (1063.33, "per_1k_adults", "1\u202f063,3 / 1 000 adultes"),
+    (1.04, "percentage_points", "+1,0 pt"),
+    (35.44, "per_100k_adults", "35,44 / 100k adultes"),
+    (3.107, "TND_per_USD", "3,107 TND/USD"),
+    (119.0, "index_2017_100", "119,0"),
     (None, "percent", "Indisponible"),
 ])
 def test_format_value(value, unit, expected):

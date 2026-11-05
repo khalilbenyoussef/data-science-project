@@ -37,8 +37,8 @@ def test_relative_threshold_for_non_percent_units():
     rec = result["recommendations"][0]
     assert rec["kind"] == USER_KIND and rec["user_data"] is True
     assert rec["text"].startswith("Piste à explorer (à partir de vos données) : ")
-    assert "30.8 pour 100 000 adultes (données utilisateur, non vérifiées par BIFlow)" in rec["text"]
-    assert "35.4 pour 100 000 adultes" in rec["text"] and "13.1 % de moins en valeur relative" in rec["text"]
+    assert "30,8 pour 100 000 adultes (données utilisateur, non vérifiées par BIFlow)" in rec["text"]
+    assert "35,4 pour 100 000 adultes" in rec["text"] and "13,1 % de moins en valeur relative" in rec["text"]
     assert rec["text"].endswith(f"{INDICATIVE}. Association, pas causalité.")
     assert rec["trigger"]["threshold"] == 10
     assert run(comp_row("atm", "per_100k_adults", 33.0, 35.44))["recommendations"] == []
@@ -46,10 +46,10 @@ def test_relative_threshold_for_non_percent_units():
 
 def test_points_threshold_for_percent_and_both_directions():
     above = run(comp_row("mobile", "percent", 45.0, 37.8))["recommendations"][0]  # 7.2 pts de plus
-    assert "7.2 pts de plus" in above["text"] and "en valeur relative" not in above["text"]
+    assert "7,2 pts de plus" in above["text"] and "en valeur relative" not in above["text"]
     assert "ce qui distingue votre valeur" in above["text"]
     below = run(comp_row("mobile", "percent", 32.8, 37.8))["recommendations"][0]  # 5.0 pts : seuil inclus
-    assert "5.0 pts de moins" in below["text"] and "en dessous de la référence officielle" in below["text"]
+    assert "5,0 pts de moins" in below["text"] and "en dessous de la référence officielle" in below["text"]
     assert run(comp_row("mobile", "percent", 33.0, 37.8))["recommendations"] == []
 
 

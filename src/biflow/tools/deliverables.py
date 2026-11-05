@@ -21,6 +21,7 @@ import duckdb
 import yaml
 
 from biflow.config import ROOT, load_config, path_of, resolve
+from biflow.tools.audit_text import fr_number
 from biflow.tools.dashboard_spec import COUNTRY_LABELS
 from biflow.tools.kpi import DEFAULT_CATALOG, load_catalog
 
@@ -259,11 +260,11 @@ def fmt_int(value: Any) -> str:
 def fmt_num(value: Any, decimals: int = 1) -> str:
     if not isinstance(value, (int, float)):
         return NA
-    return f"{float(value):,.{decimals}f}".replace(",", " ")
+    return fr_number(float(value), decimals)
 
 
 def fmt_s(value: Any) -> str:
-    return f"{float(value):.2f} s" if isinstance(value, (int, float)) else NA
+    return f"{fr_number(float(value), 2)} s" if isinstance(value, (int, float)) else NA
 
 
 def md_cell(value: Any) -> str:

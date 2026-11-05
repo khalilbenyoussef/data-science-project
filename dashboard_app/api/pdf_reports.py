@@ -26,6 +26,7 @@ from reportlab.platypus import (
     KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
 
+from biflow.tools.audit_text import fr_number
 from biflow.tools.deliverables import NA, STALE, STATUS_FR, Context, agent_summaries
 from biflow.tools.user_sources.data import USER_CHIP
 
@@ -36,7 +37,7 @@ RESULTS = {"pass": "réussi", "warn": "avertissement", "fail": "échec"}
 UNITS = {"percent": "%", "percentage_points": "pts", "per_100k_adults": "pour 100 000 adultes",
          "per_1k_adults": "pour 1 000 adultes", "percent_of_gdp": "% du PIB"}
 PUBLICATION = {"approved": "approuvée", "approved_with_review_note": "avec réserve", "blocked": "bloquée"}
-REPLACE = {"≥": ">=", "≤": "<=", "−": "-", " ": " ", " ": " ", "→": "->", "✓": "oui", "✗": "non"}
+REPLACE = {"≥": ">=", "≤": "<=", "−": "-", "\u202f": "\u00a0", " ": " ", "→": "->", "✓": "oui", "✗": "non"}
 
 
 def clean(value: Any) -> str:
@@ -50,8 +51,7 @@ def n(value: Any, decimals: int = 0) -> str:
     """Nombre au format francais (espace des milliers, virgule decimale)."""
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return NA
-    text = f"{value:,.{decimals}f}".replace(",", " ").replace(".", ",")
-    return text
+    return fr_number(value, decimals, thousands="\u00a0")
 
 
 def _styles() -> dict[str, ParagraphStyle]:

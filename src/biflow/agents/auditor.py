@@ -79,15 +79,15 @@ class AuditorAgent(BaseAgent):
         specs = []
         if latest("account_ownership", focus, 1):
             year, = latest("account_ownership", focus, 1)
-            specs.append(("Detention de compte", by_key[("account_ownership", focus, year)], None, None))
+            specs.append(("Détention de compte", by_key[("account_ownership", focus, year)], None, None))
         if len(latest("gender_gap", focus, 2)) == 2:
             before, after = latest("gender_gap", focus, 2)
             left, right = by_key[("gender_gap", focus, before)], by_key[("gender_gap", focus, after)]
-            specs.append(("Ecart hommes-femmes", right, left, explain_change(left, right, min_change_pp)))
+            specs.append(("Écart hommes-femmes", right, left, explain_change(left, right, min_change_pp)))
         common = sorted(set(latest("branch_density", focus)) & set(latest("branch_density", "PEERS")))
         if common:
             left, right = by_key[("branch_density", "PEERS", common[-1])], by_key[("branch_density", focus, common[-1])]
-            specs.append(("Densite d'agences et pairs", right, left, explain_change(left, right, min_change_pp)))
+            specs.append(("Densité d'agences et pairs", right, left, explain_change(left, right, min_change_pp)))
 
         ask = self._ask()
         out = []
@@ -96,7 +96,7 @@ class AuditorAgent(BaseAgent):
                          for lang in ("fr", "en")}
             french = rephrase(templates["fr"], "fr", ask if len(out) < budget else None)
             self.log.info("[auditor] exemple '%s' : texte %s%s", title, french["origin"],
-                          f" (LLM ecarte : nombres non justifies {french['unsupported_numbers']})"
+                          f" (LLM écarté : nombres non justifiés {french['unsupported_numbers']})"
                           if french.get("llm_status") == "rejected_ungrounded" else "")
             out.append({
                 "title": title, "kpi_id": record["kpi_id"], "iso3": record["iso3"], "year": record["year"],
@@ -244,8 +244,8 @@ class AuditorAgent(BaseAgent):
             rejected = [i for i in insight_audit if not i["accepted"]]
             checks.append(make_check(
                 "F1_insights_grounded", "insight", "warn" if rejected else "pass",
-                f"{len(insight_audit)} insight(s) audite(s), {len(rejected)} rejete(s) : claims conformes a "
-                "kpi_values (valeur, unite, annee, ligne approuvee) et nombres du texte justifies",
+                f"{len(insight_audit)} insight(s) audité(s), {len(rejected)} rejeté(s) : claims conformes à "
+                "kpi_values (valeur, unité, année, ligne approuvée) et nombres du texte justifiés",
                 [{"insight_id": i["insight_id"], "reasons": i["reasons"]} for i in rejected],
                 affects_publication=False))
             for item in rejected:
@@ -274,7 +274,7 @@ class AuditorAgent(BaseAgent):
             if check["result"] == "fail":
                 self.log.warning("[auditor] %s : %s", check["check_id"], check["detail"])
         notes = dict(ctx.get("llm_notes") or {})
-        notes["auditor"] = f"verdict {verdict} ({counts['fail']} echec(s), {counts['warn']} alerte(s))"
+        notes["auditor"] = f"verdict {verdict} ({counts['fail']} échec(s), {counts['warn']} alerte(s))"
         audit = {
             "verdict": verdict,
             "counts": counts,

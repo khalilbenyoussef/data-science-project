@@ -25,6 +25,7 @@ from pydantic import (
 )
 
 from biflow.config import resolve
+from biflow.tools.audit_text import fr_number
 from biflow.tools.dictionary import label_for
 from biflow.tools.kpi import BARRIER_KPIS, SUBGROUP_KPIS, load_catalog
 from biflow.tools.warehouse_reader import (
@@ -536,25 +537,27 @@ _UNIT_LABELS = {
 def format_value(value: float | None, unit: str | None) -> str:
     if value is None:
         return "Indisponible"
+    # format francais (virgule decimale, milliers en espace fine insecable) : affichage seulement
     if unit == "percent":
-        return f"{value:.1f} %"
+        return f"{fr_number(value, 1)} %"
     if unit == "percentage_points":
-        return f"{value:+.1f} pt"
+        return f"{fr_number(value, 1, signed=True)} pt"
     if unit == "per_100k_adults":
-        return f"{value:.2f} / 100k adultes"
+        return f"{fr_number(value, 2)} / 100k adultes"
     if unit == "per_1k_adults":
-        return f"{value:.1f} / 1 000 adultes"
+        return f"{fr_number(value, 1)} / 1 000 adultes"
     if unit == "percent_of_gdp":
-        return f"{value:.1f} % du PIB"
+        return f"{fr_number(value, 1)} % du PIB"
     if unit == "TND_per_month":
-        return f"{value:,.2f} TND/mois".replace(",", " ")
+        return f"{fr_number(value, 2)} TND/mois"
     if unit == "TND_per_USD":
-        return f"{value:.3f} TND/USD"
+        return f"{fr_number(value, 3)} TND/USD"
     if unit == "usd_current_per_capita":
-        return f"{value:,.0f} USD/hab".replace(",", " ")
+        return f"{fr_number(value, 0)} USD/hab"
     if unit == "index_2017_100":
-        return f"{value:.1f}"
-    return f"{value:.2f}".rstrip("0").rstrip(".")
+        return fr_number(value, 1)
+    text = f"{value:.2f}".rstrip("0").rstrip(".")
+    return fr_number(value, len(text.split(".")[1]) if "." in text else 0)
 
 
 def _slug(text: str) -> str:
@@ -694,12 +697,12 @@ def _delta(
         return {
             "value": value, "unit": "percentage_points",
             "from_year": int(base["year"]), "to_year": int(target_year),
-            "label": f"{value:+.1f} pt vs {base['year']}",
+            "label": f"{fr_number(value, 1, signed=True)} pt vs {base['year']}",
         }
     return {
         "value": value, "unit": "absolute",
         "from_year": int(base["year"]), "to_year": int(target_year),
-        "label": f"{value:+.2f} vs {base['year']}",
+        "label": f"{fr_number(value, 2, signed=True)} vs {base['year']}",
     }
 
 
@@ -1176,7 +1179,7 @@ def _build_blocks(
     if morocco and subject and morocco["value"] is not None and subject["value"] is not None:
         gap = morocco["value"] - subject["value"]
         peer_notes.append(
-            f"Écart calculé Maroc − {subject['label']} : {gap:+.1f} pt "
+            f"Écart calculé Maroc − {subject['label']} : {fr_number(gap, 1, signed=True)} pt "
             "(différence de deux observations, même année)."
         )
     peer_chart = {
@@ -1312,11 +1315,11 @@ def _build_blocks(
     }
     if (formal_bars[0]["value"] is not None and formal_bars[1]["value"] is not None):
         formal_chart["notes"].append(
-            f"Écart épargne tout − formel : {formal_bars[0]['value'] - formal_bars[1]['value']:+.1f} pt."
+            f"Écart épargne tout − formel : {fr_number(formal_bars[0]['value'] - formal_bars[1]['value'], 1, signed=True)} pt."
         )
     if (formal_bars[2]["value"] is not None and formal_bars[3]["value"] is not None):
         formal_chart["notes"].append(
-            f"Écart emprunt tout − formel : {formal_bars[2]['value'] - formal_bars[3]['value']:+.1f} pt."
+            f"Écart emprunt tout − formel : {fr_number(formal_bars[2]['value'] - formal_bars[3]['value'], 1, signed=True)} pt."
         )
 
     def group_gap(dimension: str, left_key: str, right_key: str, gap_year: int):
@@ -1653,7 +1656,7 @@ def _build_blocks(
     }
     if urban["value"] is not None and rural["value"] is not None:
         urban_rural_chart["notes"].append(
-            f"Écart urbain − rural : {urban['value'] - rural['value']:+.1f} pt."
+            f"Écart urbain − rural : {fr_number(urban['value'] - rural['value'], 1, signed=True)} pt."
         )
     context_items = []
     context_entries = (
@@ -1807,7 +1810,7 @@ def _build_blocks(
                 income_items.append({
                     "id": "derived_monthly_magnitude",
                     "label": "Ordre de grandeur mensuel (dérivé)",
-                    "value": f"{magnitude:,.0f} TND/mois".replace(",", " "),
+                    "value": f"{fr_number(magnitude, 0)} TND/mois",
                     "unit": "TND_per_month", "status": "available",
                     "provider": "derived", "chip": _chip(
                         "derived", "Calcul BIFlow · dérivé", review=True,
@@ -1917,7 +1920,7 @@ def _build_blocks(
         notices.append(
             {"code": "fin24aP_definition", "severity": "warning", "kpi_id": "emergency_money",
              "message": (
-                 "fin24aP : le dictionnaire l'appelle « Paiement numerique » alors que la "
+                 "fin24aP : le dictionnaire l'appelle « Paiement numérique » alors que la "
                  "définition Findex 2025 attendue est « could obtain emergency money ». "
                  "La valeur brute est affichée avec un badge de revue, sans validation."
              )})
@@ -2170,7 +2173,7 @@ def extract_facts(blocks: Mapping[str, Any], *, iso3: str, year: int) -> list[di
                             facts.append(_gap_fact(group["dimension"], group["title"], row["gap_pp"],
                                                    row["year"], iso3, row["evidence_ids"],
                                                    label=f"Écart de compte — {group['title']}",
-                                                   display=f"{row['gap_pp']:+.1f} pt"))
+                                                   display=f"{fr_number(row['gap_pp'], 1, signed=True)} pt"))
             if chart["kind"] == "gap":
                 for point in chart["gap_points"]:
                     for year, value in ((point["from_year"], point["gap_from_pp"]),
@@ -2181,7 +2184,7 @@ def extract_facts(blocks: Mapping[str, Any], *, iso3: str, year: int) -> list[di
                         facts.append(_gap_fact(
                             dimension, point["label"], value, year, iso3,
                             tuple(e for e in point["evidence_ids"] if e.endswith(f"-{year}")),
-                            label=f"Écart — {point['label']}", display=f"{value:.1f} pt"))
+                            label=f"Écart — {point['label']}", display=f"{fr_number(value, 1)} pt"))
                     if point["change_pp"] is None:
                         continue
                     facts.append({
@@ -2191,7 +2194,7 @@ def extract_facts(blocks: Mapping[str, Any], *, iso3: str, year: int) -> list[di
                         "value": point["change_pp"], "unit": "percentage_points",
                         "year": point["to_year"], "iso3": iso3,
                         "provider": "derived",
-                        "display": f"{point['change_pp']:+.1f} pt",
+                        "display": f"{fr_number(point['change_pp'], 1, signed=True)} pt",
                         "evidence_ids": point["evidence_ids"],
                     })
             if chart["kind"] == "heatmap" and chart["id"] == "barriers_heatmap":
@@ -2221,7 +2224,7 @@ def extract_facts(blocks: Mapping[str, Any], *, iso3: str, year: int) -> list[di
                         "label": f"Indice — {series['label']} (2017 = 100)",
                         "value": last["value"], "unit": "index_2017_100",
                         "year": last["year"], "iso3": iso3,
-                        "provider": "derived", "display": f"{last['value']:.1f}",
+                        "provider": "derived", "display": fr_number(last['value'], 1),
                         "evidence_ids": series.get("evidence_ids") or (),
                     })
         for block in page.get("blocks") or ():

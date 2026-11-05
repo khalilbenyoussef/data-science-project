@@ -10,25 +10,46 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Mapping
 
-NUMBER = re.compile(r"(?<![\w.,])[-+−]?\d+(?:[.,]\d+)?(?!\w)")
+# Nombre d'un texte : format francais (37,8 ; milliers groupes par une espace fine
+# insecable U+202F ou insecable U+00A0 : « 1\u202f063,3 ») ou point decimal (37.8).
+# Une espace ordinaire ne groupe jamais : « en 2024 37,8 » reste deux nombres.
+THOUSANDS = "\u202f\u00a0"
+NUMBER = re.compile(
+    r"(?<![\w.,\u202f\u00a0])[-+−]?(?:\d{1,3}(?:[\u202f\u00a0]\d{3})+|\d+)(?:[.,]\d+)?(?!\w)")
 UNIT_LABELS = {
     "fr": {"percent": "%", "percentage_points": "pts", "per_100k_adults": "pour 100 000 adultes"},
     "en": {"percent": "%", "percentage_points": "pts", "per_100k_adults": "per 100 000 adults"},
 }
 STATUS_LABELS = {
-    "fr": {"approved": "approuve", "approved_with_review_note": "approuve avec note de revue",
-           "blocked": "bloque", "not_evaluated": "non evalue"},
+    "fr": {"approved": "approuvé", "approved_with_review_note": "approuvé avec note de revue",
+           "blocked": "bloqué", "not_evaluated": "non évalué"},
     "en": {"approved": "approved", "approved_with_review_note": "approved with review note",
            "blocked": "blocked", "not_evaluated": "not evaluated"},
 }
 
 
 # --------------------------------------------------------------------------- nombres
+def fr_number(value: float | int, decimals: int = 1, signed: bool = False, thousands: str = "\u202f") -> str:
+    """Nombre au format francais : virgule decimale, milliers separes par ``thousands``
+    (U+202F dans l'application et l'API, U+00A0 dans les PDF). Affichage seulement."""
+    text = f"{value:+,.{decimals}f}" if signed else f"{value:,.{decimals}f}"
+    return text.replace(",", "|").replace(".", ",").replace("|", thousands)
+
+
+def number_value(token: str) -> float:
+    """Valeur d'un nombre lu par NUMBER (signe, groupes de milliers et virgule acceptes)."""
+    text = token.replace("−", "-")
+    for sep in THOUSANDS:
+        text = text.replace(sep, "")
+    return float(text.replace(",", "."))
+
+
 def fmt(value: float | None, lang: str, decimals: int = 1, signed: bool = False) -> str:
     if value is None:
         return "n/d" if lang == "fr" else "n/a"
-    text = f"{value:+.{decimals}f}" if signed else f"{value:.{decimals}f}"
-    return text.replace(".", ",") if lang == "fr" else text
+    if lang == "fr":
+        return fr_number(value, decimals, signed)
+    return f"{value:+.{decimals}f}" if signed else f"{value:.{decimals}f}"
 
 
 def extract_numbers(text: str) -> list[str]:
@@ -36,7 +57,10 @@ def extract_numbers(text: str) -> list[str]:
     inclus dans un identifiant (v1, hash) sont ignores."""
     out = []
     for token in NUMBER.findall(text or ""):
-        out.append(token.lstrip("+-−").replace(",", "."))
+        canonical = token.lstrip("+-−").replace(",", ".")
+        for sep in THOUSANDS:
+            canonical = canonical.replace(sep, "")
+        out.append(canonical)
     return out
 
 
@@ -85,11 +109,11 @@ def template_text(record: Mapping[str, Any], lang: str = "fr") -> str:
                          else f"Peers without a value: {', '.join(missing)}.")
     elif len(deps) == 2:
         a, b = deps
-        parts.append(f"Ecart = {a['label']} {fmt(a['value'], lang)} % - {b['label']} {fmt(b['value'], lang)} %."
+        parts.append(f"Écart = {a['label']} {fmt(a['value'], lang)} % - {b['label']} {fmt(b['value'], lang)} %."
                      if fr else f"Gap = {a['label']} {fmt(a['value'], lang)}% - {b['label']} {fmt(b['value'], lang)}%.")
     elif len(deps) == 1:
         d = deps[0]
-        parts.append(f"Calcule comme 100 - {d['label']} ({fmt(d['value'], lang)} %)." if fr
+        parts.append(f"Calculé comme 100 - {d['label']} ({fmt(d['value'], lang)} %)." if fr
                      else f"Computed as 100 - {d['label']} ({fmt(d['value'], lang)}%).")
     inputs = record.get("inputs") or []
     if inputs and record["iso3"] != "PEERS":
@@ -128,7 +152,7 @@ def change_text(change: Mapping[str, Any], left: Mapping[str, Any], right: Mappi
             f"{c['label']} {fmt(c['contribution'], lang, signed=True)}" for c in comps
             if c.get("contribution") is not None) + "."
     elif len(comps) == 2:
-        text += (" Decomposition : " if fr else " Breakdown: ") + ", ".join(
+        text += (" Décomposition : " if fr else " Breakdown: ") + ", ".join(
             f"{c['label']} {fmt(c['delta'], lang, signed=True)} pts" for c in comps) + "."
     elif (left["iso3"] == "PEERS") != (right["iso3"] == "PEERS"):
         peers = left if left["iso3"] == "PEERS" else right
@@ -138,7 +162,7 @@ def change_text(change: Mapping[str, Any], left: Mapping[str, Any], right: Mappi
     if not change.get("comparable", True):
         text += (f" Non comparable : {change.get('reason')}." if fr else f" Not comparable: {change.get('reason')}.")
     if change.get("within_survey_noise"):
-        text += (f" Variation inferieure a {fmt(change['min_meaningful_change_pp'], lang)} pts : "
+        text += (f" Variation inférieure à {fmt(change['min_meaningful_change_pp'], lang)} pts : "
                  "dans le bruit d'enquete." if fr else
                  f" Change below {fmt(change['min_meaningful_change_pp'], lang)} pts: within survey noise.")
     return text

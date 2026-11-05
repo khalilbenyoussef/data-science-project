@@ -150,15 +150,15 @@ def _faults(focus: str) -> list[dict[str, Any]]:
                                                   "dont 99 % en ville.")]
 
     return [
-        {"id": "tampered_value", "label": "Valeur KPI modifiee (+0,05)", "expected": "A1_recomputed_values", "apply": tamper},
-        {"id": "wrong_unit", "label": "Mauvaise unite (densite en percent)", "expected": "B1_one_unit_per_kpi", "apply": unit},
-        {"id": "aggregate_row", "label": "Ligne agregat WLD dans kpi_values", "expected": "B3_country_entities_only", "apply": aggregate},
-        {"id": "zero_for_null", "label": "Zero au lieu de NULL", "expected": "A2_unavailable_rows_are_null", "apply": zero},
-        {"id": "snapshot_mismatch", "label": "snapshot_id incoherent", "expected": "B5_snapshot_and_run_ids", "apply": snapshot},
-        {"id": "source_hash", "label": "Hash source modifie (rapport qualite)", "expected": "B6_source_hashes", "apply": source_hash},
+        {"id": "tampered_value", "label": "Valeur KPI modifiée (+0,05)", "expected": "A1_recomputed_values", "apply": tamper},
+        {"id": "wrong_unit", "label": "Mauvaise unité (densité en percent)", "expected": "B1_one_unit_per_kpi", "apply": unit},
+        {"id": "aggregate_row", "label": "Ligne agrégat WLD dans kpi_values", "expected": "B3_country_entities_only", "apply": aggregate},
+        {"id": "zero_for_null", "label": "Zéro au lieu de NULL", "expected": "A2_unavailable_rows_are_null", "apply": zero},
+        {"id": "snapshot_mismatch", "label": "snapshot_id incohérent", "expected": "B5_snapshot_and_run_ids", "apply": snapshot},
+        {"id": "source_hash", "label": "Hash source modifié (rapport qualité)", "expected": "B6_source_hashes", "apply": source_hash},
         {"id": "provisional_kpi", "label": "KPI provisoire dans le catalogue", "expected": "B8_catalog_definitions", "apply": provisional},
         {"id": "insight_wrong_number", "label": "Insight citant un mauvais chiffre", "expected": "F1_insights_grounded", "apply": wrong_number},
-        {"id": "insight_uncited_number", "label": "Insight avec un nombre non cite", "expected": "F1_insights_grounded", "apply": uncited},
+        {"id": "insight_uncited_number", "label": "Insight avec un nombre non cité", "expected": "F1_insights_grounded", "apply": uncited},
     ]
 
 
@@ -215,11 +215,11 @@ def evaluate(cfg: dict[str, Any] | None = None, out_dir: str | Path | None = Non
 def render(summary: dict[str, Any]) -> str:
     base = summary["baseline"]
     lines = [
-        "# Evaluation de l'Auditor par injection de fautes", "",
-        f"Reference sans faute : verdict **{base['verdict']}** ({base['counts']}), "
+        "# Évaluation de l'Auditor par injection de fautes", "",
+        f"Référence sans faute : verdict **{base['verdict']}** ({base['counts']}), "
         f"publication {base['publication']}, duree de l'audit {base['timing_s']} s.", "",
-        f"**Fautes detectees : {summary['detected']} / {summary['total']}**", "",
-        "| Faute injectee | Controle attendu | Detectee | Verdict | Controles en echec | Preuve |",
+        f"**Fautes détectées : {summary['detected']} / {summary['total']}**", "",
+        "| Faute injectée | Contrôle attendu | Détectée | Verdict | Contrôles en échec | Preuve |",
         "|---|---|---|---|---|---|",
     ]
     for r in summary["faults"]:

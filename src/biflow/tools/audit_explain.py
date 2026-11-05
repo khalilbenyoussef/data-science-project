@@ -10,10 +10,11 @@ from __future__ import annotations
 from typing import Any, Iterable, Mapping
 
 from biflow.tools.audit_checks import touched_rows
+from biflow.tools.audit_text import fr_number
 
 PEERS_ISO3 = "PEERS"
 TRANSFORMATIONS = {
-    "value": "valeur publiee telle quelle (aucune transformation)",
+    "value": "valeur publiée telle quelle (aucune transformation)",
     "100 * value": "fraction Findex x 100 (part des adultes en %)",
     "100 * (1 - value)": "complement : 100 x (1 - fraction de detention de compte)",
 }
@@ -30,7 +31,7 @@ def _transformation(formula: str, lang: str = "fr") -> str:
     table = TRANSFORMATIONS if lang == "fr" else TRANSFORMATIONS_EN
     if formula in table:
         return table[formula]
-    return ("ecart en points : 100 x (fraction du premier sous-groupe - fraction du second)" if lang == "fr"
+    return ("écart en points : 100 x (fraction du premier sous-groupe - fraction du second)" if lang == "fr"
             else "gap in points: 100 x (first subgroup fraction - second subgroup fraction)")
 
 
@@ -152,7 +153,7 @@ def explain_change(left: Mapping[str, Any], right: Mapping[str, Any], min_change
         left_peers = {d["iso3"]: d["value"] for d in left["dependencies"] if d["included"]}
         right_peers = {d["iso3"]: d["value"] for d in right["dependencies"] if d["included"]}
         if set(left_peers) != set(right_peers):
-            out.update(comparable=False, reason="ensembles de pairs differents : "
+            out.update(comparable=False, reason="ensembles de pairs différents : "
                        f"{sorted(left_peers)} / {sorted(right_peers)}")
         n = len(right_peers)
         out["components"] = [
@@ -190,11 +191,11 @@ def decision_log(*, snapshot: Mapping[str, Any] | None, lineage: Mapping[str, An
                             for name, meta in sorted(inputs.items())]})
     snapshot = snapshot or {}
     status = snapshot.get("status")
-    text = {"new": "nouvelles donnees : nouvelle version", "published": "nouvelle version publiee",
-            "rebuild": "reconstruction depuis la version publiee", "pending": "version candidate"}.get(
+    text = {"new": "nouvelles données : nouvelle version", "published": "nouvelle version publiée",
+            "rebuild": "reconstruction depuis la version publiée", "pending": "version candidate"}.get(
         status, f"statut {status}")
     log.append({"step": "snapshot", "decision": f"{snapshot.get('snapshot_id')} ({text})",
-                "reasons": ["empreinte de contenu insensible a l'ordre des lignes comparee a la version publiee"]})
+                "reasons": ["empreinte de contenu insensible à l'ordre des lignes comparée à la version publiée"]})
     issues = quality.get("issues") or []
     log.append({"step": "quality",
                 "decision": f"gate {'PASS' if quality.get('passed') else 'FAIL'}, score {quality.get('overall_score')}",
@@ -204,10 +205,10 @@ def decision_log(*, snapshot: Mapping[str, Any] | None, lineage: Mapping[str, An
     rejected = lineage.get("rejected") or {}
     period = lineage.get("period") or {}
     log.append({"step": "etl",
-                "decision": f"annees {period.get('min_year')}-{period.get('max_year')} conservees",
-                "reasons": [f"{source} : {count} ligne(s) rejetee(s) ({reason})"
+                "decision": f"années {period.get('min_year')}-{period.get('max_year')} conservées",
+                "reasons": [f"{source} : {count} ligne(s) rejetée(s) ({reason})"
                             for source, reasons in sorted(rejected.items()) for reason, count in sorted(reasons.items())]
-                + [f"{len(aggregates)} agregat(s) regionaux/mondiaux conserves dans country_dim mais exclus "
+                + [f"{len(aggregates)} agrégat(s) régionaux/mondiaux conservés dans country_dim mais exclus "
                    "des KPI (is_aggregate = true)"]})
     user_inputs = {name: meta for name, meta in inputs.items() if isinstance(meta, dict) and meta.get("user")}
     excluded = list(lineage.get("excluded_sources") or [])
@@ -215,8 +216,9 @@ def decision_log(*, snapshot: Mapping[str, Any] | None, lineage: Mapping[str, An
         log.append({"step": "user_sources",
                     "decision": f"{len([m for m in user_inputs.values() if not m.get('excluded')])} source(s) "
                                 f"utilisateur incluse(s), {len(excluded)} exclue(s)",
-                    "reasons": [f"{e['source']} exclue a l'etape {e['step']} (score qualite "
-                                f"{e.get('quality_score')}) : {e['reason']}" for e in excluded]
+                    "reasons": [f"{e['source']} exclue à l'étape {e['step']} (score qualité "
+                                f"{fr_number(e['quality_score'], 2) if isinstance(e.get('quality_score'), (int, float)) else 'n/d'}) : "
+                                f"{e['reason']}" for e in excluded]
                     + [f"{name} incluse : {meta.get('rows')} observation(s)" for name, meta in user_inputs.items()
                        if not meta.get("excluded")]})
     available = sum(r["value"] is not None for r in kpi_rows)

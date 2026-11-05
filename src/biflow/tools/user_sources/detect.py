@@ -41,14 +41,14 @@ def check_file(path: str | Path, max_file_mb: float | None = None) -> Path:
         raise UserSourceError(f"Fichier introuvable : {path}")
     if path.suffix.lower() not in ALLOWED_SUFFIXES:
         raise UserSourceError(f"Format refuse ({path.suffix or 'sans extension'}) : seuls les fichiers CSV "
-                              f"({', '.join(ALLOWED_SUFFIXES)}) sont acceptes")
+                              f"({', '.join(ALLOWED_SUFFIXES)}) sont acceptés")
     limit = float(max_file_mb if max_file_mb is not None else DEFAULT_MAX_FILE_MB)
     size_mb = path.stat().st_size / 1e6
     if size_mb > limit:
         raise UserSourceError(f"Fichier trop volumineux : {size_mb:.1f} Mo > {limit:g} Mo (uploads.max_file_mb)")
     with open(path, "rb") as handle:
         if b"\x00" in handle.read(1 << 16):
-            raise UserSourceError(f"Contenu binaire detecte dans {path.name} : un fichier CSV texte est attendu")
+            raise UserSourceError(f"Contenu binaire détecté dans {path.name} : un fichier CSV texte est attendu")
     return path
 
 
@@ -165,7 +165,7 @@ def read_user_csv(path: str | Path, read: dict[str, Any]) -> pd.DataFrame:
             raise UserSourceError(f"Ligne {line} : {len(record)} champ(s) au lieu de {len(header)}")
         rows.append([*record, line])
     if header is None:
-        raise UserSourceError("Aucune ligne d'en-tete detectee")
+        raise UserSourceError("Aucune ligne d'en-tête détectée")
     return pd.DataFrame(rows, columns=[*header, "_line"], dtype=object)
 
 
@@ -181,7 +181,7 @@ def parse_number(text: object, decimal: str = ".") -> float | None:
         value = re.sub(r"[   ]", "", value)
     pattern = COMMA_NUMBER if decimal == "," else DOT_NUMBER
     if not pattern.match(value):
-        raise ValueError(f"valeur non numerique {value!r}")
+        raise ValueError(f"valeur non numérique {value!r}")
     return float(value.replace(",", ".")) if decimal == "," else float(value)
 
 
@@ -230,16 +230,16 @@ def detect_structure(df: pd.DataFrame, decimal: str = ".", resolver: CountryReso
 
     if len(year_columns) >= 2:
         layout = "wide_by_year"
-        evidence = f"{len(year_columns)} colonnes nommees comme des annees ({year_columns[0]}..{year_columns[-1]})"
+        evidence = f"{len(year_columns)} colonnes nommées comme des années ({year_columns[0]}..{year_columns[-1]})"
     elif candidates["year"] and candidates["indicator"] and len(numeric_columns) == 1:
         layout = "long"
-        evidence = "une colonne annee, une colonne indicateur et une seule colonne numerique"
+        evidence = "une colonne année, une colonne indicateur et une seule colonne numérique"
     elif candidates["year"] and numeric_columns:
         layout = "wide_by_indicator"
-        evidence = f"une colonne annee et {len(numeric_columns)} colonne(s) numerique(s) (une par indicateur)"
+        evidence = f"une colonne année et {len(numeric_columns)} colonne(s) numérique(s) (une par indicateur)"
     else:
         layout = None
-        evidence = "aucune disposition reconnue (colonne annee ou colonnes annees introuvables)"
+        evidence = "aucune disposition reconnue (colonne année ou colonnes années introuvables)"
     return {"layout": layout, "evidence": evidence, "candidates": candidates,
             "year_columns": year_columns, "numeric_columns": numeric_columns, "columns": columns}
 

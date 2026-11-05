@@ -135,7 +135,7 @@ def test_evaluation_pdf_numbers_equal_audit_summary(env):
     assert n(summary["counts"]["pass"]) in strings and n(summary["counts"]["warn"]) in strings
     publication = summary["publication"]
     for key in ("approved", "approved_with_review_note"):
-        assert n(publication[key]) in strings  # 1 509 et 111
+        assert n(publication[key]).replace("\u00a0", " ") in strings  # 1 509 et 111 (insecable dans le flux : espace)
     assert f"{n(summary['evaluation']['detected'])} / {n(summary['evaluation']['total'])}" in strings
     insight = summary["insight_audit"]
     assert n(insight["audited"]) in strings and n(insight["not_auditable"]) in strings
@@ -166,7 +166,7 @@ def test_insights_pdf_for_the_scope(env):
     joined = " ".join(pdf_strings(response.content))
     assert "Tunisie (TUN), 2024" in joined
     assert "accepté" in joined and "rejeté" in joined and "non auditable" in joined  # statut calcule a la demande
-    assert "Piste à explorer" in joined and "23.0 pts" in joined
+    assert "Piste à explorer" in joined and "23,0 pts" in joined
     assert snapshot(root) == before
 
 
@@ -190,11 +190,11 @@ def test_insights_pdf_annex_labels_every_user_value(env):
     official = joined[:joined.index("Annexe : vos données")]
     assert "30.8" not in official and "exemple fictif" not in official  # jamais dans les constats officiels
     assert "BIFlow ne les vérifie pas" in annex
-    assert "30.8 pour 100 000 adultes (2024)" in annex and "26.4 % (2023)" in annex  # annee anterieure indiquee
+    assert "30,8 pour 100 000 adultes (2024)" in annex and "26,4 % (2023)" in annex  # annee anterieure indiquee
     # chaque ligne de valeurs porte l'etiquette (cellule « Étiquette »), plus le chapeau de section
     assert annex.count("Données utilisateur") >= 3
     assert "Comparaison indicative : définition déclarée par l'utilisateur" in annex
-    assert "35.44 pour 100 000 adultes (2024)" in annex  # KPI officiel compare, meme annee
+    assert "35,44 pour 100 000 adultes (2024)" in annex  # KPI officiel compare, meme annee
     assert "Pistes à partir de vos données" in annex and "à partir de vos données) :" in annex
     assert "à partir de vos données" not in official
     assert snapshot(root) == before

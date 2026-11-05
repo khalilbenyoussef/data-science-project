@@ -35,8 +35,8 @@ def test_long_proposal_uses_synonyms_and_asks_for_unit(tmp_path):
                                   "value": "Valeur", "indicator": "Indicateur"}
     assert mapping["indicators"] == {"clients": {"label": "Clients", "unit": None, "transform": "none"}}
     assert mapping["indicator_values"] == {"Clients": "clients"}
-    assert proposal["origins"]["country"] == "regle : synonyme de nom de colonne"
-    assert any("Unite de l'indicateur 'Clients'" in q and "jamais devinee" in q for q in proposal["questions"])
+    assert proposal["origins"]["country"] == "règle : synonyme de nom de colonne"
+    assert any("Unité de l'indicateur 'Clients'" in q and "jamais devinée" in q for q in proposal["questions"])
     with pytest.raises(UserSourceError, match="unit"):
         validate_mapping(mapping, df)  # unite manquante : refuse
     assert validate_mapping(complete(proposal), df).indicators["clients"].unit == "count"
@@ -84,12 +84,12 @@ def test_llm_is_only_asked_for_missing_roles_and_revalidated(tmp_path):
 
     def suggest(context):
         calls.append(context)
-        return {"indicator": "c3", "value": "c1"}  # c1 deja utilisee (pays)
+        return {"indicator": "c3", "value": "c1"}  # c1 déjà utilisée (pays)
 
     proposal, _ = propose(tmp_path, text, llm_suggest=suggest)
     mapping = proposal["mapping"]
     assert mapping["columns"]["indicator"] == "c3" and mapping["columns"]["value"] == "c4"
-    assert proposal["origins"]["indicator"] == "LLM (valide par regles)"
+    assert proposal["origins"]["indicator"] == "LLM (validé par règles)"
     assert calls and calls[0]["missing_roles"] == ["indicator"]
 
 
@@ -102,8 +102,8 @@ def test_llm_suggestion_failing_rules_is_rejected(tmp_path):
     proposal = propose_mapping("demo", "f.csv", df, detection,
                                llm_suggest=lambda ctx: {"value": "c5", "indicator": "c1"})
     assert proposal["mapping"]["columns"]["value"] is None
-    assert proposal["origins"]["value"] == "suggestion LLM rejetee : 'c5' : 0% de valeurs numeriques"
-    assert proposal["origins"]["indicator"] == "suggestion LLM rejetee : colonne 'c1' deja utilisee"
+    assert proposal["origins"]["value"] == "suggestion LLM rejetée : 'c5' : 0% de valeurs numériques"
+    assert proposal["origins"]["indicator"] == "suggestion LLM rejetée : colonne 'c1' déjà utilisée"
 
 
 def test_llm_role_suggester_never_returns_units():

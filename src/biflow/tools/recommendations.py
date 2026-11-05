@@ -17,7 +17,7 @@ import duckdb
 import yaml
 
 from biflow.config import ROOT
-from biflow.tools.audit_text import UNIT_LABELS, grounding
+from biflow.tools.audit_text import UNIT_LABELS, fr_number, grounding
 from biflow.tools.dashboard_spec import COUNTRY_LABELS
 from biflow.tools.insights import audit_insights
 
@@ -46,19 +46,19 @@ def load_rules(path: str | Path = RULES_PATH) -> dict[str, Any]:
         raise RulesError(f"{path} : liste « rules » attendue")
     for rule in data["rules"]:
         if rule.get("kind") not in KINDS:
-            raise RulesError(f"regle {rule.get('id')} : type inconnu {rule.get('kind')}")
+            raise RulesError(f"règle {rule.get('id')} : type inconnu {rule.get('kind')}")
         if rule["kind"] == USER_KIND:
             for key in ("threshold_pp", "threshold_pct"):
                 if not isinstance(rule.get(key), (int, float)) or rule[key] <= 0:
-                    raise RulesError(f"regle {rule.get('id')} : {key} positif attendu")
+                    raise RulesError(f"règle {rule.get('id')} : {key} positif attendu")
             if not rule.get("piste_below") or not rule.get("piste_above"):
-                raise RulesError(f"regle {rule.get('id')} : piste_below et piste_above attendues")
+                raise RulesError(f"règle {rule.get('id')} : piste_below et piste_above attendues")
             continue
         key = "threshold_pct" if rule["kind"] == "below_peers_relative" else "threshold_pp"
         if not isinstance(rule.get(key), (int, float)) or rule[key] <= 0:
-            raise RulesError(f"regle {rule.get('id')} : {key} positif attendu")
+            raise RulesError(f"règle {rule.get('id')} : {key} positif attendu")
         if not isinstance(rule.get("kpis"), dict) or not rule["kpis"]:
-            raise RulesError(f"regle {rule.get('id')} : kpis attendus")
+            raise RulesError(f"règle {rule.get('id')} : kpis attendus")
     return data
 
 
@@ -77,7 +77,8 @@ def read_rows(warehouse: str | Path, iso3: str, year: int) -> list[dict[str, Any
 
 
 def _r1(value: float) -> str:
-    return f"{value:.1f}"
+    """Une decimale, format francais (« 23,0 ») : affichage seulement."""
+    return fr_number(value, 1)
 
 
 def _country(iso3: str) -> str:

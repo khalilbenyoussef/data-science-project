@@ -71,7 +71,7 @@ def test_gap_change_text_decomposes():
     left, right = _gap(2021, 45.14, 28.75), _gap(2024, 49.57, 26.61)
     text = change_text(explain_change(left, right), left, right, "fr")
     assert "16,4 pts -> Tunisia 2024 23,0 pts, variation +6,6 pts" in text
-    assert "Decomposition : men +4,4 pts, women -2,1 pts." in text
+    assert "Décomposition : men +4,4 pts, women -2,1 pts." in text
 
 
 class FakeLLM:

@@ -58,7 +58,7 @@ src/biflow/
   llm.py           providers, fallback, cache, compteur de tokens
   state.py         etat partage du pipeline
   graph.py         graphe LangGraph Route 1 + repli sequentiel
-  semantic_graph.py  route semantique a la demande (une requete KPI)
+  semantic_graph.py  route sémantique à la demande (une requête KPI)
   analysis_graph.py graphe Route 2 (BI Analyst -> Dashboard)
   agents/          base, collector, snapshot, profiler, quality, etl, semantic_kpi, auditor
                    + bi_analyst, analyst, dashboard (Route 2)
@@ -76,7 +76,7 @@ outputs/               reports, profiles, logs, cache LLM
 
 ## Pipeline (S06 → S12)
 
-| Etape | Agent | Sorties principales |
+| Étape | Agent | Sorties principales |
 |---|---|---|
 | S06 | `collector` | `data/raw/*.csv` + SHA-256, telechargement WDI pagine (FAS via API en option) |
 | S07 | `snapshot` | `data/snapshots/` : nouvelle version `vN` si le contenu change, sinon `no_change` |
@@ -344,13 +344,13 @@ unité = unité déclarée. Ces lignes sont publiées au mieux
 catalog_id: biflow_user_kpis
 references:
   user_upload_agents: {path: data/uploads/agents.csv, locator: "config/sources/agents.yaml, colonne agents",
-                       evidence: "fichier depose, unite declaree count"}
+                       evidence: "fichier déposé, unité déclarée count"}
 kpis:
   agents_count:
     definition_version: "1.0.0"
     name: Agents bancaires (source utilisateur)
     business_objective: financial_inclusion
-    definition: Nombre d'agents bancaires declare par l'utilisateur.
+    definition: Nombre d'agents bancaires déclaré par l'utilisateur.
     verification: {status: user_declared, evidence: [user_upload_agents], uncertainties: [Source non verifiee par BIFlow.]}
     source: {dataset: "user:agents", indicator: agents.agents, official_indicator: null}
     warehouse: {fact_table: fact, indicator_code: agents.agents, source: "user:agents", input_unit: count,
@@ -359,7 +359,7 @@ kpis:
     unit: count
     denominator: {population: non applicable, basis: user_declared}
     subgroup: total_population
-    reference_period: annee declaree
+    reference_period: année déclarée
     valid_years: [2023, 2024]
     year_evidence: user_upload_agents
     aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none}
@@ -442,7 +442,7 @@ contrats sémantiques KPI (`list`, `describe`, `calculate`, `latest_available`,
 `compare_countries`, `compare_years`). Elle ne contient ni LLM, ni SQL ad hoc,
 ni calcul parallèle.
 
-| Etape | Agent | Sorties |
+| Étape | Agent | Sorties |
 |---|---|---|
 | S10 | `bi_analyst` | `analysis_dataset.json`, `bi_analyst.json`, `bi_analyst.md` |
 | S11 | `dashboard` | `dashboard_data.json`, `outputs/dashboard/dashboard.json` |
@@ -455,7 +455,7 @@ le contrat (schéma `1.0`) puis l'exporte de façon atomique pour le front.
 # Rapport BI Analyst seul
 python main.py analyze --country TUN,MAR,DZA --mode latest --run-id demo
 
-# Analyste + donnees du dashboard
+# Analyste + données du dashboard
 python main.py dashboard --country TUN,MAR,DZA --kpis account_ownership,saving_rate `
   --mode year --year 2024 --reference TUN --top 5 --run-id demo
 ```
@@ -586,9 +586,9 @@ PYTHONPATH=src .venv/bin/python -m pytest -q
 python main.py steps
 python main.py run --only quality
 python main.py run --from etl
-python main.py run --to etl --no-llm      # s'arrete apres l'ETL, sans KPI
+python main.py run --to etl --no-llm      # s'arrête après l'ETL, sans KPI
 python main.py run --only semantic_kpi    # recalcule kpi_values (sans audit)
-python main.py run --rebuild              # rejoue snapshot -> auditor sur la version publiee
+python main.py run --rebuild              # rejoue snapshot -> auditor sur la version publiée
 python main.py explain --kpi account_ownership --iso3 TUN --year 2024
 python main.py explain --kpi gender_gap --iso3 TUN --year 2024 --compare-year 2021 --lang en
 python main.py explain --kpi branch_density --iso3 TUN --year 2024 --compare-iso3 PEERS

@@ -65,7 +65,7 @@ def test_subgroup_gap_cites_both_groups_and_names_target():
                   row("account_ownership_men", "TUN", 49.6), row("account_ownership_women", "TUN", 26.64)])
     rec = result["recommendations"][0]
     assert rec["target_group"] == "femmes"
-    assert "23.0 pts (49.6 % contre 26.6 %)" in rec["text"]
+    assert "23,0 pts (49,6 % contre 26,6 %)" in rec["text"]
     assert [e["kpi_id"] for e in rec["evidence"]] == ["gender_gap", "account_ownership_men",
                                                       "account_ownership_women"]
     assert rec["audit"]["accepted"] is True
@@ -74,14 +74,14 @@ def test_subgroup_gap_cites_both_groups_and_names_target():
 def test_negative_gap_swaps_target_group():
     rec = run([row("urban_gap", "TUN", -12.0, "percentage_points")])["recommendations"][0]
     assert rec["target_group"] == "adultes urbains"
-    assert "12.0 pts" in rec["text"]
+    assert "12,0 pts" in rec["text"]
 
 
 def test_barrier_above_peers_threshold_and_partial_average():
     rows = [row("barrier_no_trust", "TUN", 15.5), peers("barrier_no_trust", 10.5, partial=True)]
     rec = run(rows)["recommendations"][0]
     assert rec["rule_id"] == "barrier_above_peers"
-    assert "moyenne partielle, sans Algérie" in rec["text"] and "5.0 pts de plus" in rec["text"]
+    assert "moyenne partielle, sans Algérie" in rec["text"] and "5,0 pts de plus" in rec["text"]
     assert rec["review_note"] is True
     assert ids(run([row("barrier_no_trust", "TUN", 15.4), peers("barrier_no_trust", 10.5)])) == []
 
@@ -93,7 +93,7 @@ def test_usage_below_peers_and_network_relative_threshold():
     unit = "per_100k_adults"
     hit = run([row("branch_density", "TUN", 18.0, unit), peers("branch_density", 20.0, unit)])
     assert ids(hit) == [("network_below_peers", "branch_density")]
-    assert "18.0 pour 100 000 adultes en Tunisie, contre 20.0" in hit["recommendations"][0]["text"]
+    assert "18,0 pour 100 000 adultes en Tunisie, contre 20,0" in hit["recommendations"][0]["text"]
     assert hit["recommendations"][0]["audit"]["accepted"] is True
     assert ids(run([row("branch_density", "TUN", 18.1, unit), peers("branch_density", 20.0, unit)])) == []
 
@@ -109,7 +109,7 @@ def test_rules_apply_to_the_selected_country():
     result = run(rows, iso3="MAR")
     assert result["country"] == "Maroc"
     rec = result["recommendations"][0]
-    assert rec["iso3"] == "MAR" and "au Maroc" in rec["text"] and "19.9" in rec["text"]
+    assert rec["iso3"] == "MAR" and "au Maroc" in rec["text"] and "19,9" in rec["text"]
     rec = run([row("barrier_no_trust", "MAR", 20.0), peers("barrier_no_trust", 10.0)], iso3="MAR")
     assert "moyenne incluant Maroc" in rec["recommendations"][0]["text"]
 
@@ -131,7 +131,7 @@ def test_unjustified_number_or_forbidden_phrase_is_rejected():
     rules["rules"][0]["kpis"]["gender_gap"]["piste"] = "lancer 3 programmes pour les {target}"
     result = run([row("gender_gap", "TUN", 22.0, "percentage_points")], rules=rules)
     assert result["recommendations"] == []
-    assert "nombre '3' du texte non justifie par un claim" in result["rejected"][0]["audit"]["reasons"]
+    assert "nombre '3' du texte non justifié par un claim" in result["rejected"][0]["audit"]["reasons"]
     rules["rules"][0]["kpis"]["gender_gap"]["piste"] = "il faut cibler les {target}"
     result = run([row("gender_gap", "TUN", 22.0, "percentage_points")], rules=rules)
     assert result["rejected"][0]["audit"]["reasons"] == ["formulation interdite : il faut"]
@@ -173,7 +173,7 @@ def test_api_returns_audited_recommendations_for_the_scope(client):
     assert (body["iso3"], body["year"], body["country"]) == ("TUN", 2024, "Tunisie")
     assert [r["kpi_id"] for r in body["recommendations"]] == ["gender_gap", "barrier_no_trust"]
     trust = body["recommendations"][1]
-    assert "15.5 %" in trust["text"] and "7.5 %" in trust["text"] and "8.0 pts" in trust["text"]
+    assert "15,5 %" in trust["text"] and "7,5 %" in trust["text"] and "8,0 pts" in trust["text"]
     assert [e["id"] for e in trust["evidence"]] == ["EV-barrier_no_trust-TUN-2024", "EV-barrier_no_trust-PEERS-2024"]
     assert body["rejected"] == 0
     assert [r["kpi_id"] for r in client.get("/api/recommendations?iso3=TUN&year=2021").json()["recommendations"]] \

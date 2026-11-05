@@ -250,7 +250,7 @@ def build_insights(
         # l'avertissement de libelle ne reste que si le dictionnaire garde l'ancien libelle
         statement = (
             f"{emergency['display']} des adultes déclarent pouvoir obtenir de "
-            f"l'argent en urgence (fin24aP, {emergency['year']})"
+            f"l'argent en urgence ({emergency['year']})"
             + (" ; le libellé du dictionnaire ne concorde pas avec la définition Findex "
                "attendue, la valeur brute reste à revoir." if FIN24AP_MISLABELED else ".")
         )
@@ -272,7 +272,7 @@ def build_insights(
             for peer in peers if peer is not lead
         )
         statement = (
-            f"Détention d'un compte en {lead['year']}: "
+            f"Détention d'un compte en {lead['year']} : "
             f"{lead['label']} {lead['display']}, contre {listing}."
         )
         add("overview", _insight(
@@ -362,7 +362,7 @@ def build_insights(
                 continue
             parts.append(f"{label} {_spoken(fact)} en {fact['year']}")
             cited.append(fact)
-        statement = "; ".join(parts) + "."
+        statement = " ; ".join(parts) + "."
         add("access", _insight(
             "INS-access-outreach", "outreach", statement,
             severity="review", kind="auto", cited=cited,
@@ -379,7 +379,7 @@ def build_insights(
             parts.append(f"{label} {fact['display']} en {fact['year']}")
             cited.append(fact)
         add("access", _insight(
-            "INS-access-balance", "banking_depth", "; ".join(parts) + ".",
+            "INS-access-balance", "banking_depth", " ; ".join(parts) + ".",
             severity="review", kind="auto", cited=cited,
             facts=facts, warnings=warnings,
         ))
@@ -697,7 +697,7 @@ def answer_question(
         if fact is not None:
             answer = (
                 f"En {fact['year']}, {fact['display']} des adultes déclarent pouvoir "
-                "obtenir de l'argent en urgence (fin24aP), mais le libellé du "
+                "obtenir de l'argent en urgence, mais le libellé du "
                 "dictionnaire ne concorde pas avec la définition Findex : valeur à revoir."
             )
             used = [fact]
@@ -713,7 +713,7 @@ def answer_question(
                 parts.append(f"{label} {fact['display']} en {fact['year']}")
                 cited.append(fact)
         if parts:
-            answer = "; ".join(parts) + "."
+            answer = " ; ".join(parts) + "."
             used = cited
     elif intent == "peers":
         answer, used = _answer_peers(index)
@@ -727,7 +727,7 @@ def answer_question(
                 parts.append(f"{label} : indice {fact['display']} en {fact['year']}")
                 cited.append(fact)
         if parts:
-            answer = "; ".join(parts) + " (2017 = 100)."
+            answer = " ; ".join(parts) + " (2017 = 100)."
             used = cited
 
     if not answer:

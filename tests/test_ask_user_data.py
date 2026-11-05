@@ -16,7 +16,7 @@ from biflow.tools.user_sources.data import USER_CHIP, USER_MARKER, UserData
 
 SETTINGS = {"temperature": 0.2, "max_calls_per_session": 30, "max_tool_steps": 4, "history_turns": 10}
 # valeurs utilisateur volontairement uniques : on les cherche dans tout ce qui part au LLM
-SECRET = ("7319.53", "61.37", "58.11")
+SECRET = ("7319.53", "61.37", "58.11", "7 319,53", "61,37", "58,11", "7319,53", "7 319")
 
 
 def _view(iso3, year):
@@ -93,7 +93,7 @@ def test_reader_returns_only_user_sources_with_the_chip(user_data):
 
 def test_reader_falls_back_to_the_latest_earlier_year(user_data):
     exact = user_data.latest("banque.taux_digital", "TUN", 2024)
-    assert exact["year"] == 2024 and exact["same_year"] and exact["display"] == "61.37 %"
+    assert exact["year"] == 2024 and exact["same_year"] and exact["display"] == "61,37 %"
     earlier = user_data.latest("banque.clients_actifs", "TUN", 2024)
     assert earlier["year"] == 2023 and not earlier["same_year"]
     assert user_data.latest("banque.clients_actifs", "TUN", 2022) is None
@@ -139,14 +139,14 @@ def test_flag_off_user_question_is_answered_locally_and_labelled(user_data):
     result = ask("Quel est le taux de clients digitaux de ma banque ?", llm=llm, user_data=user_data)
     assert llm.calls == 0
     assert result["mode"] == "deterministic" and result["intent"] == "user_source"
-    assert result["answer"].startswith(USER_MARKER) and "61.37 %" in result["answer"]
+    assert result["answer"].startswith(USER_MARKER) and "61,37 %" in result["answer"]
     assert result["user_data_policy"] == {"llm_allowed": False, "reason": USER_POLICY_REASON["fr"]}
     assert result["facts"] and all(f["user_data"] and f["chip"] == USER_CHIP for f in result["facts"])
 
 
 def test_flag_off_earlier_year_is_labelled(user_data):
     result = ask("Combien de clients actifs ?", user_data=user_data)
-    assert "7319.53 (2023, dernière année disponible avant 2024)" in result["answer"]
+    assert "7 319,53 (2023, dernière année disponible avant 2024)" in result["answer"]
 
 
 def test_flag_off_no_user_number_ever_reaches_the_llm(user_data):
@@ -202,4 +202,4 @@ def test_tool_payload_is_read_only_and_labelled(user_data):
     listing = tools.call("get_user_indicator", {})
     assert listing["chip"] == USER_CHIP and not any(v in json.dumps(listing) for v in SECRET)
     value = tools.call("get_user_indicator", {"indicator": "banque.taux_digital", "iso3": "MAR"})
-    assert value["values"][0]["display"] == "58.11 %" and value["values"][0]["year"] == 2022
+    assert value["values"][0]["display"] == "58,11 %" and value["values"][0]["year"] == 2022

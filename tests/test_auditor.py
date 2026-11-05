@@ -273,7 +273,7 @@ def test_catalog_faults_fail(world, change):
 def test_unverified_findex_code_fails_catalog_check(world, monkeypatch):
     monkeypatch.setattr("biflow.tools.audit_checks.FINDEX_UNVERIFIED", frozenset({"g20_any"}))
     reasons = [r["reason"] for r in _check(world.run(), "B8_catalog_definitions")["affected_rows"]]
-    assert reasons == ["code non verifie g20_any"]
+    assert reasons == ["code non vérifié g20_any"]
 
 
 def test_quality_diagnostic_on_an_input_is_a_caveat(world):
@@ -422,7 +422,7 @@ def test_peer_change_lists_each_peer_contribution(world):
     assert change["delta"] == pytest.approx(sum(c["contribution"] for c in change["components"]))
     changed = explain_change(stored[("account_ownership", "PEERS", 2021)],
                              stored[("account_ownership", "PEERS", 2024)])
-    assert changed["comparable"] is False and "pairs differents" in changed["reason"]
+    assert changed["comparable"] is False and "pairs différents" in changed["reason"]
     noise = explain_change(stored[("account_ownership", "MAR", 2021)], stored[("account_ownership", "MAR", 2024)])
     assert noise["within_survey_noise"] is True
 
@@ -432,8 +432,8 @@ def test_decision_log_explains_each_step(world):
     steps = {entry["step"]: entry for entry in audit["decision_log"]}
     assert list(steps) == ["collector", "snapshot", "quality", "etl", "semantic_kpi", "auditor"]
     assert "gate PASS" in steps["quality"]["decision"]
-    assert steps["etl"]["decision"] == "annees 2011-2024 conservees"
-    assert any("rejetee" in reason for reason in steps["etl"]["reasons"])
+    assert steps["etl"]["decision"] == "années 2011-2024 conservées"
+    assert any("rejetée" in reason for reason in steps["etl"]["reasons"])
     assert steps["auditor"]["decision"] == "verdict pass_with_warnings"
 
 
@@ -463,10 +463,10 @@ def test_report_examples_without_llm_use_templates(world, monkeypatch):
     from biflow.agents.base import BaseAgent
     monkeypatch.setattr(BaseAgent, "ask_text", lambda *a, **k: pytest.fail("aucun appel LLM attendu"))
     examples = _execute(world)["examples"]
-    assert [e["title"] for e in examples] == ["Detention de compte", "Ecart hommes-femmes",
-                                              "Densite d'agences et pairs"]
+    assert [e["title"] for e in examples] == ["Détention de compte", "Écart hommes-femmes",
+                                              "Densité d'agences et pairs"]
     assert all(e["origin"] == {"fr": "template", "en": "template"} for e in examples)
-    assert "variation +6,6 pts. Decomposition : men +4,4 pts, women -2,1 pts." in examples[1]["text"]["fr"]
+    assert "variation +6,6 pts. Décomposition : men +4,4 pts, women -2,1 pts." in examples[1]["text"]["fr"]
     assert "Pairs : MAR" in examples[2]["text"]["fr"]
 
 
@@ -506,7 +506,7 @@ def test_explain_cli_reads_stored_explanations_only(world, monkeypatch, capsys):
     assert cli.main() == 0
     out = capsys.readouterr().out
     assert out.startswith("# Écart femmes-hommes de détention d'un compte - Tunisia 2024")  # name_fr (1.7.0)
-    assert "Decomposition : men +4,4 pts, women -2,1 pts." in out
+    assert "Décomposition : men +4,4 pts, women -2,1 pts." in out
     monkeypatch.setattr(sys, "argv", ["main.py", "explain", "--kpi", "branch_density", "--iso3", "TUN",
                                       "--year", "2023", "--compare-iso3", "PEERS", "--lang", "en",
                                       "--warehouse", warehouse])

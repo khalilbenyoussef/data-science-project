@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 VERDICT_LABELS = {"pass": "CONFORME", "pass_with_warnings": "CONFORME AVEC AVERTISSEMENTS", "fail": "NON CONFORME"}
-RESULT_LABELS = {"pass": "OK", "warn": "AVERT.", "fail": "ECHEC"}
+RESULT_LABELS = {"pass": "OK", "warn": "AVERT.", "fail": "ÉCHEC"}
 
 
 def build_report(audit: Mapping[str, Any], decisions: Mapping[tuple, str], timing_s: float) -> dict[str, Any]:
@@ -41,16 +41,16 @@ def render_report(report: Mapping[str, Any]) -> str:
         "# Rapport d'audit BIFlow (BI Auditor / XAI)", "",
         f"- Run : `{report['run_id']}` - snapshot `{report['snapshot_id']}` - {report['created_at']}",
         f"- **Verdict : {VERDICT_LABELS.get(report['verdict'], report['verdict'])}** "
-        f"({counts['pass']} OK, {counts['warn']} avertissement(s), {counts['fail']} echec(s))",
-        f"- Lignes KPI auditees : {report['rows']} ; duree de l'etape : {report['timing_s']} s", "",
-        "## Controles", "",
-        "| Controle | Categorie | Resultat | Detail | Lignes |", "|---|---|---|---|---|",
+        f"({counts['pass']} OK, {counts['warn']} avertissement(s), {counts['fail']} échec(s))",
+        f"- Lignes KPI auditées : {report['rows']} ; durée de l'étape : {report['timing_s']} s", "",
+        "## Contrôles", "",
+        "| Contrôle | Catégorie | Résultat | Détail | Lignes |", "|---|---|---|---|---|",
     ]
     for check in report["checks"]:
         detail = str(check["detail"]).replace("|", "/")
         lines.append(f"| {check['check_id']} | {check['category']} | {RESULT_LABELS[check['result']]} | "
                      f"{detail} | {len(check['affected_rows'])} |")
-    lines += ["", "## Avertissements (n'empechent pas la publication)", ""]
+    lines += ["", "## Avertissements (n'empêchent pas la publication)", ""]
     if not report["caveats"]:
         lines.append("Aucun.")
     for caveat in report["caveats"]:
@@ -59,14 +59,14 @@ def render_report(report: Mapping[str, Any]) -> str:
         lines.append(f"- **{caveat['check_id']}** : {caveat['detail']}"
                      + (f" Exemples : {sample}" + (f" (+{more})" if more > 0 else "") + "." if sample else ""))
     publication = report["publication"]
-    lines += ["", "## Decisions de publication", "",
+    lines += ["", "## Décisions de publication", "",
               "| Statut | Lignes |", "|---|---|"]
     lines += [f"| {status} | {count} |" for status, count in (publication["by_status"] or {}).items()]
     if publication["blocked_rows"]:
-        lines += ["", "Lignes bloquees : " + ", ".join(
+        lines += ["", "Lignes bloquées : " + ", ".join(
             f"{r['kpi_id']}/{r['iso3']}/{r['year']}" for r in publication["blocked_rows"][:30])
             + (" ..." if len(publication["blocked_rows"]) > 30 else "")]
-    lines += ["", "## Journal des decisions du pipeline", ""]
+    lines += ["", "## Journal des décisions du pipeline", ""]
     for entry in report["decision_log"]:
         lines.append(f"- **{entry['step']}** : {entry['decision']}")
         lines += [f"  - {reason}" for reason in entry.get("reasons") or []]
@@ -75,20 +75,20 @@ def render_report(report: Mapping[str, Any]) -> str:
         origin = example["origin"]["fr"]
         lines += [f"### {example['title']}", "", example["text"]["fr"], "",
                   f"*English* : {example['text']['en']}", "",
-                  f"Texte francais : {'reformulation LLM verifiee' if origin == 'llm' else 'gabarit deterministe'}"
-                  + (f" (reformulation LLM ecartee : nombres non justifies "
+                  f"Texte francais : {'reformulation LLM vérifiée' if origin == 'llm' else 'gabarit deterministe'}"
+                  + (f" (reformulation LLM écartée : nombres non justifiés "
                      f"{example['llm'].get('unsupported_numbers')})"
                      if (example.get("llm") or {}).get("llm_status") == "rejected_ungrounded" else "") + ".", ""]
     if report.get("insight_audit") is not None:
-        lines += ["## Insights audites", "", "| Insight | Accepte | Raisons |", "|---|---|---|"]
+        lines += ["## Insights audites", "", "| Insight | Accepté | Raisons |", "|---|---|---|"]
         lines += [f"| {i['insight_id']} | {'oui' if i['accepted'] else 'non'} | "
                   f"{'; '.join(i['reasons']).replace('|', '/') or '-'} |" for i in report["insight_audit"]]
     route2 = report.get("route2_insight_audit")
     if route2:
         lines += ["", "## Insights de la Route 2 (FinOVA Analyst)", "",
                   f"- Run Route 2 : `{route2.get('run_id')}` ({route2.get('created_at')})",
-                  f"- Insights audites : {route2.get('audited')} ; acceptes : {route2.get('accepted')} ; "
-                  f"rejetes : {route2.get('rejected')} ; sans fait KPI (non auditables) : "
+                  f"- Insights audites : {route2.get('audited')} ; acceptés : {route2.get('accepted')} ; "
+                  f"rejetés : {route2.get('rejected')} ; sans fait KPI (non auditables) : "
                   f"{route2.get('not_auditable')}", ""]
         rejected = [r for r in route2.get("results") or [] if not r.get("accepted")]
         if rejected:

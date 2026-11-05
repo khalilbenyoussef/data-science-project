@@ -66,7 +66,7 @@ def test_header_carries_run_snapshot_and_catalog(ctx):
 
 def test_quality_numbers_come_from_the_report(ctx):
     text = dl.render_quality(ctx)
-    for expected in ("0.812", "0.654", "12.34 %", "| fas | 77 | 9 | 5 |", "Anomalies moyennes | 3", "maison"):
+    for expected in ("0,812", "0,654", "12,34 %", "| fas | 77 | 9 | 5 |", "Anomalies moyennes | 3", "maison"):
         assert expected in text
 
 
@@ -166,7 +166,7 @@ def test_insights_document_lists_audit_status_and_recommendations(ctx, tmp_path,
     assert "1 audités, 1 acceptés, 0 rejetés, 1 non auditables" in text
     assert "Périmètre : **Tunisie (TUN), 2024**" in text
     assert "1. Piste à explorer : étudier des offres et canaux de distribution conçus pour les femmes." in text
-    assert "23.0 pts" in text and "Groupe cible : femmes" in text
+    assert "23,0 pts" in text and "Groupe cible : femmes" in text
     assert str(reco.load_rules()["rules"][0]["threshold_pp"]) + " pts" in text
 
 
@@ -188,7 +188,7 @@ def test_evaluation_flags_stale_results_and_unmeasured_manual_time(ctx):
     assert "Contrôle en direct (10 questions fixes" in text and "non mesuré" in text
     assert text.count("\n## ") == 1 + len(dl.AGENTS) + 2  # fraicheur, synthese, un par agent, reference
     ctx.manual = {"minutes_per_kpi": {"account_ownership": 12.5}}
-    assert "| `account_ownership` | 4 | 4 | 12.5 min |" in dl.render_evaluation(ctx)
+    assert "| `account_ownership` | 4 | 4 | 12,5 min |" in dl.render_evaluation(ctx)
 
 
 def test_evaluation_reports_live_ask_check(ctx):
@@ -217,8 +217,8 @@ def test_demo_script_reads_its_numbers(ctx, monkeypatch):
     assert "données fictives" in banker and "Mon indicateur mesure la même chose" in banker
     for limit in ("aucune authentification réelle", "Niveau pays uniquement", "llm.ask.allow_user_data_to_llm"):
         assert limit in banker
-    assert "Détention d'un compte : 37.8 %" in text and "MAR 44.4 %" in text
-    assert "Écart hommes − femmes : 23.0 pts ; revenu : 27.0 pts" in text
+    assert "Détention d'un compte : 37,8 %" in text and "MAR 44,4 %" in text
+    assert "Écart hommes − femmes : 23,0 pts ; revenu : 27,0 pts" in text
     assert "1 pistes ; ex. groupe cible « femmes »" in text
     assert "pass : 18 réussis, 1 avertissements, 0 échecs" in text and "fautes 9/9" in text
     assert "contrôle en direct non mesuré" in text and "| 9:30–10:00 | Conclusion | — |" in text

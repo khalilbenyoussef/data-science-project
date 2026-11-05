@@ -15,7 +15,7 @@ from typing import Any, Iterable, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
 
-from biflow.tools.audit_text import NUMBER
+from biflow.tools.audit_text import NUMBER, THOUSANDS
 from biflow.utils.countries import normalize_iso3
 
 APPROVED = ("approved", "approved_with_review_note")
@@ -53,6 +53,8 @@ def _numbers(text: str) -> list[tuple[str, float, int]]:
     out = []
     for token in NUMBER.findall(text):
         canonical = token.lstrip("+-−").replace(",", ".")
+        for sep in THOUSANDS:
+            canonical = canonical.replace(sep, "")
         out.append((token, float(canonical), _decimals(canonical)))
     return out
 
@@ -86,17 +88,17 @@ def audit_insights(insights: Iterable[Any], rows: Iterable[Mapping[str, Any]],
             status = (statuses or {}).get((claim.kpi_id, iso3, claim.year), row.get("publication_status"))
             decimals = _decimals(repr(claim.value)) if "e" not in repr(claim.value) else 6
             if row["unit"] != claim.unit:
-                reasons.append(f"claim {label} : unite {claim.unit} au lieu de {row['unit']}")
+                reasons.append(f"claim {label} : unité {claim.unit} au lieu de {row['unit']}")
             elif row["value"] is None:
                 reasons.append(f"claim {label} : valeur indisponible dans kpi_values")
             elif not _same(claim.value, row["value"], decimals):
-                reasons.append(f"claim {label} : {claim.value} different de {row['value']:.{decimals}f} publie")
+                reasons.append(f"claim {label} : {claim.value} différent de {row['value']:.{decimals}f} publié")
             elif status not in APPROVED:
-                reasons.append(f"claim {label} : ligne {status}, non approuvee")
+                reasons.append(f"claim {label} : ligne {status}, non approuvée")
             else:
                 verified.append((claim, iso3, row["value"]))
                 if status == "approved_with_review_note":
-                    notes.append(f"claim {label} : publie avec note de revue {list(row.get('review_reasons') or [])}")
+                    notes.append(f"claim {label} : publié avec note de revue {list(row.get('review_reasons') or [])}")
 
         years = {c.year for c, _, _ in verified}
         differences = []
@@ -111,7 +113,7 @@ def audit_insights(insights: Iterable[Any], rows: Iterable[Mapping[str, Any]],
                 or any(_same(number, diff, decimals) for diff in differences)
             )
             if not backed:
-                reasons.append(f"nombre '{token}' du texte non justifie par un claim")
+                reasons.append(f"nombre '{token}' du texte non justifié par un claim")
         results.append({"insight_id": insight.insight_id, "accepted": not reasons,
                         "reasons": reasons, "notes": notes})
     return results

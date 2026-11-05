@@ -120,7 +120,7 @@ def test_failing_user_source_is_excluded_and_recorded(base, monkeypatch):
     assert state["status"] == "success" and state["snapshot"]["status"] == "published"
     excluded, = state["excluded_sources"]
     assert (excluded["source"], excluded["step"]) == ("agents", "quality")
-    assert "valeurs differentes" in excluded["reason"] and excluded["quality_score"] < 0.7
+    assert "valeurs différentes" in excluded["reason"] and excluded["quality_score"] < 0.7
     run = json.loads((base / "reports" / "excl" / "run.json").read_text(encoding="utf-8"))
     assert run["excluded_sources"] == state["excluded_sources"]
     with duckdb.connect(str(base / "processed" / "warehouse.duckdb"), read_only=True) as con:
@@ -128,7 +128,7 @@ def test_failing_user_source_is_excluded_and_recorded(base, monkeypatch):
     report = json.loads((base / "audit" / "audit_report.json").read_text(encoding="utf-8"))
     step = next(e for e in report["decision_log"] if e["step"] == "user_sources")
     assert step["decision"] == "0 source(s) utilisateur incluse(s), 1 exclue(s)"
-    assert "agents exclue a l'etape quality" in step["reasons"][0]
+    assert "agents exclue à l'étape quality (score qualité 0,65)" in step["reasons"][0]
     assert report["verdict"] != "fail"
     md = (base / "quality" / "quality_report.md").read_text(encoding="utf-8")
     assert "FAIL (exclue)" in md and "Exclue : **agents**" in md

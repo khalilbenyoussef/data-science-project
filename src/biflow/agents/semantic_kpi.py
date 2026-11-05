@@ -120,7 +120,7 @@ class SemanticKpiAgent(BaseAgent):
         notes = dict(ctx.get("llm_notes") or {})
         notes["semantic_kpi"] = (
             f"{summary['rows']} valeurs KPI ({summary['available']} disponibles, "
-            f"{summary['requires_review']} a revoir)"
+            f"{summary['requires_review']} à revoir)"
         )
         return {
             "kpi_paths": {"table": "kpi_values", "warehouse": str(warehouse), "parquet": str(parquet)},

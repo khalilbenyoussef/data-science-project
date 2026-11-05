@@ -18,12 +18,12 @@ def test_audit_report_json_and_markdown(world):
     assert {c["check_id"] for c in report["caveats"]} == {"C2_partial_peer_coverage", "C4_within_survey_noise"}
     assert report["publication"]["blocked_rows"] == []
     assert [e["step"] for e in report["decision_log"]][-1] == "auditor"
-    assert [e["title"] for e in report["examples"]] == ["Detention de compte", "Ecart hommes-femmes",
-                                                        "Densite d'agences et pairs"]
+    assert [e["title"] for e in report["examples"]] == ["Détention de compte", "Écart hommes-femmes",
+                                                        "Densité d'agences et pairs"]
     md = (world.tmp / "audit" / "audit_report.md").read_text(encoding="utf-8")
-    for section in ("# Rapport d'audit BIFlow", "**Verdict : CONFORME AVEC AVERTISSEMENTS**", "## Controles",
-                    "## Avertissements", "## Decisions de publication", "## Journal des decisions du pipeline",
-                    "## Exemples d'explications", "Decomposition : men +4,4 pts, women -2,1 pts."):
+    for section in ("# Rapport d'audit BIFlow", "**Verdict : CONFORME AVEC AVERTISSEMENTS**", "## Contrôles",
+                    "## Avertissements", "## Décisions de publication", "## Journal des décisions du pipeline",
+                    "## Exemples d'explications", "Décomposition : men +4,4 pts, women -2,1 pts."):
         assert section in md, section
 
 
@@ -48,4 +48,4 @@ def test_fault_injection_detects_every_fault_without_touching_sources(world, tmp
     assert all(f["verdict"] != "pass" for f in summary["faults"])
     assert hashlib.sha256(warehouse.read_bytes()).hexdigest() == digest  # copie de travail uniquement
     md = (tmp_path / "eval" / "evaluation.md").read_text(encoding="utf-8")
-    assert "**Fautes detectees : 9 / 9**" in md and "| Ligne agregat WLD dans kpi_values |" in md
+    assert "**Fautes détectées : 9 / 9**" in md and "| Ligne agrégat WLD dans kpi_values |" in md
