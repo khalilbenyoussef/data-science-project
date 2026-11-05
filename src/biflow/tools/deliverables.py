@@ -633,10 +633,81 @@ def render_kpi_catalog(ctx: Context) -> str:
     return "\n".join(lines)
 
 
+def _status_fr(accepted: Any) -> str:
+    return "accepté" if accepted is True else "rejeté" if accepted is False else "non auditable"
+
+
+def scope_recommendations(ctx: Context, iso3: str | None = None, year: int | None = None) -> dict[str, Any]:
+    """Pistes du perimetre (pays et annee de la spec publiee par defaut)."""
+    from biflow.tools.recommendations import recommendations_for
+
+    iso3 = iso3 or (ctx.spec.get("country") or {}).get("iso3") or (ctx.cfg.get("kpi") or {}).get("focus", "TUN")
+    year = int(year or ctx.spec.get("year") or (ctx.cfg.get("dashboard") or {}).get("default_year", 2024))
+    return recommendations_for(ctx.warehouse, iso3, year, ctx.official_kpis())
+
+
+def render_insights(ctx: Context) -> str:
+    from biflow.tools.insights import insight_details
+    from biflow.tools.recommendations import load_rules
+
+    audit = ctx.audit.get("route2_insight_audit") or {}
+    rows = insight_details(ctx.spec, audit, ctx.catalog["kpis"])
+    lines = header(ctx, "Constats et pistes de recommandation",
+                   ["dashboard_app/public/data/finova.json", "data/audit/audit_report.json (route2_insight_audit)",
+                    "table kpi_values", "config/recommendations.yaml"])
+    lines += [
+        "## Constats audités", "",
+        f"Constats du run Route 2 `{audit.get('run_id', NA)}` (audit du {audit.get('created_at', NA)}) : "
+        f"{fmt_int(audit.get('audited'))} audités, {fmt_int(audit.get('accepted'))} acceptés, "
+        f"{fmt_int(audit.get('rejected'))} rejetés, {fmt_int(audit.get('not_auditable'))} non auditables "
+        "(aucun fait KPI derrière la phrase, par exemple une référence statique).", "",
+        "Un constat est accepté quand chaque nombre de la phrase est une valeur publiée de `kpi_values`, "
+        "une année ou une différence entre deux valeurs citées du même indicateur, au même arrondi.", "",
+    ]
+    lines += table(["Constat", "Texte", "Statut", "KPI · pays · année cités"],
+                   ([f"`{r['insight_id']}`", r.get("statement") or NA, _status_fr(r["accepted"])
+                     + (f" ({'; '.join(r['reasons'])})" if r["accepted"] is False else ""),
+                     "<br>".join(f"{c['kpi']} · {c['iso3']} · {c['year']}" for c in r["cited"]) or "—"]
+                    for r in rows)) if rows else [f"Aucun constat : {NA}."]
+    rules = load_rules()
+    result = scope_recommendations(ctx)
+    lines += [
+        "", "## Pistes de recommandation", "",
+        f"Périmètre : **{result['country']} ({result['iso3']}), {result['year']}**. Règles déterministes de "
+        f"`config/recommendations.yaml` (version {rules.get('version', NA)}), appliquées aux seules lignes "
+        f"`kpi_values` au statut {', '.join(f'`{s}`' for s in rules.get('publication_statuses') or [])}. "
+        f"{result['rules_checked']} comparaisons évaluées, {len(result['recommendations'])} pistes retenues, "
+        f"{len(result['rejected'])} écartées par l'audit des nombres.", "",
+        "Chaque piste est une **piste à explorer**, pas une conclusion : elle décrit une association observée "
+        "dans les données, jamais une cause.", "",
+        "### Règles et seuils", "",
+    ]
+    lines += table(["Règle", "Condition", "Indicateurs"],
+                   ([f"`{r['id']}`", str(r.get("rule_label", "")).format(
+                       threshold=r.get("threshold_pct", r.get("threshold_pp"))),
+                     ", ".join(f"`{k}`" for k in r["kpis"])] for r in rules["rules"]))
+    lines += ["", "### Pistes retenues", ""]
+    if not result["recommendations"]:
+        lines += ["Aucune règle déclenchée pour ce périmètre."]
+    for index, rec in enumerate(result["recommendations"], 1):
+        lines += [f"{index}. {rec['text']}", "",
+                  f"   - Groupe cible : {rec['target_group']}",
+                  f"   - Règle : `{rec['rule_id']}` ({rec['rule']})",
+                  "   - Sources : " + " ; ".join(
+                      f"{e['kpi']} · {e['iso3']} · {e['year']} = {fmt_num(e['value'], 2)} ({e['unit']}, "
+                      f"`{e['publication_status']}`)" for e in rec["evidence"]), ""]
+    if result["rejected"]:
+        lines += ["### Pistes écartées", ""]
+        lines += [f"- `{r['id']}` : {'; '.join(r['audit']['reasons'])}" for r in result["rejected"]]
+    lines += [""]
+    return "\n".join(lines)
+
+
 RENDERERS = {
     "ARCHITECTURE.md": render_architecture,
     "DATA_QUALITY_REPORT.md": render_quality,
     "KPI_CATALOG.md": render_kpi_catalog,
+    "INSIGHTS_ET_RECOMMANDATIONS.md": render_insights,
 }
 
 
@@ -646,4 +717,4 @@ def stable(text: str) -> str:
 
 
 __all__ = ["AGENTS", "Context", "DELIVERABLES_DIR", "NA", "RENDERERS", "agent_summaries", "load_context",
-           "stable", "warehouse_counts"]
+           "scope_recommendations", "stable", "warehouse_counts"]

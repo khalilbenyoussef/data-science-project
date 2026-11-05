@@ -205,3 +205,12 @@ def test_strict_content_security_policy_on_api_and_ui(client):
     assert "'unsafe-inline'" not in CONTENT_SECURITY_POLICY and "'unsafe-eval'" not in CONTENT_SECURITY_POLICY
     assert "default-src 'self'" in CONTENT_SECURITY_POLICY and "frame-ancestors 'none'" in CONTENT_SECURITY_POLICY
     assert "Content-Security-Policy" not in client.get("/docs").headers  # documentation de developpement
+
+
+def test_recommendations_route_is_served_with_csp(client):
+    from dashboard_app.api.app import CONTENT_SECURITY_POLICY
+
+    response = client.get("/api/recommendations", params={"iso3": "TUN", "year": 2024})
+    assert response.status_code == 200  # entrepot absent : aucune piste, jamais d'erreur 500
+    assert response.json()["recommendations"] == []
+    assert response.headers.get("Content-Security-Policy") == CONTENT_SECURITY_POLICY

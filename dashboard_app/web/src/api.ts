@@ -1,5 +1,6 @@
 import type {
-  AskResult, DetectResult, DryRunResult, RunSummary, SourceData, SourceJob, SourceMappingInput,
+  AskResult, DetectResult, DryRunResult, RecommendationsResult, RunSummary, SourceData, SourceJob,
+  SourceMappingInput,
   SourcesList, Spec,
 } from "./types";
 
@@ -120,4 +121,9 @@ export function fetchSourceData(name: string): Promise<SourceData> {
 
 export function fetchRuns(): Promise<{ runs: RunSummary[]; count: number }> {
   return request<{ runs: RunSummary[]; count: number }>("/api/runs");
+}
+
+export function fetchRecommendations(iso3: string, year: number, signal?: AbortSignal): Promise<RecommendationsResult> {
+  return request<RecommendationsResult>(
+    `/api/recommendations?iso3=${encodeURIComponent(iso3)}&year=${year}`, { signal });
 }

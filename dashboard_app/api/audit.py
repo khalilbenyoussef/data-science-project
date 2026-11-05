@@ -17,7 +17,7 @@ from typing import Any, Mapping
 import duckdb
 from fastapi import APIRouter, HTTPException, Query
 
-from biflow.tools.insights import insights_from_finova
+from biflow.tools.insights import insight_details
 from biflow.tools.kpi import DEFAULT_CATALOG, load_catalog
 
 AFFECTED_LIMIT = 200
@@ -104,23 +104,8 @@ def create_audit_router(*, audit_dir: Path, warehouse: Path, spec_file: Path,
             return []
         return [{"reason": r[0], "label": REASON_LABELS.get(r[0], r[0]), "rows": int(r[1])} for r in rows]
 
-    def insight_details(audit: Mapping[str, Any]) -> list[dict[str, Any]]:
-        spec = _load(spec_file)
-        catalog = load_catalog(catalog_path)
-        by_page = {page.get("id"): page.get("insights") or [] for page in spec.get("pages") or []}
-        statements = {f"{page}:{item.get('id')}": item.get("statement") for page, items in by_page.items()
-                      for item in items}
-        claims, _ = insights_from_finova(by_page, spec.get("facts") or [], catalog["kpis"])
-        cited = {claim["insight_id"]: [{"kpi_id": c["kpi_id"], "kpi": _name_fr(catalog, c["kpi_id"]),
-                                        "iso3": c["iso3"], "year": c["year"]} for c in claim["claims"]]
-                 for claim in claims}
-        rows = [{"insight_id": item["insight_id"], "accepted": item["accepted"], "reasons": item.get("reasons") or [],
-                 "statement": statements.get(item["insight_id"]), "cited": cited.get(item["insight_id"], [])}
-                for item in audit.get("results") or []]
-        rows += [{"insight_id": insight_id, "accepted": None, "reasons": ["non auditable"],
-                  "statement": statements.get(insight_id), "cited": []}
-                 for insight_id in audit.get("not_auditable_ids") or []]
-        return rows
+    def insight_rows(audit: Mapping[str, Any]) -> list[dict[str, Any]]:
+        return insight_details(_load(spec_file), audit, load_catalog(catalog_path)["kpis"])
 
     @router.get("/summary")
     def summary() -> dict[str, Any]:
@@ -140,7 +125,7 @@ def create_audit_router(*, audit_dir: Path, warehouse: Path, spec_file: Path,
             "review_reasons": review_reasons(),
             "insight_audit": {key: insight.get(key) for key in ("run_id", "created_at", "audited", "accepted",
                                                                 "rejected", "not_auditable")}
-            | {"insights": insight_details(insight)},
+            | {"insights": insight_rows(insight)},
             "evaluation": {
                 "available": bool(evaluation), "created_at": evaluated_at,
                 "stale": bool(audit_time and eval_time and eval_time < audit_time),

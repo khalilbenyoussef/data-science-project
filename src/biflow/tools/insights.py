@@ -167,4 +167,28 @@ def insights_from_finova(insights_by_page: Mapping[str, Iterable[Mapping[str, An
     return converted, not_auditable
 
 
-__all__ = ["APPROVED", "Claim", "Insight", "audit_insights", "insights_from_finova"]
+def insight_details(spec: Mapping[str, Any], audit: Mapping[str, Any],
+                    catalog_kpis: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Constats de la spec avec leur resultat d'audit (accepte, rejete ou non
+    auditable) et les KPI, pays et annees qu'ils citent. Lecture seule."""
+    def name_fr(kpi_id: str) -> str:
+        kpi = catalog_kpis.get(kpi_id) or {}
+        return kpi.get("name_fr") or kpi.get("name") or kpi_id
+
+    by_page = {page.get("id"): page.get("insights") or [] for page in spec.get("pages") or []}
+    statements = {f"{page}:{item.get('id')}": item.get("statement") for page, items in by_page.items()
+                  for item in items}
+    claims, _ = insights_from_finova(by_page, spec.get("facts") or [], catalog_kpis)
+    cited = {claim["insight_id"]: [{"kpi_id": c["kpi_id"], "kpi": name_fr(c["kpi_id"]),
+                                    "iso3": c["iso3"], "year": c["year"]} for c in claim["claims"]]
+             for claim in claims}
+    rows = [{"insight_id": item["insight_id"], "accepted": item["accepted"], "reasons": item.get("reasons") or [],
+             "statement": statements.get(item["insight_id"]), "cited": cited.get(item["insight_id"], [])}
+            for item in audit.get("results") or []]
+    rows += [{"insight_id": insight_id, "accepted": None, "reasons": ["non auditable"],
+              "statement": statements.get(insight_id), "cited": []}
+             for insight_id in audit.get("not_auditable_ids") or []]
+    return rows
+
+
+__all__ = ["APPROVED", "Claim", "Insight", "audit_insights", "insight_details", "insights_from_finova"]

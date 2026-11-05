@@ -1148,6 +1148,23 @@ code,
 .insight-list .sev-info .dot,
 .notice-list .sev-info .dot { background: var(--series); }
 
+.reco-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 6px;
+}
+
+.reco-target {
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.recommendations .tag-row code {
+  font-family: inherit;
+  font-size: 0.72rem;
+}
+
 .tag-row {
   display: flex;
   flex-wrap: wrap;

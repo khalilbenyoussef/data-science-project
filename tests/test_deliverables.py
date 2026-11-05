@@ -136,3 +136,35 @@ def test_check_ignores_generation_date(ctx, tmp_path, monkeypatch):
     assert build_deliverables.build(out, check=True) == 0
     target.write_text(target.read_text(encoding="utf-8") + "\nmodifie\n", encoding="utf-8")
     assert build_deliverables.build(out, check=True) == 1
+
+
+def test_insights_document_lists_audit_status_and_recommendations(ctx, tmp_path, monkeypatch):
+    import duckdb
+
+    from biflow.tools import recommendations as reco
+
+    ctx.spec = {"country": {"iso3": "TUN"}, "year": 2024, "pages": [
+        {"id": "overview", "insights": [{"id": "A", "statement": "En 2024, 37.8 % ont un compte.",
+                                         "evidence_ids": ["F-1"]}]},
+        {"id": "poverty", "insights": [{"id": "B", "statement": "SMIG", "evidence_ids": []}]}],
+        "facts": [{"id": "F-1", "code": "account_ownership", "value": 37.8, "year": 2024, "iso3": "TUN",
+                   "provider": "semantic", "unit": "percent", "evidence_ids": ["EV-account_ownership-TUN-2024"]}]}
+    ctx.audit["route2_insight_audit"] = {"run_id": "r2", "audited": 1, "accepted": 1, "rejected": 0,
+                                         "not_auditable": 1, "results": [{"insight_id": "overview:A",
+                                                                          "accepted": True, "reasons": []}],
+                                         "not_auditable_ids": ["poverty:B"]}
+    ctx.warehouse = tmp_path / "w.duckdb"
+    with duckdb.connect(str(ctx.warehouse)) as con:
+        con.execute("CREATE TABLE kpi_values (kpi_id VARCHAR, iso3 VARCHAR, year INTEGER, value DOUBLE, "
+                    "unit VARCHAR, publication_status VARCHAR, review_reasons VARCHAR[], peer_status VARCHAR, "
+                    "peers_included VARCHAR[], missing_peers VARCHAR[])")
+        con.execute("INSERT INTO kpi_values VALUES ('gender_gap', 'TUN', 2024, 22.96, 'percentage_points', "
+                    "'approved', [], NULL, NULL, NULL)")
+    text = dl.render_insights(ctx)
+    assert "| `overview:A` | En 2024, 37.8 % ont un compte. | accepté | Taux de détention d'un compte · TUN · 2024 |" in text
+    assert "| `poverty:B` | SMIG | non auditable | — |" in text
+    assert "1 audités, 1 acceptés, 0 rejetés, 1 non auditables" in text
+    assert "Périmètre : **Tunisie (TUN), 2024**" in text
+    assert "1. Piste à explorer : étudier des offres et canaux de distribution conçus pour les femmes." in text
+    assert "23.0 pts" in text and "Groupe cible : femmes" in text
+    assert str(reco.load_rules()["rules"][0]["threshold_pp"]) + " pts" in text

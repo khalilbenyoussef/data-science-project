@@ -29,6 +29,7 @@ from biflow.config import ROOT, load_config, resolve
 from biflow.tools.dashboard_spec import COUNTRY_LABELS, PEERS, REFERENCE_PATH
 from biflow.tools.audit_text import template_text
 from dashboard_app.api.audit import create_audit_router
+from dashboard_app.api.reports import create_reports_router
 from dashboard_app.api.sources import create_sources_router
 from biflow.tools.kpi import DEFAULT_CATALOG
 from biflow.tools.spec_cache import (
@@ -315,9 +316,10 @@ def create_app(
     sources_router, _ = create_sources_router(cfg, warehouse=warehouse, runner=sources_runner)
     app.include_router(sources_router)
     # page « Audit et confiance » : rapport d'audit, kpi_values et explications (lecture seule)
-    app.include_router(create_audit_router(
-        audit_dir=resolve(audit_dir if audit_dir is not None else paths.get("audit", "data/audit")),
-        warehouse=warehouse, spec_file=spec_file))
+    audit_root = resolve(audit_dir if audit_dir is not None else paths.get("audit", "data/audit"))
+    app.include_router(create_audit_router(audit_dir=audit_root, warehouse=warehouse, spec_file=spec_file))
+    # pistes de recommandation (regles deterministes sur kpi_values auditees), lecture seule
+    app.include_router(create_reports_router(warehouse=warehouse, audit_dir=audit_root, spec_file=spec_file))
 
     settings = ask_settings(cfg)
     budget = SessionBudget(settings["max_calls_per_session"])

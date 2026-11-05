@@ -1,0 +1,107 @@
+# Pistes de recommandation : regles deterministes (aucun texte libre de LLM).
+#
+# Chaque regle lit uniquement des lignes kpi_values auditees (statut de publication
+# ci-dessous) du pays et de l'annee selectionnes, compare a un seuil et, si elle se
+# declenche, produit une « piste a explorer » qui cite ses chiffres et nomme le groupe
+# cible. Les nombres du texte sont ensuite controles par l'audit des insights
+# (biflow.tools.insights.audit_insights) : une piste non justifiee est ecartee.
+# Association, pas causalite : aucune regle n'affirme une cause ni une obligation.
+
+version: 1
+publication_statuses: [approved, approved_with_review_note]
+prefix: "Piste à explorer : "
+caveat: "Association, pas causalité."
+forbidden_phrases: ["il faut", "doit ", "doivent ", "cause ", "provoque", "entraîne"]
+
+rules:
+  # Ecart entre sous-groupes (KPI d'ecart du catalogue, en points de pourcentage).
+  # Le KPI vaut groupe « favorise » moins groupe « cible » ; un ecart negatif inverse les roles.
+  - id: subgroup_gap
+    kind: subgroup_gap
+    threshold_pp: 10
+    rule_label: "écart entre sous-groupes ≥ {threshold} pts"
+    kpis:
+      gender_gap:
+        topic: "détention d'un compte"
+        advantaged: "hommes"
+        target: "femmes"
+        piste: "étudier des offres et canaux de distribution conçus pour les {target}"
+      income_gap:
+        topic: "détention d'un compte"
+        advantaged: "60 % les plus riches"
+        target: "40 % les plus pauvres"
+        piste: "examiner des comptes à bas coût et sans frais fixes pour les {target}"
+      education_gap:
+        topic: "détention d'un compte"
+        advantaged: "adultes du secondaire ou plus"
+        target: "adultes du primaire ou moins"
+        piste: "tester des parcours d'ouverture simplifiés et de l'accompagnement pour les {target}"
+      laborforce_gap:
+        topic: "détention d'un compte"
+        advantaged: "actifs"
+        target: "adultes hors population active"
+        piste: "explorer des canaux qui ne passent pas par l'employeur pour les {target}"
+      age_gap:
+        topic: "détention d'un compte"
+        advantaged: "adultes de 25 ans et plus"
+        target: "jeunes de 15 à 24 ans"
+        piste: "étudier des offres d'entrée pour les {target}"
+      urban_gap:
+        topic: "détention d'un compte"
+        advantaged: "adultes urbains"
+        target: "adultes ruraux"
+        piste: "examiner les points de service de proximité (agents, mobile) pour les {target}"
+
+  # Obstacle cite par les adultes sans compte nettement plus souvent que chez les pairs.
+  - id: barrier_above_peers
+    kind: above_peers
+    threshold_pp: 5
+    rule_label: "pays − moyenne des pairs ≥ {threshold} pts"
+    kpis:
+      barrier_too_far:
+        target: "adultes sans compte éloignés des institutions financières"
+        piste: "examiner la couverture géographique des points de service pour les {target}"
+      barrier_too_expensive:
+        target: "adultes sans compte qui jugent les services trop chers"
+        piste: "étudier la structure des frais des comptes de base pour les {target}"
+      barrier_no_documents:
+        target: "adultes sans compte faute de documents"
+        piste: "examiner des procédures d'identification simplifiées pour les {target}"
+      barrier_insufficient_funds:
+        target: "adultes sans compte faute d'argent suffisant"
+        piste: "étudier des comptes sans solde minimal pour les {target}"
+      barrier_family_has_account:
+        target: "adultes sans compte dont un proche en possède un"
+        piste: "explorer des comptes individuels faciles à ouvrir pour les {target}"
+      barrier_no_trust:
+        target: "adultes sans compte méfiants envers les institutions financières"
+        piste: "explorer l'information sur la protection des clients et la garantie des dépôts pour les {target}"
+
+  # Usage nettement inferieur a la moyenne des pairs (points de pourcentage).
+  - id: usage_below_peers
+    kind: below_peers
+    threshold_pp: 5
+    rule_label: "moyenne des pairs − pays ≥ {threshold} pts"
+    kpis:
+      account_ownership:
+        target: "adultes sans compte"
+        piste: "étudier les freins à l'ouverture de compte pour les {target}"
+      digital_payment_rate:
+        target: "adultes qui ne paient pas encore par voie numérique"
+        piste: "examiner l'acceptation des paiements numériques chez les commerçants pour les {target}"
+      formal_saving_rate:
+        target: "adultes qui épargnent hors des institutions financières"
+        piste: "étudier des produits d'épargne formelle simples pour les {target}"
+
+  # Reseau physique nettement moins dense que la moyenne des pairs (ecart relatif).
+  - id: network_below_peers
+    kind: below_peers_relative
+    threshold_pct: 10
+    rule_label: "densité inférieure d'au moins {threshold} % à la moyenne des pairs"
+    kpis:
+      branch_density:
+        target: "adultes des zones peu desservies par les agences"
+        piste: "examiner le maillage des agences et des agents bancaires pour les {target}"
+      atm_density:
+        target: "adultes des zones peu équipées en distributeurs"
+        piste: "étudier le déploiement de distributeurs ou de points de retrait pour les {target}"

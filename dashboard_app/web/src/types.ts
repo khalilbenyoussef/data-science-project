@@ -507,3 +507,41 @@ export interface RunSummary {
   spec: boolean;
   route2: Record<string, unknown> | null;
 }
+
+// ------------------------------------------------------------ Pistes de recommandation
+export interface RecommendationEvidence {
+  id: string;
+  kpi_id: string;
+  kpi: string;
+  iso3: string;
+  year: number;
+  value: number;
+  unit: string;
+  publication_status: string;
+  review_reasons: string[];
+}
+
+export interface Recommendation {
+  id: string;
+  rule_id: string;
+  kpi_id: string;
+  kpi: string;
+  iso3: string;
+  year: number;
+  country: string;
+  target_group: string;
+  text: string;
+  rule: string;
+  review_note: boolean;
+  evidence: RecommendationEvidence[];
+}
+
+export interface RecommendationsResult {
+  iso3: string;
+  year: number;
+  country: string;
+  rules_version: number | null;
+  rules_checked: number;
+  recommendations: Recommendation[];
+  rejected: number;
+}
