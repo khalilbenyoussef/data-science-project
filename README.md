@@ -67,7 +67,7 @@ src/biflow/
                    user_sources ; analysis, dashboard_contract, dashboard_spec (Route 2)
   utils/           io, logger, pays (ISO3)
 config/config.yaml     chemins, LLM, orchestrateur, KPI, sources, seuils, analyst, dashboard
-config/kpi_catalog.v1.yaml  definitions declaratives des KPI (version 1.7.0, libelles francais name_fr)
+config/kpi_catalog.v1.yaml  définitions déclaratives des KPI (version 1.8.0 : name_fr, definition_fr, denominator_fr)
 data/                  raw, snapshots, staging, processed, profiles, quality, audit
 dashboard_app/         dashboard FinOVA : API FastAPI (api/) + front React/Vite (web/)
 legacy/dashboard/      ancien front React/ECharts, retire du service (remplace par FinOVA)

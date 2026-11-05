@@ -3133,3 +3133,11 @@ select {
 .user-recommendations h4 {
   margin: 0;
 }
+
+/* Definition officielle : source anglaise du catalogue, en petit, pour verifier le sens */
+.source-en {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}

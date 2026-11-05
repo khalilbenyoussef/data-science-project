@@ -257,6 +257,10 @@ def fmt_int(value: Any) -> str:
     return f"{int(value):,}".replace(",", "\u202f") if isinstance(value, (int, float)) else NA
 
 
+PUBLICATION_FR = {"approved": "approuvée", "approved_with_review_note": "approuvée avec réserve",
+                  "blocked": "bloquée"}
+
+
 def fmt_num(value: Any, decimals: int = 1) -> str:
     if not isinstance(value, (int, float)):
         return NA
@@ -354,7 +358,7 @@ def _key_output(agent_id: str, report: Mapping[str, Any], ctx: Context, counts: 
         a = out.get("audit") or ctx.audit
         c = a.get("counts") or {}
         return {"rows_in": a.get("rows"), "verdict": a.get("verdict"),
-                "checks": c, "text": f"verdict {a.get('verdict', NA)} ({c.get('pass', NA)} réussis, "
+                "checks": c, "text": f"verdict {VERDICTS_FR.get(a.get('verdict'), a.get('verdict', NA))} ({c.get('pass', NA)} réussis, "
                                      f"{c.get('warn', NA)} avertissements, {c.get('fail', NA)} échecs)"}
     if agent_id == "analyst":
         s = out.get("analyst_summary") or {}
@@ -365,7 +369,7 @@ def _key_output(agent_id: str, report: Mapping[str, Any], ctx: Context, counts: 
         s = out.get("dashboard_spec_summary") or {}
         return {"rows_out": s.get("facts"),
                 "text": f"{s.get('pages', NA)} pages, {s.get('facts', NA)} faits, publication "
-                        f"{s.get('publication_status', NA)}"}
+                        f"{PUBLICATION_FR.get(s.get('publication_status'), s.get('publication_status', NA))}"}
     return {"text": NA}
 
 
@@ -477,7 +481,7 @@ def render_architecture(ctx: Context) -> str:
         "  SNAP --> PROF[Profils] --> QUAL[\"Rapport qualité<br/>score " + fmt_num(ctx.quality.get('overall_score'), 3) + "\"]",
         "  QUAL -->|gate réussi| DW[(\"Entrepôt DuckDB<br/>" + fmt_int(counts.get('fact_rows')) + " lignes fact\")]",
         "  DW --> KPI[(\"kpi_values<br/>" + fmt_int(counts.get('kpi_rows')) + " lignes\")]",
-        "  KPI --> AUD[\"Audit<br/>" + str(ctx.audit.get('verdict', NA)) + "\"]",
+        "  KPI --> AUD[\"Audit<br/>" + VERDICTS_FR.get(ctx.audit.get('verdict'), str(ctx.audit.get('verdict', NA))) + "\"]",
         "  AUD --> SPEC[\"Spec FinOVA<br/>faits + constats audités\"]",
         "  SPEC --> UI[Interface FinOVA] --> ASK[Ask Finova]",
         "```", "",
@@ -614,13 +618,15 @@ def render_kpi_catalog(ctx: Context) -> str:
         src = v.get("source") or {}
         lines += [
             f"### {v.get('name_fr') or v.get('name')} (`{k}`)", "",
-            f"- **Définition** : {v.get('definition', NA)}",
+            f"- **Définition** : {v.get('definition_fr') or v.get('definition', NA)}",
+            f"  <br><sub>Source (EN) : {v.get('definition', NA)}</sub>",
             f"- **Formule** : `{formula.get('from_fact', NA)}` depuis `fact` "
             f"(`{(v.get('warehouse') or {}).get('indicator_code', NA)}`)"
             + (f" ; dépendances : {', '.join(f'`{d}`' for d in v.get('dependencies') or [])}"
                if v.get("dependencies") else ""),
             f"- **Unité** : {v.get('unit', NA)}",
-            f"- **Dénominateur** : {den.get('population', NA)} ({den.get('basis', NA)})",
+            f"- **Dénominateur** : {v.get('denominator_fr') or NA}",
+            f"  <br><sub>Source (EN) : {den.get('population', NA)} ({den.get('basis', NA)})</sub>",
             f"- **Code source** : {src.get('dataset', NA)} `{src.get('indicator', NA)}`"
             + (f" (indicateur officiel `{src['official_indicator']}`)" if src.get("official_indicator") else ""),
             f"- **Années valides** : {', '.join(str(y) for y in v.get('valid_years') or []) or NA}",
@@ -821,7 +827,7 @@ def render_evaluation(ctx: Context) -> str:
         ask_extra += [
             f"- Contrôle en direct : **{live.get('grounded')}/{live.get('questions')} réponses fondées**, "
             f"{live.get('llm_answers')} rédigées par le LLM (les autres en repli déterministe) ; modèle "
-            f"{live.get('model')}, le {live.get('run_at')}.",
+            f"{live.get('model')}, le {str(live.get('run_at')).replace('T', ' ')}.",
             f"- Méthode : {live.get('method', NA)}.", "",
             *table(["Question", "Mode", "Fondée", "Nombres hors faits", "Réponse"],
                    ([r["question"], r["mode"], "oui" if r["grounded"] else "non", ", ".join(r["unknown"]) or "—",
@@ -963,7 +969,7 @@ def render_demo(ctx: Context) -> str:
         f"{fmt_num(total_r1, 1)} s |",
         f"| 7:00–8:30 | Audit et confiance | Verdict, contrôles, injection de fautes, « Télécharger le rapport (PDF) » | "
         "Un auditeur indépendant recalcule chaque valeur ; on a vérifié qu'il détecte des fautes injectées. | "
-        f"{ctx.audit.get('verdict', NA)} : {counts.get('pass', NA)} réussis, {counts.get('warn', NA)} avertissements, "
+        f"{VERDICTS_FR.get(ctx.audit.get('verdict'), ctx.audit.get('verdict', NA))} : {counts.get('pass', NA)} réussis, {counts.get('warn', NA)} avertissements, "
         f"{counts.get('fail', NA)} échecs ; {fmt_int(publication.get('approved'))} approuvées, "
         f"{fmt_int(publication.get('approved_with_review_note'))} avec réserve ; fautes "
         f"{fi.get('detected', NA)}/{fi.get('total', NA)} ; constats {insight.get('accepted', NA)}/"

@@ -416,7 +416,10 @@ function EvaluationPanel({ summary }: { summary: AuditSummary }) {
                   <small className="check-id">{fault.expected_check}</small>
                 </td>
                 <td><span className={`status ${fault.detected ? "status-available" : "status-removed"}`}>{fault.detected ? "Oui" : "Non"}</span></td>
-                <td>{VERDICTS[fault.verdict] ?? fault.verdict}{fault.failing_checks.length ? ` (${fault.failing_checks.join(", ")})` : ""}</td>
+                <td title={fault.failing_checks.join(", ") || undefined}>
+                  {VERDICTS[fault.verdict] ?? fault.verdict}
+                  {fault.failing_checks.length ? ` (${fault.failing_checks.map((id) => id.split("_")[0]).join(", ")})` : ""}
+                </td>
               </tr>
             ))}
           </tbody>

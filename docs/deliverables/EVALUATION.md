@@ -1,34 +1,34 @@
 # Évaluation des agents et approche de référence
 
-- **Généré le** : 2026-11-05T22:20:39
-- **Run audité (Route 1)** : `user_delete_20261105T221858`
+- **Généré le** : 2026-11-06T00:05:28
+- **Run audité (Route 1)** : `20261105T234338`
 - **Snapshot** : `v9`
-- **Version du catalogue KPI** : 1.7.0
-- **Run Route 2 (spec publiée)** : `route2_20261105T221924144045`
+- **Version du catalogue KPI** : 1.8.0
+- **Run Route 2 (spec publiée)** : `route2_20261105T234415620050`
 - **Sources lues** : `outputs/reports/<run>/*.json`, `data/audit/evaluation.json`, `data/audit/audit_report.json`, `outputs/evaluation/agents.json`, `outputs/evaluation/ask_live.json`, `outputs/evaluation/baseline.json`, `docs/deliverables/manual_baseline.yaml`
 - Document généré par `scripts/build_deliverables.py` : ne pas modifier à la main.
 
 ## Fraîcheur des mesures
 
-- Dernier audit : 2026-11-05T22:19:21
-- Injection de fautes : 2026-11-04T12:59:47 — **résultat antérieur au dernier audit**
-- Évaluation des agents (scripts/evaluate_agents.py) : 2026-11-05T18:20:31 — **résultat antérieur au dernier audit**
+- Dernier audit : 2026-11-05T23:44:08
+- Injection de fautes : 2026-11-05T23:47:38
+- Évaluation des agents (scripts/evaluate_agents.py) : 2026-11-05T23:47:42
 - Contrôle en direct d’Ask Finova : 2026-11-05T18:20:31 — **résultat antérieur au dernier audit**
-- Approche de référence (scripts/baseline_reference.py) : 2026-11-05T18:12:24 — **résultat antérieur au dernier audit**
+- Approche de référence (scripts/baseline_reference.py) : 2026-11-05T23:47:46
 
 ## Synthèse par agent
 
 | Agent | Mode | Statut | Durée | Lignes entrée → sortie | Sortie clé | Appels LLM |
 |---|---|---|---|---|---|---|
-| Collector | déterministe | réussi | 0.14 s | non disponible → 60 361 | 3 source(s) collectée(s) | 0 appel |
-| Snapshot | déterministe | réussi | 1.47 s | non disponible → 60 361 | snapshot v9 (new) | 0 appel |
-| Profiler | déterministe | réussi | 2.50 s | 60 361 → 60 361 | findex 8 577 × 36 ; fas 32 209 × 57 ; gdp 19 575 × 6 | 0 appel |
-| Quality | déterministe + LLM optionnel | réussi | 1.33 s | 60 361 → non disponible | score 0.936, gate réussi | 0 appel |
-| ETL | déterministe | réussi | 2.38 s | 60 361 → 90 732 | 90 732 lignes fact, 263 pays | 0 appel |
-| Semantic & KPI | déterministe | réussi | 6.70 s | 90 732 → 1 620 | 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue) | 0 appel |
-| Auditor (BI Auditor / XAI) | déterministe + LLM optionnel | réussi | 5.09 s | 1 620 → non disponible | verdict pass_with_warnings (17 réussis, 2 avertissements, 0 échecs) | 0 appel |
-| Analyst (FinOVA) | déterministe | réussi | 0.01 s | 96 → 17 | 17 constats sur 96 faits, carte XAI oui | 0 appel |
-| Dashboard spec | déterministe | réussi | 0.77 s | non disponible → 96 | 6 pages, 96 faits, publication approved | 0 appel |
+| Collector | déterministe | réussi | 0,14 s | non disponible → 60 361 | 3 source(s) collectée(s) | 0 appel |
+| Snapshot | déterministe | réussi | 0,20 s | non disponible → 60 361 | snapshot v9 (rebuild) | 0 appel |
+| Profiler | déterministe | réussi | 3,51 s | 60 361 → 60 361 | findex 8 577 × 36 ; fas 32 209 × 57 ; gdp 19 575 × 6 | 0 appel |
+| Quality | déterministe + LLM optionnel | réussi | 2,19 s | 60 361 → non disponible | score 0,936, gate réussi | 0 appel |
+| ETL | déterministe | réussi | 3,94 s | 60 361 → 90 732 | 90 732 lignes fact, 263 pays | 0 appel |
+| Semantic & KPI | déterministe | réussi | 12,57 s | 90 732 → 1 620 | 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue) | 0 appel |
+| Auditor (BI Auditor / XAI) | déterministe + LLM optionnel | réussi | 7,67 s | 1 620 → non disponible | verdict conforme avec avertissements (17 réussis, 2 avertissements, 0 échecs) | 0 appel |
+| Analyst (FinOVA) | déterministe | réussi | 0,02 s | 96 → 17 | 17 constats sur 96 faits, carte XAI oui | 0 appel |
+| Dashboard spec | déterministe | réussi | 0,83 s | non disponible → 96 | 6 pages, 96 faits, publication approuvée | 0 appel |
 | Ask Finova | déterministe + LLM optionnel | à la demande | non disponible | non disponible → non disponible | réponses à la demande, nombres contrôlés contre les faits | non disponible |
 
 ## Collector
@@ -36,17 +36,18 @@
 *Collecte les sources officielles (Findex, FAS, PIB WDI) et les sources utilisateur confirmées ; calcule l'empreinte SHA-256 de chaque fichier.*
 
 - Mode : déterministe
-- Run : `user_delete_20261105T221858` — statut réussi, durée 0.14 s, 0 avertissement(s), 0 erreur(s)
+- Run : `user_delete_20261105T221858` — statut réussi, durée 0,14 s, 0 avertissement(s), 0 erreur(s)
 - Sortie clé : 3 source(s) collectée(s)
 - Appels LLM mesurés : 0 appel
+- run courant reconstruit depuis le snapshot publié : dernier Collector exécuté
 
 ## Snapshot
 
 *Versionne les fichiers bruts (blobs dédupliqués par SHA-256) ; sans donnée nouvelle, le run s'arrête.*
 
 - Mode : déterministe
-- Run : `user_delete_20261105T221858` — statut réussi, durée 1.47 s, 0 avertissement(s), 0 erreur(s)
-- Sortie clé : snapshot v9 (new)
+- Run : `20261105T234338` — statut réussi, durée 0,20 s, 0 avertissement(s), 0 erreur(s)
+- Sortie clé : snapshot v9 (rebuild)
 - Appels LLM mesurés : 0 appel
 - Snapshot publié après l'audit : `v9` (published)
 
@@ -55,7 +56,7 @@
 *Profile chaque source : dimensions, valeurs manquantes, types, colonnes de métadonnées, valeurs atypiques (IsolationForest).*
 
 - Mode : déterministe
-- Run : `user_delete_20261105T221858` — statut réussi, durée 2.50 s, 0 avertissement(s), 0 erreur(s)
+- Run : `20261105T234338` — statut réussi, durée 3,51 s, 0 avertissement(s), 0 erreur(s)
 - Sortie clé : findex 8 577 × 36 ; fas 32 209 × 57 ; gdp 19 575 × 6
 - Appels LLM mesurés : 0 appel
 - Lignes profilées : 60 361
@@ -65,10 +66,10 @@
 *Contrôle qualité : score par source, gate (seuil configuré), anomalies classées par sévérité, diagnostics de plausibilité, exclusion des sources utilisateur non conformes.*
 
 - Mode : déterministe + LLM optionnel (plan de remédiation rédigé, sans effet sur le score ni le gate ; groq → gemini)
-- Run : `user_delete_20261105T221858` — statut réussi, durée 1.33 s, 0 avertissement(s), 0 erreur(s)
-- Sortie clé : score 0.936, gate réussi
+- Run : `20261105T234338` — statut réussi, durée 2,19 s, 0 avertissement(s), 0 erreur(s)
+- Sortie clé : score 0,936, gate réussi
 - Appels LLM mesurés : 0 appel
-- Score global 0.936 (seuil 0.70), gate réussi
+- Score global 0,936 (seuil 0,70), gate réussi
 - Anomalies : critiques 0, élevées 0, moyennes 2, faibles 0
 - Diagnostics : 25 ; sources utilisateur exclues : 0
 
@@ -77,7 +78,7 @@
 *Harmonise les sources (codes pays ISO3, années, unités) et construit le modèle en étoile.*
 
 - Mode : déterministe
-- Run : `user_delete_20261105T221858` — statut réussi, durée 2.38 s, 0 avertissement(s), 0 erreur(s)
+- Run : `20261105T234338` — statut réussi, durée 3,94 s, 0 avertissement(s), 0 erreur(s)
 - Sortie clé : 90 732 lignes fact, 263 pays
 - Appels LLM mesurés : 0 appel
 - Lignes fact par source : fas 15 753, findex 64 328, gdp 10 651
@@ -87,7 +88,7 @@
 *Calcule chaque KPI du catalogue pour le pays focus et les pairs, sur chaque année valide ; attribue un statut de publication.*
 
 - Mode : déterministe
-- Run : `user_delete_20261105T221858` — statut réussi, durée 6.70 s, 0 avertissement(s), 0 erreur(s)
+- Run : `20261105T234338` — statut réussi, durée 12,57 s, 0 avertissement(s), 0 erreur(s)
 - Sortie clé : 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue)
 - Appels LLM mesurés : 0 appel
 
@@ -96,45 +97,47 @@
 *Vérification indépendante : recalcul depuis fact sans le code KPI, contrôles de cohérence et de traçabilité, verdict d'audit, explications par valeur ; décide la publication du snapshot.*
 
 - Mode : déterministe + LLM optionnel (reformulation de quelques explications, rejetée si un nombre n'est pas justifié ; groq → gemini)
-- Run : `user_delete_20261105T221858` — statut réussi, durée 5.09 s, 0 avertissement(s), 0 erreur(s)
-- Sortie clé : verdict pass_with_warnings (17 réussis, 2 avertissements, 0 échecs)
+- Run : `20261105T234338` — statut réussi, durée 7,67 s, 0 avertissement(s), 0 erreur(s)
+- Sortie clé : verdict conforme avec avertissements (17 réussis, 2 avertissements, 0 échecs)
 - Appels LLM mesurés : 0 appel
 - Contrôles : 17 réussis, 2 avertissements, 0 échecs sur 1 620 lignes
 - Publication : 1 509 approuvées, 111 avec réserve, 0 bloquées
 
 ### Injection de fautes (9/9 détectées)
 
-Mesure : 2026-11-04T12:59:47 — **résultat antérieur au dernier audit**
+Mesure : 2026-11-05T23:47:38
 
 | Faute injectée | Contrôle attendu | Détectée | Verdict |
 |---|---|---|---|
-| Valeur KPI modifiee (+0,05) | `A1_recomputed_values` | oui | fail |
-| Mauvaise unite (densite en percent) | `B1_one_unit_per_kpi` | oui | fail |
-| Ligne agregat WLD dans kpi_values | `B3_country_entities_only` | oui | fail |
-| Zero au lieu de NULL | `A2_unavailable_rows_are_null` | oui | fail |
-| snapshot_id incoherent | `B5_snapshot_and_run_ids` | oui | fail |
-| Hash source modifie (rapport qualite) | `B6_source_hashes` | oui | fail |
-| KPI provisoire dans le catalogue | `B8_catalog_definitions` | oui | fail |
-| Insight citant un mauvais chiffre | `F1_insights_grounded` | oui | pass_with_warnings |
-| Insight avec un nombre non cite | `F1_insights_grounded` | oui | pass_with_warnings |
+| 1. Valeur KPI modifiée (+0,05) | A1 – Valeurs recalculées<br><sub>`A1_recomputed_values`</sub> | oui | non conforme |
+| 2. Mauvaise unité (densité en percent) | B1 – Une unité par indicateur<br><sub>`B1_one_unit_per_kpi`</sub> | oui | non conforme |
+| 3. Ligne agrégat WLD dans kpi_values | B3 – Pays uniquement, sans agrégat<br><sub>`B3_country_entities_only`</sub> | oui | non conforme |
+| 4. Zéro au lieu de NULL | A2 – Valeurs indisponibles vides<br><sub>`A2_unavailable_rows_are_null`</sub> | oui | non conforme |
+| 5. snapshot_id incohérent | B5 – Version et run cohérents<br><sub>`B5_snapshot_and_run_ids`</sub> | oui | non conforme |
+| 6. Hash source modifié (rapport qualité) | B6 – Empreintes des sources<br><sub>`B6_source_hashes`</sub> | oui | non conforme |
+| 7. KPI provisoire dans le catalogue | B8 – Définitions du catalogue<br><sub>`B8_catalog_definitions`</sub> | oui | non conforme |
+| 8. Insight citant un mauvais chiffre | F1 – Constats fondés sur les chiffres<br><sub>`F1_insights_grounded`</sub> | oui | conforme avec avertissements |
+| 9. Insight avec un nombre non cité | F1 – Constats fondés sur les chiffres<br><sub>`F1_insights_grounded`</sub> | oui | conforme avec avertissements |
+
+Fautes 8–9 (constats) : elles sont détectées par le rejet du constat concerné ; les données restent exactes, donc le verdict des données reste « conforme avec avertissements ».
 
 ## Analyst (FinOVA)
 
 *Écrit les constats et la carte XAI à partir des faits exportés ; tout nombre d'une phrase doit exister dans les faits (verify_numbers).*
 
 - Mode : déterministe (narration LLM désactivée : analyst.narrate = false)
-- Run : `route2_20261105T221924144045` — statut réussi, durée 0.01 s, 0 avertissement(s), 0 erreur(s)
+- Run : `route2_20261105T234415620050` — statut réussi, durée 0,02 s, 0 avertissement(s), 0 erreur(s)
 - Sortie clé : 17 constats sur 96 faits, carte XAI oui
 - Appels LLM mesurés : 0 appel
-- Audit des constats (run `route2_20261105T221924144045`) : 15 audités, 15 acceptés, 0 rejetés, 2 non auditables
+- Audit des constats (run `route2_20261105T234415620050`) : 15 audités, 15 acceptés, 0 rejetés, 2 non auditables
 
 ## Dashboard spec
 
 *Construit le contrat FinOVA 2.0 validé (pages, métriques, graphiques, faits, avertissements) ; ne calcule aucun KPI et n'approuve aucune publication.*
 
 - Mode : déterministe
-- Run : `route2_20261105T221924144045` — statut réussi, durée 0.77 s, 2 avertissement(s), 0 erreur(s)
-- Sortie clé : 6 pages, 96 faits, publication approved
+- Run : `route2_20261105T234415620050` — statut réussi, durée 0,83 s, 2 avertissement(s), 0 erreur(s)
+- Sortie clé : 6 pages, 96 faits, publication approuvée
 - Appels LLM mesurés : 0 appel
 
 ## Ask Finova
@@ -143,8 +146,8 @@ Mesure : 2026-11-04T12:59:47 — **résultat antérieur au dernier audit**
 
 - Mode : déterministe + LLM optionnel (conversation avec outils sur les faits, nombres contrôlés ; groq → gemini)
 - Exécution : à la demande (`POST /api/ask`), pas de rapport de run
-- Tests unitaires (LLM simulé), `tests/test_ask_chat.py` : 18/18 réussis, dont 4/4 tests de grounding (exécutés le 2026-11-05T18:13:34)
-- Contrôle en direct : **10/10 réponses fondées**, 9 rédigées par le LLM (les autres en repli déterministe) ; modèle groq (openai/gpt-oss-120b), le 2026-11-05T18:20:31.
+- Tests unitaires (LLM simulé), `tests/test_ask_chat.py` : 18/18 réussis, dont 3/3 tests de grounding (exécutés le 2026-11-05T23:47:39)
+- Contrôle en direct : **10/10 réponses fondées**, 9 rédigées par le LLM (les autres en repli déterministe) ; modèle groq (openai/gpt-oss-120b), le 2026-11-05 18:20:31.
 - Méthode : chaque nombre de la réponse doit figurer dans les faits FinOVA du pays focus et des pairs (même année), être une année de la spec ou un nombre d'un libellé d'unité ; le contrôle ne vérifie pas que le nombre est attribué au bon indicateur.
 
 | Question | Mode | Fondée | Nombres hors faits | Réponse |
@@ -164,7 +167,7 @@ Mesure : 2026-11-04T12:59:47 — **résultat antérieur au dernier audit**
 
 Recalcul naïf de 4 indicateurs directement depuis les CSV bruts (`scripts/baseline_reference.py`), comme un analyste le ferait dans un tableur : filtrer le pays et l'année, lire la colonne, multiplier par 100 ou soustraire deux groupes. Comparaison avec `kpi_values` à la tolérance de l'Auditor.
 
-Mesure : 2026-11-05T18:12:24 — **résultat antérieur au dernier audit**
+Mesure : 2026-11-05T23:47:46
 
 | Indicateur | Valeurs comparées | Identiques | Temps Excel (manuel) |
 |---|---|---|---|
@@ -175,10 +178,10 @@ Mesure : 2026-11-05T18:12:24 — **résultat antérieur au dernier audit**
 
 | Approche | Périmètre | Temps mesuré |
 |---|---|---|
-| Recalcul naïf (pandas) | 4 indicateurs, 5 pays, toutes années | 0.96 s |
-| Lecture de `kpi_values` | mêmes valeurs, déjà calculées et auditées | 0.01 s |
-| Agent Semantic & KPI | 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue) | 6.70 s |
-| Agent Auditor | recalcul indépendant et contrôles de toutes les lignes | 5.09 s |
+| Recalcul naïf (pandas) | 4 indicateurs, 5 pays, toutes années | 0,92 s |
+| Lecture de `kpi_values` | mêmes valeurs, déjà calculées et auditées | 0,02 s |
+| Agent Semantic & KPI | 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue) | 12,57 s |
+| Agent Auditor | recalcul indépendant et contrôles de toutes les lignes | 7,67 s |
 | Excel (manuel) | 4 indicateurs | non mesuré |
 
 Résultat : **132/132 valeurs identiques** (tolérance 1e-09), 0 écart(s), 0 valeur(s) publiée(s) introuvable(s) dans le calcul naïf. Le pipeline ajoute ce que le calcul naïf n'apporte pas : statut de publication, moyenne des pairs avec couverture, traçabilité jusqu'au fichier brut et audit indépendant.

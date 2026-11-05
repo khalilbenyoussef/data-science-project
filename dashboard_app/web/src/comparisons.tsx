@@ -67,6 +67,7 @@ function ComparisonItem({ row }: { row: ComparisonRow }) {
           {row.denominator ? ` · Dénominateur : ${row.denominator}` : ""}
         </p>
       )}
+      {row.definition_en && <p className="source-en">Source (EN) : {row.definition_en}</p>}
       {row.notes.length > 0 && (
         <p className="small comparison-notes">{row.notes.join(" · ")}</p>
       )}
