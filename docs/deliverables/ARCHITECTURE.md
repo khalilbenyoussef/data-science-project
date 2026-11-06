@@ -1,6 +1,6 @@
 # Architecture multi-agents — FinOVA / BIFlow
 
-- **Généré le** : 2026-11-06T02:45:25
+- **Généré le** : 2026-11-06T05:32:36
 - **Run audité (Route 1)** : `user_delete_20261106T024500`
 - **Snapshot** : `v14`
 - **Version du catalogue KPI** : 1.8.0

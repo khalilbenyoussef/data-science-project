@@ -1,6 +1,6 @@
 # Évaluation des agents et approche de référence
 
-- **Généré le** : 2026-11-06T02:45:25
+- **Généré le** : 2026-11-06T05:32:36
 - **Run audité (Route 1)** : `user_delete_20261106T024500`
 - **Snapshot** : `v14`
 - **Version du catalogue KPI** : 1.8.0
@@ -11,10 +11,10 @@
 ## Fraîcheur des mesures
 
 - Dernier audit : 2026-11-06T02:43:55
-- Injection de fautes : 2026-11-05T23:47:38 — **résultat antérieur au dernier audit**
-- Évaluation des agents (scripts/evaluate_agents.py) : 2026-11-05T23:47:42 — **résultat antérieur au dernier audit**
-- Contrôle en direct d’Ask Finova : 2026-11-05T18:20:31 — **résultat antérieur au dernier audit**
-- Approche de référence (scripts/baseline_reference.py) : 2026-11-05T23:47:46 — **résultat antérieur au dernier audit**
+- Injection de fautes : 2026-11-06T05:23:29
+- Évaluation des agents (scripts/evaluate_agents.py) : 2026-11-06T05:32:30
+- Contrôle en direct d’Ask Finova : 2026-11-06T05:32:30
+- Approche de référence (scripts/baseline_reference.py) : 2026-11-06T05:23:33
 
 ## Synthèse par agent
 
@@ -104,7 +104,7 @@
 
 ### Injection de fautes (9/9 détectées)
 
-Mesure : 2026-11-05T23:47:38 — **résultat antérieur au dernier audit**
+Mesure : 2026-11-06T05:23:29
 
 | Faute injectée | Contrôle attendu | Détectée | Verdict |
 |---|---|---|---|
@@ -145,28 +145,28 @@ Fautes 8–9 (constats) : elles sont détectées par le rejet du constat concern
 
 - Mode : déterministe + LLM optionnel (conversation avec outils sur les faits, nombres contrôlés ; groq → gemini)
 - Exécution : à la demande (`POST /api/ask`), pas de rapport de run
-- Tests unitaires (LLM simulé), `tests/test_ask_chat.py` : 18/18 réussis, dont 3/3 tests de grounding (exécutés le 2026-11-05T23:47:39)
-- Contrôle en direct : **10/10 réponses fondées**, 9 rédigées par le LLM (les autres en repli déterministe) ; modèle groq (openai/gpt-oss-120b), le 2026-11-05 18:20:31.
+- Tests unitaires (LLM simulé), `tests/test_ask_chat.py` : 18/18 réussis, dont 3/3 tests de grounding (exécutés le 2026-11-06T05:29:19)
+- Contrôle en direct : **10/10 réponses fondées**, 9 rédigées par le LLM (les autres en repli déterministe) ; modèle groq (openai/gpt-oss-120b), le 2026-11-06 05:32:30.
 - Méthode : chaque nombre de la réponse doit figurer dans les faits FinOVA du pays focus et des pairs (même année), être une année de la spec ou un nombre d'un libellé d'unité ; le contrôle ne vérifie pas que le nombre est attribué au bon indicateur.
 
 | Question | Mode | Fondée | Nombres hors faits | Réponse |
 |---|---|---|---|---|
-| Quel est le taux de détention d'un compte en Tunisie ? | llm | oui | — | En 2024, le taux de détention d’un compte en Tunisie est de 37.8 % (source : tableau de bord Finova). Cette donnée reflète la proportion d’adultes disposant d’un compte bancaire. Aucun autre chiffre n’est fourni dans le  |
-| Comment la Tunisie se compare-t-elle au Maroc pour la détention d'un compte ? | llm | oui | — | En 2024, le taux de détention d’un compte est de 37,8 % en Tunisie. Au même moment, le Maroc affiche 44,4 % de détention d’un compte. Ainsi, le Maroc dépasse la Tunisie de quelques points de pourcentage. |
-| Quel est l'écart entre les hommes et les femmes ? | llm | oui | — | En 2024, l’écart de détention de compte entre les hommes et les femmes en Tunisie s’élève à +23,0 points de pourcentage. (source : Finova, indicateur « Écart de compte — Genre », 2024). |
-| Combien d'adultes utilisent les paiements numériques ? | llm | oui | — | En 2024, 23,7 % des adultes en Tunisie ont effectué ou reçu un paiement numérique. Cette proportion reflète l’usage des services de paiement digital parmi la population adulte. Aucun autre chiffre n’est disponible pour l |
-| Combien y a-t-il d'agences bancaires pour 100 000 adultes ? | llm | oui | — | En 2024, la Tunisie comptait 22.37 agences bancaires pour 100 000 adultes. Cette densité reflète la disponibilité des services bancaires dans le pays. |
-| Pourquoi les adultes n'ont-ils pas de compte ? | deterministic | oui | — | En 2024, 37.8 % des adultes en Tunisie détiennent un compte. (+1.0 pt vs 2021) |
-| Quelle part des adultes épargne auprès d'une institution financière ? | llm | oui | — | En 2024, 48,2 % des adultes en Tunisie épargnent auprès d’une institution financière. |
-| Le taux de détention a-t-il progressé depuis 2021 ? | llm | oui | — | Oui, le taux de détention d’un compte a progressé. En 2024 il s’établit à 37,8 % (Tunisie, 2024) et il a augmenté d’un point de pourcentage par rapport à 2021 (variation +1,0 pt, 2024). Cela indique une légère améliorati |
-| Et pour le Maroc, quel est le taux de détention d'un compte ? | llm | oui | — | Le taux de détention d’un compte au Maroc en 2024 est de 44.4 %. Cette valeur n’a pas évolué par rapport à 2021, avec une variation de +0.0 point de pourcentage. |
-| What is the main barrier to account ownership? | llm | oui | — | En 2024, le principal obstacle à la détention d’un compte en Tunisie est l’absence de documents requis, avec 13,3 % des personnes non bancarisées. Ce taux dépasse celui des services trop chers (12,4 %) et de la distance  |
+| Quel est le taux de détention d'un compte en Tunisie ? | llm | oui | — | En 2024, le taux de détention d’un compte en Tunisie est de 37,8 %. Cette valeur provient du tableau de bord Finova pour l’année 2024. Si vous avez besoin d’autres indicateurs ou de comparaisons, n’hésitez pas à me le de |
+| Comment la Tunisie se compare-t-elle au Maroc pour la détention d'un compte ? | llm | oui | — | En 2024, la Tunisie affiche un taux de détention d’un compte de 37,8 %, contre 44,4 % au Maroc. Le Maroc se situe donc environ sept points de pourcentage au‑dessus de la Tunisie. Cette différence reflète un niveau d’incl |
+| Quel est l'écart entre les hommes et les femmes ? | llm | oui | — | En 2024, l’écart de détention de compte entre les hommes et les femmes en Tunisie est de +23,0 pt. Cela signifie que les hommes sont plus susceptibles de posséder un compte que les femmes de ce même écart. L’indicateur m |
+| Combien d'adultes utilisent les paiements numériques ? | llm | oui | — | En 2024, 23,7 % des adultes en Tunisie utilisent les paiements numériques. Cette proportion reflète la part des adultes qui ont effectué ou reçu un paiement numérique au cours de l'année. Aucun autre chiffre n’est dispon |
+| Combien y a-t-il d'agences bancaires pour 100 000 adultes ? | deterministic | oui | — | En 2024, le réseau d'agences est de 22,37 / 100k adultes. |
+| Pourquoi les adultes n'ont-ils pas de compte ? | llm | oui | — | En 2024, 9,2 % des adultes déclarent que les institutions financières sont trop éloignées, 12,4 % estiment que les services sont trop chers, et 13,3 % n’ont pas les documents requis. Ces trois obstacles – distance, coût  |
+| Quelle part des adultes épargne auprès d'une institution financière ? | llm | oui | — | En 2024, 48,2 % des adultes en Tunisie déclarent épargner auprès d’une institution financière. Cette proportion reflète l’ensemble des formes d’épargne recensées dans le pays. Aucun autre chiffre n’est disponible pour ce |
+| Le taux de détention a-t-il progressé depuis 2021 ? | llm | oui | — | Oui, le taux de détention d’un compte a progressé depuis 2021, affichant une hausse de +1,0 point en 2024. En 2024, le taux s’établit à 37,8 %. Cette évolution indique une légère amélioration de l’inclusion financière. |
+| Et pour le Maroc, quel est le taux de détention d'un compte ? | llm | oui | — | Le taux de détention d’un compte au Maroc est de 44,4 % en 2024. |
+| What is the main barrier to account ownership? | llm | oui | — | Le principal obstacle à la détention d’un compte en Tunisie est le coût perçu des services financiers, qui représente 12,4 % de la population en 2024. En comparaison, la distance des institutions financières constitue 9, |
 
 ## Approche de référence
 
 Recalcul naïf de 4 indicateurs directement depuis les CSV bruts (`scripts/baseline_reference.py`), comme un analyste le ferait dans un tableur : filtrer le pays et l'année, lire la colonne, multiplier par 100 ou soustraire deux groupes. Comparaison avec `kpi_values` à la tolérance de l'Auditor.
 
-Mesure : 2026-11-05T23:47:46 — **résultat antérieur au dernier audit**
+Mesure : 2026-11-06T05:23:33
 
 | Indicateur | Valeurs comparées | Identiques | Temps Excel (manuel) |
 |---|---|---|---|
@@ -177,8 +177,8 @@ Mesure : 2026-11-05T23:47:46 — **résultat antérieur au dernier audit**
 
 | Approche | Périmètre | Temps mesuré |
 |---|---|---|
-| Recalcul naïf (pandas) | 4 indicateurs, 5 pays, toutes années | 0,92 s |
-| Lecture de `kpi_values` | mêmes valeurs, déjà calculées et auditées | 0,02 s |
+| Recalcul naïf (pandas) | 4 indicateurs, 5 pays, toutes années | 0,84 s |
+| Lecture de `kpi_values` | mêmes valeurs, déjà calculées et auditées | 0,01 s |
 | Agent Semantic & KPI | 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue) | 5,79 s |
 | Agent Auditor | recalcul indépendant et contrôles de toutes les lignes | 4,56 s |
 | Excel (manuel) | 4 indicateurs | non mesuré |
