@@ -1,10 +1,10 @@
 # Architecture multi-agents — FinOVA / BIFlow
 
-- **Généré le** : 2026-11-06T00:05:28
-- **Run audité (Route 1)** : `20261105T234338`
-- **Snapshot** : `v9`
+- **Généré le** : 2026-11-06T02:45:25
+- **Run audité (Route 1)** : `user_delete_20261106T024500`
+- **Snapshot** : `v14`
 - **Version du catalogue KPI** : 1.8.0
-- **Run Route 2 (spec publiée)** : `route2_20261105T234415620050`
+- **Run Route 2 (spec publiée)** : `route2_20261106T024403926588`
 - **Sources lues** : `config/config.yaml`, `outputs/reports/<run>/*.json`, `data/processed/warehouse.duckdb`, `graphes LangGraph (biflow.graph, biflow.route2_graph)`
 - Document généré par `scripts/build_deliverables.py` : ne pas modifier à la main.
 
@@ -37,18 +37,17 @@ Durées, statuts et appels LLM lus dans les rapports d'agent (`outputs/reports/<
 
 | Agent | Run | Statut | Durée | Sortie clé | Appels LLM mesurés |
 |---|---|---|---|---|---|
-| Collector | `user_delete_20261105T221858` | réussi | 0,14 s | 3 source(s) collectée(s) | 0 appel |
-| Snapshot | `20261105T234338` | réussi | 0,20 s | snapshot v9 (rebuild) | 0 appel |
-| Profiler | `20261105T234338` | réussi | 3,51 s | findex 8 577 × 36 ; fas 32 209 × 57 ; gdp 19 575 × 6 | 0 appel |
-| Quality | `20261105T234338` | réussi | 2,19 s | score 0,936, gate réussi | 0 appel |
-| ETL | `20261105T234338` | réussi | 3,94 s | 90 732 lignes fact, 263 pays | 0 appel |
-| Semantic & KPI | `20261105T234338` | réussi | 12,57 s | 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue) | 0 appel |
-| Auditor (BI Auditor / XAI) | `20261105T234338` | réussi | 7,67 s | verdict conforme avec avertissements (17 réussis, 2 avertissements, 0 échecs) | 0 appel |
-| Analyst (FinOVA) | `route2_20261105T234415620050` | réussi | 0,02 s | 17 constats sur 96 faits, carte XAI oui | 0 appel |
-| Dashboard spec | `route2_20261105T234415620050` | réussi | 0,83 s | 6 pages, 96 faits, publication approuvée | 0 appel |
+| Collector | `user_delete_20261106T024500` | réussi | 0,20 s | 3 source(s) collectée(s) | 0 appel |
+| Snapshot | `user_delete_20261106T024500` | réussi | 1,20 s | snapshot v14 (new) | 0 appel |
+| Profiler | `user_delete_20261106T024500` | réussi | 2,30 s | findex 8 577 × 36 ; fas 32 209 × 57 ; gdp 19 575 × 6 | 0 appel |
+| Quality | `user_delete_20261106T024500` | réussi | 1,19 s | score 0,936, gate réussi | 0 appel |
+| ETL | `user_delete_20261106T024500` | réussi | 2,45 s | 90 732 lignes fact, 263 pays | 0 appel |
+| Semantic & KPI | `user_delete_20261106T024500` | réussi | 5,79 s | 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue) | 0 appel |
+| Auditor (BI Auditor / XAI) | `user_delete_20261106T024500` | réussi | 4,56 s | verdict conforme avec avertissements (17 réussis, 2 avertissements, 0 échecs) | 0 appel |
+| Analyst (FinOVA) | `route2_20261106T024403926588` | réussi | 0,01 s | 17 constats sur 96 faits, carte XAI oui | 0 appel |
+| Dashboard spec | `route2_20261106T024403926588` | réussi | 0,68 s | 6 pages, 96 faits, publication approuvée | 0 appel |
 | Ask Finova | non disponible | à la demande | non disponible | réponses à la demande, nombres contrôlés contre les faits | non disponible |
 
-- Collector : run courant reconstruit depuis le snapshot publié : dernier Collector exécuté.
 - Ask Finova : à la demande (POST /api/ask), aucun rapport de run.
 
 ## Graphe LangGraph
@@ -108,7 +107,7 @@ graph TD;
 
 ```mermaid
 flowchart LR
-  RAW["Fichiers bruts<br/>Findex · FAS · PIB · sources utilisateur"] --> SNAP["Snapshot v9"]
+  RAW["Fichiers bruts<br/>Findex · FAS · PIB · sources utilisateur"] --> SNAP["Snapshot v14"]
   SNAP --> PROF[Profils] --> QUAL["Rapport qualité<br/>score 0,936"]
   QUAL -->|gate réussi| DW[("Entrepôt DuckDB<br/>90 732 lignes fact")]
   DW --> KPI[("kpi_values<br/>1 620 lignes")]

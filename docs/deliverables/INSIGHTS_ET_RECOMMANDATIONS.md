@@ -1,16 +1,16 @@
 # Constats et pistes de recommandation
 
-- **Généré le** : 2026-11-06T00:05:28
-- **Run audité (Route 1)** : `20261105T234338`
-- **Snapshot** : `v9`
+- **Généré le** : 2026-11-06T02:45:25
+- **Run audité (Route 1)** : `user_delete_20261106T024500`
+- **Snapshot** : `v14`
 - **Version du catalogue KPI** : 1.8.0
-- **Run Route 2 (spec publiée)** : `route2_20261105T234415620050`
+- **Run Route 2 (spec publiée)** : `route2_20261106T024403926588`
 - **Sources lues** : `dashboard_app/public/data/finova.json`, `data/audit/audit_report.json (route2_insight_audit)`, `table kpi_values`, `config/recommendations.yaml`
 - Document généré par `scripts/build_deliverables.py` : ne pas modifier à la main.
 
 ## Constats audités
 
-Constats du run Route 2 `route2_20261105T234415620050` (audit du 2026-11-05T23:44:50) : 15 audités, 15 acceptés, 0 rejetés, 2 non auditables (aucun fait KPI derrière la phrase, par exemple une référence statique).
+Constats du run Route 2 `route2_20261106T024403926588` (audit du 2026-11-06T02:44:34) : 15 audités, 15 acceptés, 0 rejetés, 2 non auditables (aucun fait KPI derrière la phrase, par exemple une référence statique).
 
 Un constat est accepté quand chaque nombre de la phrase est une valeur publiée de `kpi_values`, une année ou une différence entre deux valeurs citées du même indicateur, au même arrondi.
 
