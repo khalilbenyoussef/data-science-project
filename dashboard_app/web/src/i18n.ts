@@ -713,6 +713,27 @@ const EN: Record<string, string> = {
   "Constats et pistes de recommandation — {country}, {year}":
     "Insights and recommendation leads — {country}, {year}",
   "Combien d'adultes ont un compte ?": "How many adults have an account?",
+  // ------------------------------------------------ vos données : IA externe
+  "Vos données : envoyées à {provider}": "Your data: sent to {provider}",
+  "Vos données : traitement local": "Your data: processed locally",
+  "Vos données : IA externe": "Your data: external AI",
+  "Local": "Local",
+  "IA externe": "External AI",
+  "suggéré": "suggested",
+  "le service d'IA": "the AI service",
+  "Ce qui est envoyé": "What is sent",
+  "La question et les valeurs de vos indicateurs utilisées pour répondre.": "The question and the values of your indicators used to answer.",
+  "À qui": "To whom",
+  "{provider}, un service d'IA externe à BIFlow.": "{provider}, an AI service outside BIFlow.",
+  "Ce qui n'est pas envoyé": "What is not sent",
+  "Vos fichiers complets et les données des autres sources.": "Your full files and data from other sources.",
+  "Durée": "Duration",
+  "Pour cette session seulement (ce compte, cet onglet) : l'option revient à « traitement local » à la déconnexion, à la fermeture de l'onglet ou au redémarrage du serveur. Vous pouvez la désactiver à tout moment.": "For this session only (this account, this tab): the option goes back to “local processing” when you sign out, close the tab or the server restarts. You can turn it off at any time.",
+  "Envoyer vos données à {provider} ?": "Send your data to {provider}?",
+  "J'accepte que mes données soient envoyées à {provider} pour cette session": "I agree that my data is sent to {provider} for this session",
+  "Activer": "Enable",
+  "Aucune clé IA configurée : les réponses restent locales.": "No AI key configured: answers stay local.",
+  "Option désactivée par l'administrateur : les réponses restent locales.": "Option turned off by the administrator: answers stay local.",
 };
 
 const AR: Record<string, string> = {
@@ -1415,6 +1436,27 @@ const AR: Record<string, string> = {
   "Constats et pistes de recommandation — {country}, {year}":
     "الاستنتاجات ومسارات التوصية — {country}، {year}",
   "Combien d'adultes ont un compte ?": "كم عدد البالغين الذين يمتلكون حسابًا؟",
+  // ------------------------------------------------ vos données : IA externe
+  "Vos données : envoyées à {provider}": "بياناتك: تُرسل إلى {provider}",
+  "Vos données : traitement local": "بياناتك: معالجة محلية",
+  "Vos données : IA externe": "بياناتك: ذكاء اصطناعي خارجي",
+  "Local": "محلي",
+  "IA externe": "ذكاء اصطناعي خارجي",
+  "suggéré": "مقترح",
+  "le service d'IA": "خدمة الذكاء الاصطناعي",
+  "Ce qui est envoyé": "ما يتم إرساله",
+  "La question et les valeurs de vos indicateurs utilisées pour répondre.": "السؤال وقيم مؤشراتك المستخدمة للإجابة.",
+  "À qui": "إلى من",
+  "{provider}, un service d'IA externe à BIFlow.": "{provider}، خدمة ذكاء اصطناعي خارج BIFlow.",
+  "Ce qui n'est pas envoyé": "ما لا يتم إرساله",
+  "Vos fichiers complets et les données des autres sources.": "ملفاتك الكاملة وبيانات المصادر الأخرى.",
+  "Durée": "المدة",
+  "Pour cette session seulement (ce compte, cet onglet) : l'option revient à « traitement local » à la déconnexion, à la fermeture de l'onglet ou au redémarrage du serveur. Vous pouvez la désactiver à tout moment.": "لهذه الجلسة فقط (هذا الحساب، علامة التبويب هذه): يعود الخيار إلى «المعالجة المحلية» عند تسجيل الخروج أو إغلاق علامة التبويب أو إعادة تشغيل الخادم. يمكنك إيقافه في أي وقت.",
+  "Envoyer vos données à {provider} ?": "إرسال بياناتك إلى {provider}؟",
+  "J'accepte que mes données soient envoyées à {provider} pour cette session": "أوافق على إرسال بياناتي إلى {provider} لهذه الجلسة",
+  "Activer": "تفعيل",
+  "Aucune clé IA configurée : les réponses restent locales.": "لا يوجد مفتاح ذكاء اصطناعي مُعدّ: تبقى الإجابات محلية.",
+  "Option désactivée par l'administrateur : les réponses restent locales.": "الخيار معطّل من قبل المسؤول: تبقى الإجابات محلية.",
 };
 
 export function t(

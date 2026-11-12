@@ -8,6 +8,7 @@ import {
   shortHash, statusLabel, unitLabel,
 } from "./format";
 import { SeeWaveButton } from "./waveNav";
+import { UserDataSwitch, type UserDataControl } from "./userDataMode";
 import { t, tr } from "./i18n";
 import { getLang } from "./preferences";
 import {
@@ -886,7 +887,7 @@ export interface ChatMessage {
 }
 
 export function AskDock({
-  open, onClose, messages, busy, onAsk, suggestions, rules,
+  open, onClose, messages, busy, onAsk, suggestions, rules, userData,
 }: {
   open: boolean;
   onClose: () => void;
@@ -895,6 +896,7 @@ export function AskDock({
   onAsk: (question: string) => void;
   suggestions: string[];
   rules: string[];
+  userData: UserDataControl;
 }) {
   const [draft, setDraft] = useState("");
   const bottom = useRef<HTMLDivElement | null>(null);
@@ -914,6 +916,7 @@ export function AskDock({
         <div>
           <strong>{t("Ask Finova")}</strong>
           <span className="muted small">{t("Réponses fondées sur les chiffres du tableau de bord")}</span>
+          <UserDataSwitch control={userData} />
         </div>
         <div className="ask-head-tools">
           <kbd className="kbd" aria-hidden="true">Ctrl K</kbd>
