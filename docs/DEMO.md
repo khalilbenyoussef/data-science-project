@@ -8,7 +8,7 @@
 - **Sources lues** : `table kpi_values`, `data/audit/audit_report.json`, `outputs/reports/<run>/*.json`, `outputs/evaluation/*.json`, `config/recommendations.yaml`
 - Document généré par `scripts/build_deliverables.py` : ne pas modifier à la main.
 
-Lancement : `./start.ps1` puis ouvrir l'adresse affichée (ajouter `?demo=1` pour passer l'écran d'accueil). Périmètre de la démonstration : **Tunisie, 2024**. Les chiffres ci-dessous sont lus dans les données courantes : régénérer ce script après un nouveau run.
+Lancement : `./start.ps1` puis ouvrir l'adresse affichée et se connecter avec un compte FinOVA. Périmètre de la démonstration : **Tunisie, 2024**. Les chiffres ci-dessous sont lus dans les données courantes : régénérer ce script après un nouveau run.
 
 | Minute | Écran | Ce que je clique | Ce que je dis | Chiffres attendus |
 |---|---|---|---|---|
@@ -39,7 +39,7 @@ Fichier : `docs/examples/banque_fictive_exemple.csv` (**données fictives**, « 
 
 ## Limites (à dire si on demande)
 
-- Connexion de démonstration : aucune authentification réelle, aucun compte ni droit.
+- Connexion : comptes FinOVA sur invitation (rôles administrateur et utilisateur) ; chaque page et chaque route de données exige une session ouverte. Les sources de « Mes données » sont communes à tous les comptes.
 - Niveau pays uniquement : pas encore de gouvernorat, d'agence ni de client.
 - Données locales, sauf si `llm.ask.allow_user_data_to_llm` est activé : Ask Finova envoie alors les valeurs lues au fournisseur LLM configuré.
 - Définition déclarée par l'utilisateur : comparaison indicative, pas vérifiée par BIFlow.

@@ -941,7 +941,7 @@ def render_demo(ctx: Context) -> str:
                    ["table kpi_values", "data/audit/audit_report.json", "outputs/reports/<run>/*.json",
                     "outputs/evaluation/*.json", "config/recommendations.yaml"])
     lines += [
-        "Lancement : `./start.ps1` puis ouvrir l'adresse affichée (ajouter `?demo=1` pour passer l'écran d'accueil). "
+        "Lancement : `./start.ps1` puis ouvrir l'adresse affichée et se connecter avec un compte FinOVA. "
         f"Périmètre de la démonstration : **{COUNTRY_LABELS.get(iso3, iso3)}, {year}**. Les chiffres ci-dessous sont lus "
         "dans les données courantes : régénérer ce script après un nouveau run.", "",
         "| Minute | Écran | Ce que je clique | Ce que je dis | Chiffres attendus |", "|---|---|---|---|---|",
@@ -1000,16 +1000,19 @@ def render_demo(ctx: Context) -> str:
         "| 5 | « Pistes de recommandation » → « À partir de vos données » | Même règle fixe, seulement à année "
         "identique : ici les distributeurs. |",
         "| 6 | Ask Finova : « Quel est le taux de clients utilisant la banque mobile de ma banque ? » | Réponse "
-        "« D'après vos données », en mode simple : rien n'est envoyé au LLM tant que "
-        "`llm.ask.allow_user_data_to_llm` est désactivé. |",
+        "« D'après vos données », en mode simple, badge « Vos données : traitement local » : rien n'est "
+        "envoyé au LLM. L'interrupteur « Vos données : IA externe » ouvre une boîte de consentement ; "
+        "le choix vaut pour ce compte et cette session seulement. |",
         "| 7 | Cocher « Inclure l'annexe : vos données », « Télécharger le rapport (PDF) » | L'annexe est une "
         "section séparée, chaque valeur étiquetée. |",
         "| 8 | Mes données → « Supprimer » | Les lignes quittent l'entrepôt au recalcul. |", "",
         "## Limites (à dire si on demande)", "",
-        "- Connexion de démonstration : aucune authentification réelle, aucun compte ni droit.",
+        "- Connexion : comptes FinOVA sur invitation (rôles administrateur et utilisateur) ; chaque page et "
+        "chaque route de données exige une session ouverte. Les sources de « Mes données » sont communes "
+        "à tous les comptes.",
         "- Niveau pays uniquement : pas encore de gouvernorat, d'agence ni de client.",
-        "- Données locales, sauf si `llm.ask.allow_user_data_to_llm` est activé : Ask Finova envoie alors les "
-        "valeurs lues au fournisseur LLM configuré.",
+        "- Données locales, sauf si l'utilisateur active « Vos données : IA externe » (consentement, pour la "
+        "session) : Ask Finova envoie alors la question et les valeurs lues au fournisseur LLM configuré.",
         "- Définition déclarée par l'utilisateur : comparaison indicative, pas vérifiée par BIFlow.", "",
         "## Si une question arrive", "",
         "- *Le LLM invente-t-il des chiffres ?* Non : tout nombre est vérifié contre les faits ; voir EVALUATION.md.",

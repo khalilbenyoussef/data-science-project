@@ -215,8 +215,10 @@ def test_demo_script_reads_its_numbers(ctx, monkeypatch):
     assert main.count("\n| ") == 1 + 9  # en-tete et 9 etapes (le separateur commence par |---)
     assert banker.count("\n| ") == 1 + 8 and "banque_fictive_exemple.csv" in banker
     assert "données fictives" in banker and "Mon indicateur mesure la même chose" in banker
-    for limit in ("aucune authentification réelle", "Niveau pays uniquement", "llm.ask.allow_user_data_to_llm"):
+    for limit in ("comptes FinOVA sur invitation", "Niveau pays uniquement", "Vos données : IA externe"):
         assert limit in banker
+    assert "llm.ask.allow_user_data_to_llm" not in banker  # plus de configuration a modifier : un interrupteur
+    assert "aucune authentification réelle" not in text and "?demo=1" not in text  # vraie connexion (version jury)
     assert "Détention d'un compte : 37,8 %" in text and "MAR 44,4 %" in text
     assert "Écart hommes − femmes : 23,0 pts ; revenu : 27,0 pts" in text
     assert "1 pistes ; ex. groupe cible « femmes »" in text
