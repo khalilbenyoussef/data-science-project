@@ -614,13 +614,15 @@ def render_kpi_catalog(ctx: Context) -> str:
         src = v.get("source") or {}
         lines += [
             f"### {v.get('name_fr') or v.get('name')} (`{k}`)", "",
-            f"- **Définition** : {v.get('definition', NA)}",
+            f"- **Définition** : {v.get('definition_fr') or v.get('definition', NA)}",
+            f"  <br><sub>Source (EN) : {v.get('definition', NA)}</sub>",
             f"- **Formule** : `{formula.get('from_fact', NA)}` depuis `fact` "
             f"(`{(v.get('warehouse') or {}).get('indicator_code', NA)}`)"
             + (f" ; dépendances : {', '.join(f'`{d}`' for d in v.get('dependencies') or [])}"
                if v.get("dependencies") else ""),
             f"- **Unité** : {v.get('unit', NA)}",
-            f"- **Dénominateur** : {den.get('population', NA)} ({den.get('basis', NA)})",
+            f"- **Dénominateur** : {v.get('denominator_fr') or NA}",
+            f"  <br><sub>Source (EN) : {den.get('population', NA)} ({den.get('basis', NA)})</sub>",
             f"- **Code source** : {src.get('dataset', NA)} `{src.get('indicator', NA)}`"
             + (f" (indicateur officiel `{src['official_indicator']}`)" if src.get("official_indicator") else ""),
             f"- **Années valides** : {', '.join(str(y) for y in v.get('valid_years') or []) or NA}",
