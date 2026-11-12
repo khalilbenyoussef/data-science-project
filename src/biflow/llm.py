@@ -7,8 +7,8 @@ Les cles sont lues dans l'environnement (.env), jamais dans la configuration.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
-import pickle
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -17,6 +17,9 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.caches import BaseCache
 from langchain_core.globals import set_llm_cache
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.load import dumpd, load
+from langchain_core.messages import AIMessage
+from langchain_core.outputs import ChatGeneration, Generation
 from langchain_core.outputs import LLMResult
 
 from biflow.config import load_config, resolve
@@ -101,8 +104,17 @@ def build_chat_model(name: str, spec: dict[str, Any], temperature: float = 0) ->
     raise LLMConfigError(f"Provider LLM non supporte : {name} (type={ptype})")
 
 
+# seules classes reconstruites depuis le cache (liste explicite : contenu non fiable)
+CACHE_ALLOWED = [Generation, ChatGeneration, AIMessage]
+
+
 class DiskCache(BaseCache):
-    """Cache LLM persistant (pickle), evite de repayer les memes prompts."""
+    """Cache LLM persistant en JSON (S1) : evite de repayer les memes prompts.
+
+    Les generations sont serialisees par langchain (``dumpd``) et relues par
+    ``load`` limite a une liste explicite (generations et message IA) : aucun
+    code arbitraire n'est execute ni aucun modele reconstruit. Les anciens fichiers ``.pkl`` ne sont jamais ouverts.
+    """
 
     def __init__(self, directory: str | Path):
         self.directory = Path(directory)
@@ -110,27 +122,30 @@ class DiskCache(BaseCache):
 
     def _path(self, prompt: str, llm_string: str) -> Path:
         digest = hashlib.sha256(f"{prompt}\x00{llm_string}".encode("utf-8")).hexdigest()
-        return self.directory / f"{digest}.pkl"
+        return self.directory / f"{digest}.json"
 
-    def lookup(self, prompt: str, llm_string: str) -> LLMResult | None:
+    def lookup(self, prompt: str, llm_string: str) -> list[Any] | None:
         path = self._path(prompt, llm_string)
-        if not path.exists():
+        if not path.is_file():
             return None
         try:
-            with open(path, "rb") as f:
-                return pickle.load(f)
-        except Exception:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return [load(item, allowed_objects=CACHE_ALLOWED) for item in data["generations"]]
+        except Exception:  # entree illisible ou d'un autre format : simple cache manquant
             return None
 
-    def update(self, prompt: str, llm_string: str, return_val: LLMResult) -> None:
+    def update(self, prompt: str, llm_string: str, return_val: Any) -> None:
         try:
-            with open(self._path(prompt, llm_string), "wb") as f:
-                pickle.dump(return_val, f)
+            payload = {"generations": [dumpd(generation) for generation in return_val]}
+            path = self._path(prompt, llm_string)
+            tmp = path.with_name(f".{path.name}.tmp")
+            tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp, path)
         except Exception:
             pass
 
     def clear(self) -> None:
-        for path in self.directory.glob("*.pkl"):
+        for path in self.directory.glob("*.json"):
             path.unlink(missing_ok=True)
 
 

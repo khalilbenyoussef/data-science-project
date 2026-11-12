@@ -1,5 +1,26 @@
 # Semantic & KPI Agent handoff
 
+> **Update 2026-10-30 (catalog 1.3.0): publication is now evaluated.** In the
+> pipeline, the `auditor` step (after `semantic_kpi`) recomputes every
+> `kpi_values` row independently and sets `kpi_values.publication_status` to
+> `approved`, `approved_with_review_note` or `blocked`; a new snapshot is
+> published only when the audit has no failure. `publication_review_policy` is
+> `implemented_by_auditor`. On-demand semantic queries (`run_semantic_request`,
+> `KpiResult`) still return `publication_status="not_evaluated"`: read the
+> audited status from `kpi_values` or `kpi_explanations`. See `README.md`.
+>
+> **Update 2026-10-29 (catalog 1.2.0).** Several statements below are superseded:
+> `SemanticKpiAgent` is now also the pipeline step `semantic_kpi` after `etl`
+> (writes table `kpi_values`; the separate `run_semantic_request()` route is
+> unchanged); failed agents are retried once by the orchestrator (never a
+> quality-gate FAIL); `quality_report.json` records `run_id` and source hashes,
+> so matching runs no longer get `quality_provenance_unverified`; the catalog
+> adds `formal_saving_rate`, `formal_borrowing_rate`, `gender_gap`, `income_gap`
+> and `age_gap`; `saving_rate` / `borrowing_rate` are now **verified** (glossary
+> rows 121 and 3); lineage records a digest of the `fact`, `country_year` and
+> `country_dim` contents that KPI provenance checks; `.gitignore` now tracks `docs/` except
+> `docs/sources/`. See `README.md`.
+
 Review date: 2026-10-22. Catalog: `config/kpi_catalog.v1.yaml`, version 1.0.0.
 Readiness: ready for downstream development and review-only display; publication
 approval is not implemented. No production-code defect confirmed during review.
@@ -127,7 +148,8 @@ replace the source run ID recorded in provenance. Reports include local paths.
 Current real results require review because lineage lacks a recorded warehouse
 content digest and the standalone quality report lacks run/source-hash binding.
 Observed hashes are returned, but missing historical evidence is not invented.
-All publication statuses remain `not_evaluated`; no automated publication is ready.
+On-demand results remain `not_evaluated`; audited publication statuses live in
+`kpi_values.publication_status` (see the 2026-10-30 update above).
 Latest queries scan catalog years and evidence is re-read/hashed per lookup;
 measure latency before production dashboard usage. See [detailed usage](semantic_kpi.md).
 

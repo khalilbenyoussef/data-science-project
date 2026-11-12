@@ -41,7 +41,7 @@ def test_catalog_discovery_needs_no_warehouse_or_duckdb(tmp_path, monkeypatch):
     tools = SemanticKpiTools(tmp_path / "absent.duckdb")
     response = tools.list_kpis(ListKpisRequest())
     catalog = load_catalog()
-    assert response.catalog_version == "1.0.0"
+    assert response.catalog_version == "1.8.0"
     assert {k.kpi_id for k in response.kpis} == set(catalog["kpis"])
     for summary in response.kpis:
         entry = catalog["kpis"][summary.kpi_id]
@@ -56,8 +56,8 @@ def test_catalog_discovery_needs_no_warehouse_or_duckdb(tmp_path, monkeypatch):
 def test_descriptions_cannot_mutate_service_catalog(agent):
     request = DescribeKpiRequest(kpi_id="saving_rate")
     description = agent.describe_kpi(request)
-    description.definition["verification"]["status"] = "verified"
-    assert agent.describe_kpi(request).definition["verification"]["status"] == "provisional"
+    description.definition["verification"]["status"] = "provisional"
+    assert agent.describe_kpi(request).definition["verification"]["status"] == "verified"
 
 
 @pytest.mark.parametrize("kpi_id", list(load_catalog()["kpis"]))
@@ -93,7 +93,7 @@ def test_invalid_typed_requests_rejected_before_queries(agent, monkeypatch, inpu
 
 @pytest.mark.parametrize("action", ["calculate", "describe"])
 def test_unsupported_kpis_rejected(agent, action):
-    request = {"action": action, "kpi_id": "deposits_pct_gdp"}
+    request = {"action": action, "kpi_id": "merchant_payment_rate"}  # deposits_pct_gdp est au catalogue 1.4.0
     if action == "calculate":
         request.update(iso3="TUN", year=2024)
     with pytest.raises(ValueError, match="Unknown KPI"):
@@ -129,8 +129,8 @@ def test_structured_tools_callable_and_strict(agent, warehouse, monkeypatch):
     tools = {tool.name: tool for tool in agent.get_tools()}
     assert set(tools) == {"list_kpis", "describe_kpi", "calculate_kpi", "latest_available",
                           "compare_countries", "compare_years"}
-    assert len(tools["list_kpis"].invoke({})["kpis"]) == 6
-    assert tools["describe_kpi"].invoke({"kpi_id": "borrowing_rate"})["definition"]["verification"]["status"] == "provisional"
+    assert len(tools["list_kpis"].invoke({})["kpis"]) == len(load_catalog()["kpis"])
+    assert tools["describe_kpi"].invoke({"kpi_id": "borrowing_rate"})["definition"]["verification"]["status"] == "verified"
     digest = hashlib.sha256(warehouse.read_bytes()).hexdigest()
     original = duckdb.connect
     calls = []
@@ -142,7 +142,7 @@ def test_structured_tools_callable_and_strict(agent, warehouse, monkeypatch):
 
     monkeypatch.setattr(duckdb, "connect", connect)
     result = tools["calculate_kpi"].invoke({"iso3": "TUN", "year": 2024, "kpi_id": "saving_rate"})["result"]
-    assert result["value"] == pytest.approx(23) and result["verification_status"] == "provisional"
+    assert result["value"] == pytest.approx(23) and result["verification_status"] == "verified"
     assert result["publication_status"] == "not_evaluated" and result["requires_review"]
     assert len(calls) == 1 and hashlib.sha256(warehouse.read_bytes()).hexdigest() == digest
     with pytest.raises(ValidationError):
@@ -161,7 +161,7 @@ def test_base_agent_reports_serializable_typed_outputs(agent, input_request):
     assert report["status"] == "success" and report["llm_usage"] == {}
     response = report["outputs"]["semantic_kpi_response"]
     RESPONSE_ADAPTER.validate_python(response)
-    assert json.loads(agent.report_path().read_text())["outputs"] == report["outputs"]
+    assert json.loads(agent.report_path().read_text(encoding="utf-8"))["outputs"] == report["outputs"]
 
 
 def test_base_agent_failed_requests_preserve_error_reporting(agent):
@@ -170,8 +170,10 @@ def test_base_agent_failed_requests_preserve_error_reporting(agent):
     assert not report["outputs"]
 
 
-def test_request_union_schema_and_no_orchestrator_registration():
+def test_request_union_schema_and_pipeline_registration_after_etl():
     schema = REQUEST_ADAPTER.json_schema()
     assert schema["discriminator"]["propertyName"] == "action"
-    from biflow.graph import AGENT_CLASSES
-    assert set(AGENT_CLASSES) == {"collector", "profiler", "quality", "etl"}
+    from biflow.graph import AGENT_CLASSES, STEP_ORDER
+    assert set(AGENT_CLASSES) == {"collector", "snapshot", "profiler", "quality", "etl", "semantic_kpi", "auditor"}
+    assert AGENT_CLASSES["semantic_kpi"] is SemanticKpiAgent
+    assert STEP_ORDER.index("semantic_kpi") == STEP_ORDER.index("etl") + 1

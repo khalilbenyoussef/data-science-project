@@ -12,7 +12,7 @@ except Exception:  # noqa: BLE001
 
 from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
-from biflow.utils.io import load_source, save_json
+from biflow.utils.io import load_source, save_json, write_csv
 
 YEAR_RE = re.compile(r"^(19|20)\d{2}$")
 
@@ -545,26 +545,26 @@ class ProfilerAgent(BaseAgent):
 
     def _profile_source(self, name: str, source_cfg: dict) -> tuple[dict, str]:
         self.log.info("[%s] chargement", name)
-        df = load_source(source_cfg)
+        if source_cfg.get("type") == "user":
+            # Source utilisateur : profil des observations canoniques (lecteur dedie)
+            from biflow.tools.user_sources.loader import load_user_canonical
+
+            df = load_user_canonical(source_cfg, source_cfg.get("path"))[0]
+        else:
+            df = load_source(source_cfg)
         prof = profile(df, name, self.cfg.get("profiler"))
 
         out_dir = self.cfg["paths"]["profiles"]
         json_path = resolve(f"{out_dir}/profile_{name}.json")
         save_json(prof, json_path)
-        pd.DataFrame(prof["columns"]).to_csv(
-            resolve(f"{out_dir}/columns_{name}.csv"), index=False, encoding="utf-8-sig"
-        )
+        # exports CSV neutralises (S6) : noms de colonnes et libelles peuvent venir d'un depot utilisateur
+        write_csv(pd.DataFrame(prof["columns"]), f"{out_dir}/columns_{name}.csv")
         if prof["indicator_coverage"]:
             ic = prof["indicator_coverage"]
-            pd.DataFrame(ic["matrix"]).T.fillna(0).astype(int).to_csv(
-                resolve(f"{out_dir}/indicator_coverage_{name}.csv"), encoding="utf-8-sig"
-            )
+            write_csv(pd.DataFrame(ic["matrix"]).T.fillna(0).astype(int),
+                      f"{out_dir}/indicator_coverage_{name}.csv", index=True)
         if prof["indicator_catalog"]:
-            pd.DataFrame(prof["indicator_catalog"]).to_csv(
-                resolve(f"{out_dir}/indicator_catalog_{name}.csv"),
-                index=False,
-                encoding="utf-8-sig",
-            )
+            write_csv(pd.DataFrame(prof["indicator_catalog"]), f"{out_dir}/indicator_catalog_{name}.csv")
         resolve(f"{out_dir}/profile_{name}.md").write_text(to_markdown(prof), encoding="utf-8")
         return prof, str(json_path)
 
@@ -603,11 +603,20 @@ class ProfilerAgent(BaseAgent):
             raise AgentError("aucune source a profiler")
 
         summaries: dict[str, Any] = {}
+        excluded = {e["source"] for e in ctx.get("excluded_sources") or []}
         for name, source_cfg in sources.items():
             source_cfg = dict(source_cfg)
+            if source_cfg.get("type") == "user" and (name in excluded or name not in raw_paths):
+                continue  # exclue par le collector : deja consigne
             if name in raw_paths:
                 source_cfg["path"] = raw_paths[name]
-            prof, path = self._profile_source(name, source_cfg)
+            try:
+                prof, path = self._profile_source(name, source_cfg)
+            except ValueError as exc:
+                if source_cfg.get("type") != "user":
+                    raise
+                self.log.warning("[%s] profil impossible (source utilisateur) : %s", name, exc)
+                continue
             summaries[name] = self._summary(prof, path)
             o = prof["overview"]
             self.log.info(

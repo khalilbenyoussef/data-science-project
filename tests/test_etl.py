@@ -9,6 +9,8 @@ import pytest
 from biflow.agents.base import AgentError
 from biflow.config import load_config
 from biflow.agents.etl import (
+    DERIVE_SQL,
+    PIVOT_SQL,
     EtlAgent,
     build_country_dim,
     fas_long,
@@ -259,6 +261,25 @@ def test_findex_digital_accounts_and_payments_have_distinct_mappings(
     )
 
 
+def test_formal_saving_and_borrowing_are_pivoted_separately_from_any(tmp_path):
+    paths = _write_inputs(tmp_path)
+    raw = pd.read_csv(paths["findex"])
+    raw["save_any_t_d"] = 0.6
+    raw["fin17a"] = 0.2
+    raw["borrow_any_t_d"] = 0.5
+    raw["fin22a"] = [0.04, None, 0.05, None]
+    raw.to_csv(paths["findex"], index=False)
+    cfg = _cfg(tmp_path, paths)
+    cfg["sources"]["findex"]["indicators"] += ["save_any_t_d", "fin17a", "borrow_any_t_d", "fin22a"]
+    EtlAgent(cfg=cfg, run_id="formal").execute({"sources": cfg["sources"], "raw_paths": paths})
+    year = pd.read_parquet(tmp_path / "processed" / "country_year.parquet").set_index(["iso3", "year"])
+    assert year.loc[("MAR", 2021), "savings"] == pytest.approx(60.0)
+    assert year.loc[("MAR", 2021), "formal_saving"] == pytest.approx(20.0)
+    assert year.loc[("MAR", 2021), "borrowing"] == pytest.approx(50.0)
+    assert year.loc[("MAR", 2021), "formal_borrowing"] == pytest.approx(5.0)
+    assert pd.isna(year.loc[("FRA", 2021), "formal_borrowing"])
+
+
 def test_indicator_dim_table_is_created_and_matches_parquet(tmp_path):
     _, processed = _run_agent(tmp_path)
     con = duckdb.connect(str(processed / "warehouse.duckdb"), read_only=True)
@@ -487,30 +508,104 @@ def test_findex_all_men_women_dimensions_are_pivoted(tmp_path):
     assert round(maroc["gender_gap_pp"], 2) == -20.0
 
 
-def test_gdp_growth_requires_consecutive_positive_years(tmp_path):
+def _with_subgroups(paths, groups):
+    findex = pd.read_csv(paths["findex"])
+    extra = []
+    for _, row in findex.iterrows():
+        for group, group2, value in groups:
+            item = row.to_dict()
+            item.update(group=group, group2=group2, account_t_d=value)
+            extra.append(item)
+    findex = pd.concat([findex, pd.DataFrame(extra)], ignore_index=True)
+    findex.to_csv(paths["findex"], index=False)
+
+
+def test_income_and_age_dimensions_are_pivoted_with_gaps(tmp_path):
+    paths = _write_inputs(tmp_path)
+    _with_subgroups(paths, [
+        ("gender", "men", 0.4957), ("gender", "women", 0.2661),
+        ("income", "richest 60%", 0.4862), ("income", "poorest 40%", 0.2166),
+        ("age_cat", "age 25+", 0.4548), ("age_cat", "ages 15-24", 0.1166),
+        # Autres groupes : ne doivent jamais alimenter les colonnes revenu/age
+        ("education", "prim edu or less", 0.9), ("urbanicity", "rural", 0.8),
+    ])
+    out, processed = _run_agent(tmp_path, paths)
+    year = pd.read_parquet(processed / "country_year.parquet")
+    row = year[(year["iso3"] == "MAR") & (year["year"] == 2021)].iloc[0]
+    assert row["account_richest_60"] == pytest.approx(48.62)
+    assert row["account_poorest_40"] == pytest.approx(21.66)
+    assert row["account_age_25_plus"] == pytest.approx(45.48)
+    assert row["account_age_15_24"] == pytest.approx(11.66)
+    assert row["gender_gap_pp"] == pytest.approx(22.96)
+    assert row["income_gap_pp"] == pytest.approx(26.96)
+    assert row["age_gap_pp"] == pytest.approx(33.82)
+    lineage = json.loads((processed / "lineage.json").read_text(encoding="utf-8"))
+    assert all(lineage["checks"]["findex_income_age"].values())
+
+
+def test_gap_is_null_when_one_subgroup_is_missing(tmp_path):
+    paths = _write_inputs(tmp_path)
+    _with_subgroups(paths, [("income", "richest 60%", 0.6), ("age_cat", "ages 15-24", 0.2)])
+    _, processed = _run_agent(tmp_path, paths)
+    year = pd.read_parquet(processed / "country_year.parquet")
+    assert year["account_richest_60"].notna().all() and year["account_poorest_40"].isna().all()
+    assert year["income_gap_pp"].isna().all() and year["age_gap_pp"].isna().all()
+
+
+def test_same_subgroup_label_in_two_groups_is_rejected_before_pivot(tmp_path):
+    paths = _write_inputs(tmp_path)
+    _with_subgroups(paths, [("income", "poorest 40%", 0.2), ("education", "poorest 40%", 0.7)])
+    with pytest.raises(AgentError, match="collision"):
+        _run_agent(tmp_path, paths)
+
+
+def test_gdp_growth_comes_from_constant_price_wdi_indicator(tmp_path):
     paths = _write_inputs(tmp_path)
     gdp = pd.read_csv(paths["gdp"])
-    total = pd.DataFrame(
+    rows = pd.DataFrame(
         {
-            "iso3": ["MAR"] * 5,
-            "country": ["Morocco"] * 5,
-            "indicator_code": ["NY.GDP.MKTP.CD"] * 5,
-            "indicator_name": ["GDP"] * 5,
-            "year": [2019, 2021, 2022, 2023, 2024],
-            "value": [100.0, 110.0, 0.0, 120.0, 132.0],
+            "iso3": ["MAR"] * 6,
+            "country": ["Morocco"] * 6,
+            "indicator_code": ["NY.GDP.MKTP.CD"] * 3 + ["NY.GDP.MKTP.KD.ZG"] * 3,
+            "indicator_name": ["GDP"] * 3 + ["GDP growth (annual %)"] * 3,
+            # Le PIB nominal double (effet de change) : ne doit plus produire de croissance
+            "year": [2019, 2020, 2021, 2019, 2020, 2021],
+            "value": [100.0, 200.0, 210.0, 2.9, -7.2, None],
         }
     )
-    pd.concat([gdp, total], ignore_index=True).to_csv(paths["gdp"], index=False)
+    pd.concat([gdp, rows], ignore_index=True).to_csv(paths["gdp"], index=False)
 
     _, processed = _run_agent(tmp_path, paths)
     year = pd.read_parquet(processed / "country_year.parquet")
     growth = year[year["iso3"] == "MAR"].set_index("year")["gdp_growth_pct"]
 
-    assert pd.isna(growth.loc[2019])
-    assert pd.isna(growth.loc[2021])
-    assert pd.isna(growth.loc[2022])
-    assert pd.isna(growth.loc[2023])
-    assert round(float(growth.loc[2024]), 2) == 10.0
+    assert growth.loc[2019] == pytest.approx(2.9)
+    assert growth.loc[2020] == pytest.approx(-7.2)  # croissance negative conservee
+    assert pd.isna(growth.loc[2021])  # valeur absente : NULL, jamais recalculee
+    fra = year[year["iso3"] == "FRA"]
+    assert fra["gdp_growth_pct"].isna().all()
+    fact = pd.read_parquet(processed / "fact_inclusion.parquet")
+    signed = fact[fact["indicator_code"] == "NY.GDP.MKTP.KD.ZG"]
+    assert set(signed["unit"]) == {"percent_annual_growth"}
+    lineage = json.loads((processed / "lineage.json").read_text(encoding="utf-8"))
+    assert "NY.GDP.MKTP.KD.ZG" in lineage["checks"]["gdp_growth_rule"]
+    assert "negative_values" not in lineage["rejected"].get("gdp", {})
+
+
+def test_negative_gdp_levels_are_still_rejected(tmp_path):
+    paths = _write_inputs(tmp_path)
+    gdp = pd.read_csv(paths["gdp"])
+    gdp.loc[0, "value"] = -1.0
+    gdp.to_csv(paths["gdp"], index=False)
+    _, processed = _run_agent(tmp_path, paths)
+    lineage = json.loads((processed / "lineage.json").read_text(encoding="utf-8"))
+    assert lineage["rejected"]["gdp"]["negative_values"] == 1
+
+
+def test_derive_sql_no_longer_computes_growth_from_nominal_gdp():
+    assert "lag(" not in DERIVE_SQL and "gdp_usd" not in DERIVE_SQL
+    assert "'NY.GDP.MKTP.KD.ZG' THEN value END) AS gdp_growth_pct" in PIVOT_SQL
+    assert "NY.GDP.MKTP.KD.ZG" in load_config()["sources"]["gdp"]["indicators"]
 
 
 def test_star_schema_uniqueness_and_country_year_contract(tmp_path):

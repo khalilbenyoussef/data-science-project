@@ -14,19 +14,28 @@ __pycache__/
 !.env.example
 
 # Donnees brutes et derivees (volumineuses)
-data/raw/
-data/staging/
-data/processed/
-data/profiles/
-data/quality/
-data/reports/
+data/
 outputs/
 
+# Mappings des sources utilisateur (exemple suivi : docs/examples/)
+config/sources/
+config/kpi_catalog.user.yaml
 
-docs
+# Documentation suivie ; seules les sources externes telechargees sont ignorees
+docs/sources/
 
 # Artefacts
+.finova.pid
 *.duckdb
 *.parquet
 *.log
 backups/
+
+# Dashboard (Node)
+node_modules
+legacy/dashboard/dist/
+legacy/dashboard/public/data/*.json
+dashboard_app/web/dist/
+
+# Videos d'arriere-plan (124 Mo, a heberger separement ou via Git LFS)
+*.mp4

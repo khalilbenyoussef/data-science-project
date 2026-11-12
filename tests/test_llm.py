@@ -75,3 +75,51 @@ def test_build_agent_llm_skips_wrong_key_format(monkeypatch):
 
     assert client.agent == "quality"
     assert client.max_calls is None
+
+
+# ------------------------------------------------------------- S1 : cache JSON
+class _Payload:
+    """Objet pickle malveillant : creerait un fichier temoin s'il etait deserialise."""
+
+    def __init__(self, marker):
+        self.marker = marker
+
+    def __reduce__(self):
+        return (open, (str(self.marker), "w"))
+
+
+def test_llm_cache_round_trips_generations_as_json(tmp_path):
+    from langchain_core.messages import AIMessage
+    from langchain_core.outputs import ChatGeneration
+
+    from biflow.llm import DiskCache
+
+    cache = DiskCache(tmp_path)
+    generation = ChatGeneration(message=AIMessage("Bonjour", tool_calls=[
+        {"name": "get_kpi", "args": {"kpi_id": "account_ownership"}, "id": "c1"}]))
+    cache.update("prompt", "llm", [generation])
+    stored, = tmp_path.glob("*.json")
+    assert "Bonjour" in stored.read_text(encoding="utf-8") and not list(tmp_path.glob("*.pkl"))
+    again, = cache.lookup("prompt", "llm")
+    assert again.message.content == "Bonjour" and again.message.tool_calls[0]["name"] == "get_kpi"
+
+
+def test_planted_pickle_is_never_deserialized(tmp_path):
+    import hashlib
+    import pickle
+
+    from biflow.llm import DiskCache
+
+    marker = tmp_path / "pwned.txt"
+    digest = hashlib.sha256("prompt\x00llm".encode("utf-8")).hexdigest()
+    (tmp_path / f"{digest}.pkl").write_bytes(pickle.dumps(_Payload(marker)))
+    cache = DiskCache(tmp_path)
+    assert cache.lookup("prompt", "llm") is None
+    assert not marker.exists()
+    # JSON forge pointant vers une classe hors langchain : refuse, aucun effet
+    (tmp_path / f"{digest}.json").write_text(
+        '{"generations": [{"lc": 1, "type": "constructor", "id": ["os", "system"], "kwargs": {}}]}',
+        encoding="utf-8")
+    assert cache.lookup("prompt", "llm") is None
+    cache.clear()
+    assert (tmp_path / f"{digest}.pkl").exists() and not list(tmp_path.glob("*.json"))

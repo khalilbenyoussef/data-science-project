@@ -2,24 +2,71 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import time
 import urllib.error
 import urllib.request
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Mapping
 
 import pandas as pd
 
 from biflow.agents.base import AgentError, BaseAgent
 from biflow.config import resolve
-from biflow.utils.io import ensure_dir, read_csv_smart, sha256_file
+from biflow.utils.io import cached_sha256_file, ensure_dir, file_stat, read_csv_smart, sha256_file
 
 COLUMNS = ["iso3", "country", "indicator_code", "indicator_name", "year", "value"]
+SDMX_REQUIRED = ("COUNTRY", "FREQUENCY", "TIME_PERIOD", "OBS_VALUE", "SCALE")
 
 
 class CollectorAPIError(RuntimeError):
-    """Erreur de communication avec l'API World Bank."""
+    """Erreur de communication avec une API (World Bank, IMF)."""
+
+
+class SdmxFormatError(ValueError):
+    """Reponse SDMX hors contrat (colonnes, echelle, frequence) : jamais de repli cache."""
+
+
+# --------------------------------------------------------------------------- IMF SDMX
+def sdmx_to_fas_wide(responses: Mapping[str, str]) -> pd.DataFrame:
+    """CSV SDMX 3.0 (une ligne par observation) -> format large de fas.csv.
+
+    responses : serie locale (ex. FA26N.PHTADLT_NUM) -> texte CSV de l'API.
+    Les valeurs sont conservees telles que recues (texte) : aucune conversion
+    ni mise a l'echelle ; une echelle autre que 0 (unites) est refusee.
+    """
+    frames = []
+    for local_series, text in responses.items():
+        df = pd.read_csv(io.StringIO(text), dtype=str, keep_default_na=False)
+        missing = [column for column in SDMX_REQUIRED if column not in df.columns]
+        if missing:
+            raise SdmxFormatError(f"[fas api] colonnes SDMX absentes ({local_series}) : {missing}")
+        df = df[(df["TIME_PERIOD"].str.strip() != "") & (df["OBS_VALUE"].str.strip() != "")]
+        scales = sorted(set(df["SCALE"]) - {"0"})
+        if scales:
+            raise SdmxFormatError(f"[fas api] echelle non verifiee pour {local_series} : {scales}")
+        frequencies = sorted(set(df["FREQUENCY"]) - {"A"})
+        if frequencies:
+            raise SdmxFormatError(f"[fas api] frequence non annuelle pour {local_series} : {frequencies}")
+        if not df["TIME_PERIOD"].str.fullmatch(r"\d{4}").all():
+            raise SdmxFormatError(f"[fas api] periode non annuelle pour {local_series}")
+        frames.append(pd.DataFrame({
+            "SERIES_CODE": df["COUNTRY"].str.strip() + "." + local_series + ".A",
+            "COUNTRY": df["COUNTRY"].str.strip(),
+            "year": df["TIME_PERIOD"],
+            "value": df["OBS_VALUE"],
+        }))
+    long = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    if long.empty:
+        raise SdmxFormatError("[fas api] aucune observation recue")
+    if long.duplicated(["SERIES_CODE", "year"]).any():
+        raise SdmxFormatError("[fas api] observations en double (serie, annee)")
+    wide = long.pivot(index=["SERIES_CODE", "COUNTRY"], columns="year", values="value").reset_index()
+    wide.columns.name = None
+    years = sorted(column for column in wide.columns if column not in ("SERIES_CODE", "COUNTRY"))
+    return wide[["SERIES_CODE", "COUNTRY", *years]].sort_values("SERIES_CODE", kind="mergesort")
 
 
 # --------------------------------------------------------------------------- payload
@@ -80,6 +127,70 @@ class CollectorAgent(BaseAgent):
                 if attempt < retries:
                     time.sleep(2 ** attempt)
         raise CollectorAPIError(f"API World Bank injoignable : {last}")
+
+    def _get_text(self, url: str, accept: str) -> str:
+        """GET avec en-tete Accept (ex. text/csv) et memes nouveaux essais que _get."""
+        cfg = self.cfg.get("collector", {})
+        timeout = cfg.get("timeout", 60)
+        retries = max(1, int(cfg.get("retries", 3)))
+        last: Exception | None = None
+        for attempt in range(1, retries + 1):
+            try:
+                request = urllib.request.Request(url, headers={"Accept": accept})
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    return response.read().decode("utf-8")
+            except (urllib.error.URLError, TimeoutError, OSError, UnicodeError) as exc:
+                last = exc
+                self.log.warning("requete %d/%d echouee : %s", attempt, retries, exc)
+                if attempt < retries:
+                    time.sleep(2 ** attempt)
+        raise CollectorAPIError(f"API IMF injoignable : {last}")
+
+    def _fas_api(self, name: str, source_cfg: dict) -> dict[str, Any]:
+        """FAS via IMF Data API (SDMX 3.0) -> fichier large ; cache conserve si l'API echoue."""
+        api = source_cfg.get("api") or {}
+        out = resolve(api.get("path", "data/raw/fas_api.csv"))
+        series = api.get("series") or {}
+        if not series:
+            raise AgentError(f"[{name}] api.series vide : aucune cle SDMX verifiee configuree")
+        base = api.get("base_url", "https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/FAS/~/")
+        countries = api.get("countries", "*")
+        unmapped = sorted(set((source_cfg.get("series") or {}).values()) - set(series))
+        try:
+            responses = {
+                local: self._get_text(f"{base}{countries}.{key}", api.get("accept", "text/csv"))
+                for local, key in series.items()
+            }
+        except CollectorAPIError as exc:
+            if out.exists():
+                self.log.warning("[%s] %s - donnees API existantes conservees", name, exc)
+                return {
+                    "path": str(out), "source": "imf_sdmx_api_cache", "rows": None,
+                    "updated": False, "sha256": sha256_file(out), **file_stat(out),
+                    "diagnosis": self._diagnose(exc),
+                    "warning": f"{name}: API IMF injoignable, cache conserve ({exc})",
+                }
+            raise
+        wide = sdmx_to_fas_wide(responses)
+        payload = wide.to_csv(index=False).encode("utf-8")
+        new_hash = hashlib.sha256(payload).hexdigest()
+        updated = not out.exists() or sha256_file(out) != new_hash
+        if updated:
+            ensure_dir(out.parent)
+            tmp = out.with_suffix(out.suffix + ".tmp")
+            tmp.write_bytes(payload)
+            tmp.replace(out)
+        self.log.info("[%s] API IMF : %d series x pays, %d serie(s) -> %s",
+                      name, len(wide), len(series), out.name)
+        meta = {
+            "path": str(out), "source": "imf_sdmx_api", "rows": int(len(wide)),
+            "updated": updated, "sha256": new_hash, **file_stat(out),
+            "series": sorted(series), "unmapped_series": unmapped,
+        }
+        if unmapped:
+            meta["warning"] = (f"{name}: series non couvertes par l'API (non verifiees) : "
+                               f"{', '.join(unmapped)}")
+        return meta
 
     def _fetch_indicator(self, code: str, cfg: dict, date_range: str) -> list[dict]:
         base = cfg.get("api_base", "https://api.worldbank.org/v2")
@@ -147,6 +258,7 @@ class CollectorAgent(BaseAgent):
                     "rows": None,
                     "updated": False,
                     "sha256": sha256_file(out),
+                    **file_stat(out),
                     "diagnosis": diagnosis,
                     "warning": f"{name}: collecte echouee, cache conserve ({exc})",
                 }
@@ -161,6 +273,7 @@ class CollectorAgent(BaseAgent):
                 "rows": int(len(df)),
                 "updated": False,
                 "sha256": new_hash,
+                **file_stat(out),
             }
 
         ensure_dir(out.parent)
@@ -180,11 +293,52 @@ class CollectorAgent(BaseAgent):
             "rows": int(len(df)),
             "updated": True,
             "sha256": new_hash,
+            **file_stat(out),
             "previous_sha256": old_hash,
             "indicators": int(df["indicator_code"].nunique()),
             "year_min": int(df["year"].min()),
             "year_max": int(df["year"].max()),
         }
+
+    def _user(self, name: str, source_cfg: dict) -> dict[str, Any]:
+        """Source utilisateur : mapping valide et copie presente ; hash comme une source statique."""
+        from biflow.tools.user_sources.detect import check_file
+        from biflow.tools.user_sources.loader import user_mapping
+
+        mapping = user_mapping(source_cfg)
+        out = resolve(source_cfg.get("path") or mapping.file)
+        if not out.is_file():
+            raise FileNotFoundError(f"[{name}] copie de la source utilisateur introuvable : {out}")
+        check_file(out, (self.cfg.get("uploads") or {}).get("max_file_mb"))  # le fichier a pu changer
+        meta = {
+            "path": str(out), "type": "user", "user": True, "rows": None,
+            "mapping": str(source_cfg.get("mapping")), "fingerprint": mapping.fingerprint,
+            "sha256": sha256_file(out), **file_stat(out),
+            "size_mb": round(out.stat().st_size / 1e6, 2),
+            "checked_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        self.log.info("[%s] source utilisateur OK : %s (%.1f Mo, mapping %s)", name, out.name,
+                      meta["size_mb"], Path(meta["mapping"]).name)
+        return meta
+
+    def _offline(self, name: str, source_cfg: dict, published: Mapping[str, Any] | None) -> dict[str, Any]:
+        """collector.offline_official : source officielle reprise telle quelle, sans reseau.
+
+        Blob du snapshot publie (empreinte identique par construction) ; a defaut,
+        fichier local deja present (cache API compris). Jamais de telechargement."""
+        if published is not None and name in published["raw_paths"]:
+            meta = dict(published["raw_meta"][name])
+            if cached_sha256_file(meta["path"]) != meta["sha256"]:
+                raise AgentError(f"[{name}] blob du snapshot publie altere (hash different du manifeste)")
+            self.log.info("[%s] hors ligne : blob du snapshot publie (sha256 %s)", name, meta["sha256"][:12])
+            return {**meta, "updated": False, "offline": True}
+        api = source_cfg.get("api") or {}
+        out = resolve(api.get("path", "data/raw/fas_api.csv") if api.get("enabled") else source_cfg["path"])
+        if not out.is_file():
+            raise AgentError(f"[{name}] hors ligne : aucun snapshot publie ni fichier local ({out})")
+        self.log.info("[%s] hors ligne : fichier local %s (aucun telechargement)", name, out.name)
+        return {"path": str(out), "rows": None, "updated": False, "sha256": sha256_file(out),
+                "origin": "local_file", "offline": True, **file_stat(out)}
 
     def _static(self, name: str, source_cfg: dict, out) -> dict[str, Any]:
         if not out.exists():
@@ -200,6 +354,7 @@ class CollectorAgent(BaseAgent):
             "rows": None,
             "columns": int(len(header.columns)),
             "sha256": sha256_file(out),
+            **file_stat(out),
             "size_mb": round(out.stat().st_size / 1e6, 2),
             "checked_at": datetime.now().isoformat(timespec="seconds"),
         }
@@ -222,11 +377,41 @@ class CollectorAgent(BaseAgent):
         raw_meta: dict[str, Any] = dict(ctx.get("raw_meta") or {})
         warnings: list[str] = []
         failed: list[str] = []
+        excluded: list[dict[str, Any]] = list(ctx.get("excluded_sources") or [])
+        # Job « Mes données » : seules les sources utilisateur peuvent changer
+        offline = bool((self.cfg.get("collector") or {}).get("offline_official"))
+        published = None
+        if offline:
+            from biflow.tools.snapshots import SnapshotStore
+
+            try:
+                published = SnapshotStore((self.cfg.get("snapshots") or {}).get("root", "data/snapshots")
+                                          ).published_inputs()
+            except (KeyError, OSError):
+                published = None
 
         for name, source_cfg in sources.items():
+            if source_cfg.get("type") == "user":  # un depot utilisateur ne bloque jamais le pipeline officiel
+                try:
+                    meta = self._user(name, source_cfg)
+                    raw_paths[name], raw_meta[name] = meta["path"], meta
+                except Exception as exc:  # noqa: BLE001
+                    reason = f"{type(exc).__name__}: {exc}"
+                    excluded.append({"source": name, "step": "collector", "reason": reason, "quality_score": None})
+                    warnings.append(f"[{name}] source utilisateur exclue : {reason}")
+                    self.log.warning("[%s] source utilisateur exclue : %s", name, reason)
+                continue
             out = resolve(source_cfg["path"])
             try:
-                if source_cfg.get("static"):
+                if offline:
+                    meta = self._offline(name, source_cfg, published)
+                    out = resolve(meta["path"])
+                elif (source_cfg.get("api") or {}).get("enabled"):
+                    meta = self._fas_api(name, source_cfg)
+                    out = resolve(meta["path"])
+                    if meta.get("warning"):
+                        warnings.append(meta["warning"])
+                elif source_cfg.get("static"):
                     meta = self._static(name, source_cfg, out)
                 else:
                     meta = self._refresh(name, source_cfg, self.cfg.get("collector", {}), out)
@@ -244,6 +429,7 @@ class CollectorAgent(BaseAgent):
         return {
             "raw_paths": raw_paths,
             "raw_meta": raw_meta,
+            "excluded_sources": excluded,
             "warnings": warnings,
             "llm_notes": {
                 "collector": f"{len(raw_paths)} source(s) verifiee(s), hash SHA-256 calcule"

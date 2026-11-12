@@ -1,0 +1,10 @@
+# Données FICTIVES de démonstration (exemple fictif, BIFlow) : aucune valeur réelle, aucune banque réelle
+Pays;Année;Distributeurs (ATM) du réseau pour 100 000 adultes (exemple fictif);Agences pour 100 000 adultes (exemple fictif);Clients utilisant la banque mobile en % (exemple fictif)
+Tunisie;2021;27,4;23,9;18,5
+Tunisie;2022;28,6;24,1;22,0
+Tunisie;2023;29,7;24,6;26,4
+Tunisie;2024;30,8;;31,2
+Maroc;2021;27,9;21,8;24,3
+Maroc;2022;28,4;21,2;27,9
+Maroc;2023;29,1;20,6;31,5
+Maroc;2024;29,9;19,6;35,0

@@ -1,10 +1,11 @@
 # Declarative definitions only. No calculations, publication decisions or agents execute this file.
 schema_version: 1
-catalog_version: "1.0.0"
+catalog_version: "1.8.0"
 catalog_id: biflow_core_kpis
 created_on: "2026-10-22"
+updated_on: "2026-11-05"
 status: draft
-scope: country_year_total_population
+scope: country_year_total_population_and_subgroup_gaps
 versioning:
   definition_changes: increment catalog_version and the affected definition_version
   breaking_changes: increment catalog major version; never reuse an ID for a different measure
@@ -19,10 +20,30 @@ references:
     url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
     locator: Glossary!A118:C118, g20.any
     evidence: made or received a digital payment in the past year, age 15+
+  findex_2025_glossary_save_any:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A121:C121, save.any.t.d (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Saved any money (%, age 15+): personally saving or setting aside any money for any reason and using any mode of saving in the past year"
+  findex_2025_glossary_borrow_any:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A3:C3, borrow.any.t.d (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Borrowed any money (%, age 15+): borrowing any money (alone or with someone else) for any reason and from any source in the past year"
+  findex_2025_glossary_fin17a:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A24:C24, fin17a (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Saved at a bank or similar financial institution (%, age 15+): saving or setting aside any money at a bank or similar financial institution in the past year"
+  findex_2025_glossary_fin22a:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A31:C31, fin22a (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Borrowed from a formal bank or similar financial institution (%, age 15+): borrowing any money from a bank or similar financial institution or using a credit card in the past year"
   fas_raw_metadata:
     path: data/raw/fas.csv
     locator: SERIES_CODE ending in FA26N.PHTADLT_NUM.A; INDICATOR, TYPE_OF_TRANSFORMATION, FREQUENCY, SCALE
     evidence: commercial-bank branches, per 100000 adults, annual, units
+  findex_subgroups:
+    path: data/raw/findex.csv
+    locator: "group/group2 values: gender = men / women; income = richest 60% / poorest 40%; age_cat = age 25+ / ages 15-24"
+    evidence: official Findex subgroup breakdowns of account.t.d, observed for every survey year 2011-2024
   local_dictionary:
     path: src/biflow/tools/dictionary.py
     locator: FINDEX_LABELS and UNITS
@@ -35,6 +56,88 @@ references:
     path: data/raw/findex.csv
     locator: total-population rows inspected during the offline real-data audit
     evidence: observed nonmissing survey years, not a guarantee of coverage for each economy
+
+  findex_2025_glossary_account:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A2:C2, account.t.d (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Account (%, age 15+): The percentage of respondents who report having an account (by themselves or together with someone else) at a bank or similar financial institution or report personally using a mobile money service in the past year"
+  findex_2025_glossary_fin24aP:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A44:C44, fin24aP (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Coming up with emergency funds in 30 days: possible (%, age 15+): The percentage of respondents who say it is possible--whether difficult, somewhat difficult, or not very difficult--for them to come up with the emergency funds in 30 days"
+  findex_2025_glossary_fin24sav:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A34:C34, fin24sav (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Main source of emergency funds in 30 days: savings (%, age 15+): The percentage of respondents who say it is possible for them to come up with emergency funds in 30 days and list savings as their main source of emergency funds"
+  findex_2025_glossary_fin24bor:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A37:C37, fin24bor (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Main source of emergency funds in 30 days: loan from a bank, employer, or private lender (%, age 15+): The percentage of respondents who say it is possible for them to come up with emergency funds in 30 days and list borrowing from a bank, employer, or private lender as their main source of emergency funds"
+  findex_2025_glossary_inactive:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A109:C109, inactive.t.d (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Has an inactive account (%, age 15+): The percentage of respondents who report neither a deposit into nor a withdrawal from their account in the past year. This also includes making or receiving any kind of digital payment"
+  findex_2025_glossary_mobileaccount:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A120:C120, mobileaccount.t.d (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "Mobile money account (%, age 15+): The percentage of respondents who report personally using a mobile money service in the past year"
+  fas_raw_metadata_atm_density:
+    path: data/raw/fas.csv
+    locator: SERIES_CODE ending in FA18N.PHTADLT_NUM.A; INDICATOR, TYPE_OF_TRANSFORMATION, FREQUENCY, SCALE
+    evidence: "Number of automated teller machines (ATMs), Per 100,000 adults, annual, scale Units"
+  fas_raw_metadata_depositors_per_1k:
+    path: data/raw/fas.csv
+    locator: SERIES_CODE ending in FA29N_COMBANK.PTADLT_NUM.A; INDICATOR, TYPE_OF_TRANSFORMATION, FREQUENCY, SCALE
+    evidence: "Number of depositors, Commercial banks, Per 1,000 adults, annual, scale Units"
+  fas_raw_metadata_borrowers_per_1k:
+    path: data/raw/fas.csv
+    locator: SERIES_CODE ending in FA21N_COMBANK.PTADLT_NUM.A; INDICATOR, TYPE_OF_TRANSFORMATION, FREQUENCY, SCALE
+    evidence: "Number of borrowers, Commercial banks, Per 1,000 adults, annual, scale Units"
+  fas_raw_metadata_deposit_accounts_per_1k:
+    path: data/raw/fas.csv
+    locator: SERIES_CODE ending in FA30N_COMBANK.PTADLT_NUM.A; INDICATOR, TYPE_OF_TRANSFORMATION, FREQUENCY, SCALE
+    evidence: "Number of deposit accounts, Commercial banks, Per 1,000 adults, annual, scale Units"
+  fas_raw_metadata_loan_accounts_per_1k:
+    path: data/raw/fas.csv
+    locator: SERIES_CODE ending in LOANACCN_COMBANK.PTADLT_NUM.A; INDICATOR, TYPE_OF_TRANSFORMATION, FREQUENCY, SCALE
+    evidence: "Number of loan accounts, Commercial banks, Per 1,000 adults, annual, scale Units"
+  fas_raw_metadata_deposits_pct_gdp:
+    path: data/raw/fas.csv
+    locator: SERIES_CODE ending in OUTD_COMBANK.POGDP.A; INDICATOR, TYPE_OF_TRANSFORMATION, FREQUENCY, SCALE
+    evidence: "Outstanding deposits, Commercial banks, Percent of GDP, annual, scale Units"
+  fas_raw_metadata_loans_pct_gdp:
+    path: data/raw/fas.csv
+    locator: SERIES_CODE ending in OUTL_COMBANK.POGDP.A; INDICATOR, TYPE_OF_TRANSFORMATION, FREQUENCY, SCALE
+    evidence: "Outstanding loans, Commercial banks, Percent of GDP, annual, scale Units"
+  findex_subgroups_extended:
+    path: data/raw/findex.csv
+    locator: "group/group2 values: education = prim edu or less / secondary edu or more; laborforce = in laborforce / out of laborforce; urbanicity = rural / urban"
+    evidence: official Findex subgroup breakdowns of account.t.d; education and laborforce observed for every survey year 2011-2024, urbanicity for 2024 only
+
+  findex_2025_glossary_fin11a:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A6:C6, fin11a (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "No account because bank or similar financial institutions are too far away (%, age 15+): The percentage of respondents who report that they don't have a bank or similar financial institution account because bank or similar financial institutions are too far away"
+  findex_2025_glossary_fin11b:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A7:C7, fin11b (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "No account because financial services are too expensive (%, age 15+): The percentage of respondents who report not having a bank or similar financial institution account because financial services are too expensive"
+  findex_2025_glossary_fin11c:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A8:C8, fin11c (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "No account because of a lack of necessary documentation (%, age 15+): The percentage of respondents who report not having a bank or similar financial institution account because they lack the documentation needed to open one, such as an identity card, a wage slip, or the like"
+  findex_2025_glossary_fin11d:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A10:C10, fin11d (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "No account because of insufficient funds (%, age 15+): The percentage of respondents who report not having a bank or similar financial institution account because they do not have enough money to use one"
+  findex_2025_glossary_fin11e:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A11:C11, fin11e (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "No account because someone in the family has one (%, age 15+): The percentage of respondents who report not having a bank or similar financial institution account because someone else in their family already has one"
+  findex_2025_glossary_fin11f:
+    url: https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx
+    locator: Glossary!A9:C9, fin11f (file retrieved 2026-10-29, sha256 8eb99754e6e18d6831c133cc743d8207cc657baedc3447588a574fd3d935f923)
+    evidence: "No account because of a lack of trust in bank or similar financial institutions (%, age 15+): The percentage of respondents who report not having a bank or similar financial institution account because they do not trust bank or similar financial institutions"
 
 missing_data_policy:
   id: preserve_missing_v1
@@ -111,7 +214,13 @@ traceability_policy:
 
 publication_review_policy:
   id: review_flagged_dependencies_v1
-  implementation_status: specification_only
+  implementation_status: implemented_by_auditor
+  implementation: src/biflow/agents/auditor.py (pipeline step auditor, after semantic_kpi)
+  row_statuses:
+    approved: no failing check and no warning touches the row (a genuine NULL is published as unavailable)
+    approved_with_review_note: only warnings, caveats or KPI review reasons touch the row
+    blocked: a failing check touches the row, a run-level check fails, or an included peer row is blocked
+  snapshot_publication: a new snapshot is published only when the audit reports zero failures
   quality_gate_requirement: quality.passed must be true for the same run and source hashes
   failed_structural_gate: block_publication
   provisional_definition: block_publication_until_definition_verified
@@ -144,14 +253,16 @@ publication_review_policy:
     code: fas_pct_gdp_plausibility
     indicators: [deposits_pct_gdp, loans_pct_gdp]
     threshold_config: quality.fas_pct_gdp_threshold
-    applicability: neither percentage indicator is an input to these six KPIs; do not flag branch density by association
+    applicability: deposits_pct_gdp and loans_pct_gdp are inputs of the KPIs of the same name; only rows matched by a diagnostic (source, iso3, year, indicator_code) require review; never flag other KPIs by association
 
 kpis:
   account_ownership:
     definition_version: "1.0.0"
     name: Account ownership rate
+    name_fr: "Taux de détention d'un compte"
     business_objective: financial_inclusion
     definition: Share of adults owning a bank or similar financial-institution account or a mobile-money account.
+    definition_fr: "Part des adultes qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
     verification:
       status: verified
       evidence: [findex_2025_book, etl_contract]
@@ -170,6 +281,7 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: account_own}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -184,8 +296,10 @@ kpis:
   branch_density:
     definition_version: "1.0.0"
     name: Commercial-bank branch density
+    name_fr: "Densité des agences des banques commerciales"
     business_objective: banking_infrastructure
     definition: Number of commercial-bank branches per 100000 adults, as reported by IMF FAS.
+    definition_fr: "Nombre d'agences des banques commerciales pour 100 000 adultes, tel que publié par le FAS du FMI."
     verification:
       status: verified_metadata
       evidence: [fas_raw_metadata, etl_contract]
@@ -205,6 +319,7 @@ kpis:
     formula: {from_fact: value, from_wide: brch_per_100k}
     unit: per_100k_adults
     denominator: {population: adult population used by FAS, basis: published_count_per_100000_adults}
+    denominator_fr: "Population adulte retenue par le FAS ; nombre publié pour 100 000 adultes."
     subgroup: commercial_banks_all_adults
     reference_period: annual observation; exact within-year reference date follows FAS metadata
     valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
@@ -219,8 +334,10 @@ kpis:
   digital_payment_rate:
     definition_version: "1.0.0"
     name: Made or received a digital payment
+    name_fr: "Paiement numérique effectué ou reçu"
     business_objective: digital_finance
     definition: Share of adults who made or received a digital payment in the past year, across the payment purposes included by Findex.
+    definition_fr: "Part des adultes qui ont effectué ou reçu un paiement numérique au cours de l'année écoulée, pour les motifs de paiement retenus par le Findex."
     verification:
       status: verified
       evidence: [findex_2025_glossary, etl_contract]
@@ -239,6 +356,7 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: digital_payment}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: past_year
     valid_years: [2014, 2017, 2021, 2022, 2024]
@@ -252,16 +370,19 @@ kpis:
     dependencies: []
 
   saving_rate:
-    definition_version: "1.0.0"
-    name: Any saving rate (definition pending verification)
+    definition_version: "1.1.0"
+    name: Saved any money
+    name_fr: "Épargne (toute forme)"
     business_objective: savings_deposits
-    definition: Candidate share reporting any saving; exact survey wording, reference period and cross-wave construction remain to be verified.
+    definition: Share of adults who personally saved or set aside any money, for any reason and using any mode of saving, in the past year.
+    definition_fr: "Part des adultes qui ont personnellement épargné ou mis de l'argent de côté, pour quelque raison et par quelque moyen d'épargne que ce soit, au cours de l'année écoulée."
     verification:
-      status: provisional
-      evidence: [local_dictionary, etl_contract]
+      status: verified
+      evidence: [findex_2025_glossary_save_any, etl_contract]
       uncertainties:
-        - Confirm the official save_any_t_d definition, denominator, recall period and cross-wave comparability before publishing.
-    source: {dataset: findex, indicator: save_any_t_d, official_indicator: null}
+        - Detailed historical questionnaire comparability has not been independently reverified.
+        - Includes informal saving; formal_saving_rate covers saving at a financial institution only.
+    source: {dataset: findex, indicator: save_any_t_d, official_indicator: save.any.t.d}
     warehouse:
       fact_table: fact
       indicator_code: save_any_t_d
@@ -274,11 +395,13 @@ kpis:
       wide_input_unit: percent
     formula: {from_fact: "100 * value", from_wide: savings}
     unit: percent
-    denominator: {population: "provisionally all surveyed adults aged 15+", basis: source_verification_required}
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
-    reference_period: unverified
+    reference_period: past_year
     valid_years: [2014, 2017, 2021, 2022, 2024]
     year_evidence: observed_availability
+    not_equivalent_to: [fin17a, formal_saving_rate]
     aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
     missing_data_policy: preserve_missing_v1
     aggregation_policy: compatible_denominators_v1
@@ -287,16 +410,19 @@ kpis:
     dependencies: []
 
   borrowing_rate:
-    definition_version: "1.0.0"
-    name: Any borrowing rate (definition pending verification)
+    definition_version: "1.1.0"
+    name: Borrowed any money
+    name_fr: "Emprunt (toute forme)"
     business_objective: credit
-    definition: Candidate share reporting any borrowing; exact lender/instrument scope, reference period and cross-wave construction remain to be verified.
+    definition: Share of adults who borrowed any money, alone or together with someone else, for any reason and from any source in the past year.
+    definition_fr: "Part des adultes qui ont emprunté de l'argent, seuls ou avec quelqu'un d'autre, pour quelque raison et auprès de quelque source que ce soit, au cours de l'année écoulée."
     verification:
-      status: provisional
-      evidence: [local_dictionary, etl_contract]
+      status: verified
+      evidence: [findex_2025_glossary_borrow_any, etl_contract]
       uncertainties:
-        - Confirm the official borrow_any_t_d definition, denominator, recall period and cross-wave comparability before publishing.
-    source: {dataset: findex, indicator: borrow_any_t_d, official_indicator: null}
+        - Detailed historical questionnaire comparability has not been independently reverified.
+        - Includes informal lenders (family, friends, savings clubs); formal_borrowing_rate covers financial institutions only.
+    source: {dataset: findex, indicator: borrow_any_t_d, official_indicator: borrow.any.t.d}
     warehouse:
       fact_table: fact
       indicator_code: borrow_any_t_d
@@ -309,11 +435,13 @@ kpis:
       wide_input_unit: percent
     formula: {from_fact: "100 * value", from_wide: borrowing}
     unit: percent
-    denominator: {population: "provisionally all surveyed adults aged 15+", basis: source_verification_required}
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
-    reference_period: unverified
+    reference_period: past_year
     valid_years: [2014, 2017, 2021, 2022, 2024]
     year_evidence: observed_availability
+    not_equivalent_to: [fin22a, formal_borrowing_rate]
     aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
     missing_data_policy: preserve_missing_v1
     aggregation_policy: compatible_denominators_v1
@@ -324,8 +452,10 @@ kpis:
   unbanked_share:
     definition_version: "1.0.0"
     name: Adults without an account
+    name_fr: "Adultes sans compte"
     business_objective: financial_exclusion_vulnerability
     definition: Complement of account ownership in the same population and year; includes adults with neither a bank/similar account nor mobile money.
+    definition_fr: "Complément de la détention d'un compte dans la même population et la même année ; comprend les adultes qui n'ont ni compte bancaire ou assimilé, ni monnaie mobile."
     verification:
       status: derived_verified
       evidence: [findex_2025_book, etl_contract]
@@ -345,6 +475,7 @@ kpis:
     formula: {from_fact: "100 * (1 - value)", from_wide: "100 - account_own"}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: same_as_account_ownership
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -355,3 +486,1524 @@ kpis:
     traceability_policy: retain_input_lineage_v1
     publication_review_policy: review_flagged_dependencies_v1
     dependencies: [account_ownership]
+
+  formal_saving_rate:
+    definition_version: "1.0.0"
+    name: Saved at a financial institution
+    name_fr: "Épargne auprès d'une institution financière"
+    business_objective: savings_deposits
+    definition: Share of adults who saved or set aside any money at a bank or similar financial institution in the past year.
+    definition_fr: "Part des adultes qui ont épargné ou mis de l'argent de côté dans une banque ou une institution financière similaire au cours de l'année écoulée."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin17a, etl_contract]
+      uncertainties:
+        - Detailed historical questionnaire comparability has not been independently reverified.
+        - Excludes saving with a mobile money account (fin17b) and informal saving; not the any-saving measure (saving_rate).
+    source: {dataset: findex, indicator: fin17a, official_indicator: fin17a}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin17a
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: country_year
+      wide_column: formal_saving
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: formal_saving}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
+    subgroup: total_population
+    reference_period: past_year
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [save_any_t_d, saving_rate, fin17a.17a1.d]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  formal_borrowing_rate:
+    definition_version: "1.0.0"
+    name: Borrowed from a financial institution
+    name_fr: "Emprunt auprès d'une institution financière"
+    business_objective: credit
+    definition: Share of adults who borrowed any money from a bank or similar financial institution, or using a credit card, in the past year.
+    definition_fr: "Part des adultes qui ont emprunté de l'argent auprès d'une banque ou d'une institution financière similaire, ou au moyen d'une carte de crédit, au cours de l'année écoulée."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin22a, etl_contract]
+      uncertainties:
+        - Detailed historical questionnaire comparability has not been independently reverified.
+        - The official definition includes borrowing using a credit card; it excludes mobile-money borrowing (fin22a.22a1.22g.d) and informal lenders.
+    source: {dataset: findex, indicator: fin22a, official_indicator: fin22a}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin22a
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: country_year
+      wide_column: formal_borrowing
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: formal_borrowing}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
+    subgroup: total_population
+    reference_period: past_year
+    valid_years: [2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [borrow_any_t_d, borrowing_rate, fin22a.22a1.22g.d]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  gender_gap:
+    definition_version: "1.0.0"
+    name: Account ownership gender gap
+    name_fr: "Écart femmes-hommes de détention d'un compte"
+    business_objective: financial_inclusion
+    definition: Account ownership of men minus account ownership of women, same country and survey year, in percentage points.
+    definition_fr: "Détention d'un compte des hommes moins détention d'un compte des femmes, même pays et même année d'enquête, en points de pourcentage."
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_book, findex_subgroups, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: gender
+      dimension_value: "men"
+      subtrahend_dimension_value: "women"
+      wide_table: country_year
+      wide_column: gender_gap_pp
+      wide_input_unit: percentage_points
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: gender, dimension_value: "men"}
+      - {source: findex, indicator_code: account_t_d, dimension: gender, dimension_value: "women"}
+    formula: {from_fact: "100 * (value[men] - value[women])", from_wide: gender_gap_pp}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    denominator_fr: "Adultes de 15 ans et plus de chacun des sous-groupes comparés ; différence entre les parts pondérées des sous-groupes."
+    subgroup: gender_men_minus_women
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  income_gap:
+    definition_version: "1.0.0"
+    name: Account ownership income gap
+    name_fr: "Écart de revenu de détention d'un compte"
+    business_objective: financial_inclusion
+    definition: Account ownership of the richest 60% minus the poorest 40% of households, same country and survey year, in percentage points.
+    definition_fr: "Détention d'un compte des 60 % des ménages les plus riches moins celle des 40 % les plus pauvres, même pays et même année d'enquête, en points de pourcentage."
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_book, findex_subgroups, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: income
+      dimension_value: "richest 60%"
+      subtrahend_dimension_value: "poorest 40%"
+      wide_table: country_year
+      wide_column: income_gap_pp
+      wide_input_unit: percentage_points
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: income, dimension_value: "richest 60%"}
+      - {source: findex, indicator_code: account_t_d, dimension: income, dimension_value: "poorest 40%"}
+    formula: {from_fact: "100 * (value[richest 60%] - value[poorest 40%])", from_wide: income_gap_pp}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    denominator_fr: "Adultes de 15 ans et plus de chacun des sous-groupes comparés ; différence entre les parts pondérées des sous-groupes."
+    subgroup: income_richest_60_minus_poorest_40
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  age_gap:
+    definition_version: "1.0.0"
+    name: Account ownership age gap
+    name_fr: "Écart d'âge de détention d'un compte"
+    business_objective: financial_inclusion
+    definition: Account ownership of adults aged 25+ minus adults aged 15-24, same country and survey year, in percentage points.
+    definition_fr: "Détention d'un compte des adultes de 25 ans et plus moins celle des adultes de 15 à 24 ans, même pays et même année d'enquête, en points de pourcentage."
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_book, findex_subgroups, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: age_cat
+      dimension_value: "age 25+"
+      subtrahend_dimension_value: "ages 15-24"
+      wide_table: country_year
+      wide_column: age_gap_pp
+      wide_input_unit: percentage_points
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: age_cat, dimension_value: "age 25+"}
+      - {source: findex, indicator_code: account_t_d, dimension: age_cat, dimension_value: "ages 15-24"}
+    formula: {from_fact: "100 * (value[age 25+] - value[ages 15-24])", from_wide: age_gap_pp}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    denominator_fr: "Adultes de 15 ans et plus de chacun des sous-groupes comparés ; différence entre les parts pondérées des sous-groupes."
+    subgroup: age_25_plus_minus_15_24
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  atm_density:
+    definition_version: "1.0.0"
+    name: "Automated teller machine density"
+    name_fr: "Densité des distributeurs automatiques"
+    business_objective: banking_infrastructure
+    definition: "Number of automated teller machines (ATMs) per 100000 adults, as reported by IMF FAS."
+    definition_fr: "Nombre de distributeurs automatiques de billets (DAB) pour 100 000 adultes, tel que publié par le FAS du FMI."
+    verification:
+      status: verified_metadata
+      evidence: [fas_raw_metadata_atm_density, etl_contract]
+      uncertainties:
+        - "Exact adult-age convention and national reporting breaks require FAS methodology review before cross-country rollups."
+        - "FA18N counts all ATMs; the warehouse stores every FAS row under bank_type=commercial_banks, a storage convention, not a restriction of the series."
+    source: {dataset: fas, indicator: FA18N.PHTADLT_NUM, series_code_template: "{iso3}.FA18N.PHTADLT_NUM.A"}
+    warehouse:
+      fact_table: fact
+      indicator_code: atm_density
+      source: fas
+      input_unit: per_100k_adults
+      dimension: bank_type
+      dimension_value: commercial_banks
+      wide_table: country_year
+      wide_column: atm_per_100k
+      wide_input_unit: per_100k_adults
+    formula: {from_fact: value, from_wide: atm_per_100k}
+    unit: per_100k_adults
+    denominator: {population: "adult population used by FAS", basis: published_count_per_100000_adults}
+    denominator_fr: "Population adulte retenue par le FAS ; nombre publié pour 100 000 adultes."
+    subgroup: commercial_banks_all_adults
+    reference_period: annual observation; exact within-year reference date follows FAS metadata
+    valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
+    year_evidence: fas_raw_metadata_atm_density
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  depositors_per_1k:
+    definition_version: "1.0.0"
+    name: "Depositors with commercial banks"
+    name_fr: "Déposants des banques commerciales"
+    business_objective: savings_deposits
+    definition: "Number of depositors with commercial banks per 1000 adults, as reported by IMF FAS."
+    definition_fr: "Nombre de déposants des banques commerciales pour 1 000 adultes, tel que publié par le FAS du FMI."
+    verification:
+      status: verified_metadata
+      evidence: [fas_raw_metadata_depositors_per_1k, etl_contract]
+      uncertainties:
+        - "Exact adult-age convention and national reporting breaks require FAS methodology review before cross-country rollups."
+    source: {dataset: fas, indicator: FA29N_COMBANK.PTADLT_NUM, series_code_template: "{iso3}.FA29N_COMBANK.PTADLT_NUM.A"}
+    warehouse:
+      fact_table: fact
+      indicator_code: depositors_per_1k
+      source: fas
+      input_unit: per_1k_adults
+      dimension: bank_type
+      dimension_value: commercial_banks
+      wide_table: country_year
+      wide_column: depositors_per_1k
+      wide_input_unit: per_1k_adults
+    formula: {from_fact: value, from_wide: depositors_per_1k}
+    unit: per_1k_adults
+    denominator: {population: "adult population used by FAS", basis: published_count_per_1000_adults}
+    denominator_fr: "Population adulte retenue par le FAS ; nombre publié pour 1 000 adultes."
+    subgroup: commercial_banks_all_adults
+    reference_period: annual observation; exact within-year reference date follows FAS metadata
+    valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
+    year_evidence: fas_raw_metadata_depositors_per_1k
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  borrowers_per_1k:
+    definition_version: "1.0.0"
+    name: "Borrowers from commercial banks"
+    name_fr: "Emprunteurs des banques commerciales"
+    business_objective: credit
+    definition: "Number of borrowers from commercial banks per 1000 adults, as reported by IMF FAS."
+    definition_fr: "Nombre d'emprunteurs des banques commerciales pour 1 000 adultes, tel que publié par le FAS du FMI."
+    verification:
+      status: verified_metadata
+      evidence: [fas_raw_metadata_borrowers_per_1k, etl_contract]
+      uncertainties:
+        - "Exact adult-age convention and national reporting breaks require FAS methodology review before cross-country rollups."
+    source: {dataset: fas, indicator: FA21N_COMBANK.PTADLT_NUM, series_code_template: "{iso3}.FA21N_COMBANK.PTADLT_NUM.A"}
+    warehouse:
+      fact_table: fact
+      indicator_code: borrowers_per_1k
+      source: fas
+      input_unit: per_1k_adults
+      dimension: bank_type
+      dimension_value: commercial_banks
+      wide_table: country_year
+      wide_column: borrowers_per_1k
+      wide_input_unit: per_1k_adults
+    formula: {from_fact: value, from_wide: borrowers_per_1k}
+    unit: per_1k_adults
+    denominator: {population: "adult population used by FAS", basis: published_count_per_1000_adults}
+    denominator_fr: "Population adulte retenue par le FAS ; nombre publié pour 1 000 adultes."
+    subgroup: commercial_banks_all_adults
+    reference_period: annual observation; exact within-year reference date follows FAS metadata
+    valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
+    year_evidence: fas_raw_metadata_borrowers_per_1k
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  deposit_accounts_per_1k:
+    definition_version: "1.0.0"
+    name: "Deposit accounts with commercial banks"
+    name_fr: "Comptes de dépôt des banques commerciales"
+    business_objective: savings_deposits
+    definition: "Number of deposit accounts with commercial banks per 1000 adults, as reported by IMF FAS."
+    definition_fr: "Nombre de comptes de dépôt dans les banques commerciales pour 1 000 adultes, tel que publié par le FAS du FMI."
+    verification:
+      status: verified_metadata
+      evidence: [fas_raw_metadata_deposit_accounts_per_1k, etl_contract]
+      uncertainties:
+        - "Exact adult-age convention and national reporting breaks require FAS methodology review before cross-country rollups."
+    source: {dataset: fas, indicator: FA30N_COMBANK.PTADLT_NUM, series_code_template: "{iso3}.FA30N_COMBANK.PTADLT_NUM.A"}
+    warehouse:
+      fact_table: fact
+      indicator_code: deposit_accounts_per_1k
+      source: fas
+      input_unit: per_1k_adults
+      dimension: bank_type
+      dimension_value: commercial_banks
+      wide_table: country_year
+      wide_column: deposit_accounts_per_1k
+      wide_input_unit: per_1k_adults
+    formula: {from_fact: value, from_wide: deposit_accounts_per_1k}
+    unit: per_1k_adults
+    denominator: {population: "adult population used by FAS", basis: published_count_per_1000_adults}
+    denominator_fr: "Population adulte retenue par le FAS ; nombre publié pour 1 000 adultes."
+    subgroup: commercial_banks_all_adults
+    reference_period: annual observation; exact within-year reference date follows FAS metadata
+    valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
+    year_evidence: fas_raw_metadata_deposit_accounts_per_1k
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  loan_accounts_per_1k:
+    definition_version: "1.0.0"
+    name: "Loan accounts with commercial banks"
+    name_fr: "Comptes de prêt des banques commerciales"
+    business_objective: credit
+    definition: "Number of loan accounts with commercial banks per 1000 adults, as reported by IMF FAS."
+    definition_fr: "Nombre de comptes de prêt dans les banques commerciales pour 1 000 adultes, tel que publié par le FAS du FMI."
+    verification:
+      status: verified_metadata
+      evidence: [fas_raw_metadata_loan_accounts_per_1k, etl_contract]
+      uncertainties:
+        - "Exact adult-age convention and national reporting breaks require FAS methodology review before cross-country rollups."
+    source: {dataset: fas, indicator: LOANACCN_COMBANK.PTADLT_NUM, series_code_template: "{iso3}.LOANACCN_COMBANK.PTADLT_NUM.A"}
+    warehouse:
+      fact_table: fact
+      indicator_code: loan_accounts_per_1k
+      source: fas
+      input_unit: per_1k_adults
+      dimension: bank_type
+      dimension_value: commercial_banks
+      wide_table: country_year
+      wide_column: loan_accounts_per_1k
+      wide_input_unit: per_1k_adults
+    formula: {from_fact: value, from_wide: loan_accounts_per_1k}
+    unit: per_1k_adults
+    denominator: {population: "adult population used by FAS", basis: published_count_per_1000_adults}
+    denominator_fr: "Population adulte retenue par le FAS ; nombre publié pour 1 000 adultes."
+    subgroup: commercial_banks_all_adults
+    reference_period: annual observation; exact within-year reference date follows FAS metadata
+    valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
+    year_evidence: fas_raw_metadata_loan_accounts_per_1k
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  deposits_pct_gdp:
+    definition_version: "1.0.0"
+    name: "Outstanding deposits with commercial banks"
+    name_fr: "Encours des dépôts des banques commerciales"
+    business_objective: savings_deposits
+    definition: "Outstanding deposits with commercial banks as a percentage of GDP, as published by IMF FAS (ratio not recomputed)."
+    definition_fr: "Encours des dépôts dans les banques commerciales en pourcentage du PIB, tel que publié par le FAS du FMI (ratio non recalculé)."
+    verification:
+      status: verified_metadata
+      evidence: [fas_raw_metadata_deposits_pct_gdp, etl_contract]
+      uncertainties:
+        - "Exact adult-age convention and national reporting breaks require FAS methodology review before cross-country rollups."
+        - "Values above quality.fas_pct_gdp_threshold are flagged by the fas_pct_gdp_plausibility diagnostic; only those rows require review."
+    source: {dataset: fas, indicator: OUTD_COMBANK.POGDP, series_code_template: "{iso3}.OUTD_COMBANK.POGDP.A"}
+    warehouse:
+      fact_table: fact
+      indicator_code: deposits_pct_gdp
+      source: fas
+      input_unit: percent_of_gdp
+      dimension: bank_type
+      dimension_value: commercial_banks
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: value, from_wide: null}
+    unit: percent_of_gdp
+    denominator: {population: "GDP of the same country and year, as used by FAS", basis: published_ratio_to_gdp}
+    denominator_fr: "PIB du même pays et de la même année, tel qu'utilisé par le FAS ; ratio au PIB publié."
+    subgroup: commercial_banks_all_adults
+    reference_period: annual observation; exact within-year reference date follows FAS metadata
+    valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
+    year_evidence: fas_raw_metadata_deposits_pct_gdp
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  loans_pct_gdp:
+    definition_version: "1.0.0"
+    name: "Outstanding loans from commercial banks"
+    name_fr: "Encours des prêts des banques commerciales"
+    business_objective: credit
+    definition: "Outstanding loans from commercial banks as a percentage of GDP, as published by IMF FAS (ratio not recomputed)."
+    definition_fr: "Encours des prêts des banques commerciales en pourcentage du PIB, tel que publié par le FAS du FMI (ratio non recalculé)."
+    verification:
+      status: verified_metadata
+      evidence: [fas_raw_metadata_loans_pct_gdp, etl_contract]
+      uncertainties:
+        - "Exact adult-age convention and national reporting breaks require FAS methodology review before cross-country rollups."
+        - "Values above quality.fas_pct_gdp_threshold are flagged by the fas_pct_gdp_plausibility diagnostic; only those rows require review."
+    source: {dataset: fas, indicator: OUTL_COMBANK.POGDP, series_code_template: "{iso3}.OUTL_COMBANK.POGDP.A"}
+    warehouse:
+      fact_table: fact
+      indicator_code: loans_pct_gdp
+      source: fas
+      input_unit: percent_of_gdp
+      dimension: bank_type
+      dimension_value: commercial_banks
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: value, from_wide: null}
+    unit: percent_of_gdp
+    denominator: {population: "GDP of the same country and year, as used by FAS", basis: published_ratio_to_gdp}
+    denominator_fr: "PIB du même pays et de la même année, tel qu'utilisé par le FAS ; ratio au PIB publié."
+    subgroup: commercial_banks_all_adults
+    reference_period: annual observation; exact within-year reference date follows FAS metadata
+    valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
+    year_evidence: fas_raw_metadata_loans_pct_gdp
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  emergency_funds:
+    definition_version: "1.0.0"
+    name: "Could come up with emergency funds in 30 days"
+    name_fr: "Fonds d'urgence mobilisables en 30 jours"
+    business_objective: financial_resilience
+    definition: "Share of adults who say it is possible (difficult, somewhat difficult or not very difficult) for them to come up with emergency funds within 30 days."
+    definition_fr: "Part des adultes qui déclarent qu'il leur est possible (difficile, assez difficile ou pas très difficile) de réunir des fonds d'urgence en 30 jours."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin24aP, etl_contract]
+      uncertainties:
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+        - "The emergency amount follows the Findex questionnaire of each wave; values are not converted across waves."
+    source: {dataset: findex, indicator: fin24aP, official_indicator: fin24aP}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin24aP
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
+    subgroup: total_population
+    reference_period: at survey time; 30-day horizon
+    valid_years: [2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [fin24aN, fin24aSD_ND]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  emergency_source_savings:
+    definition_version: "1.0.0"
+    name: "Main source of emergency funds: savings"
+    name_fr: "Source principale des fonds d'urgence : épargne"
+    business_objective: financial_resilience
+    definition: "Share of all adults who say they could come up with emergency funds in 30 days and name savings as their main source."
+    definition_fr: "Part de l'ensemble des adultes qui déclarent pouvoir réunir des fonds d'urgence en 30 jours et citent l'épargne comme source principale."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin24sav, etl_contract]
+      uncertainties:
+        - "The denominator is all adults aged 15+, not only adults able to raise emergency funds."
+        - "Only the main source is recorded; sources are mutually exclusive within one wave."
+    source: {dataset: findex, indicator: fin24sav, official_indicator: fin24sav}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin24sav
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
+    subgroup: total_population
+    reference_period: at survey time; 30-day horizon
+    valid_years: [2021, 2022, 2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [emergency_funds, saving_rate]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  emergency_source_borrowing:
+    definition_version: "1.0.0"
+    name: "Main source of emergency funds: loan from a bank, employer or private lender"
+    name_fr: "Source principale des fonds d'urgence : prêt (banque, employeur ou prêteur privé)"
+    business_objective: financial_resilience
+    definition: "Share of all adults who say they could come up with emergency funds in 30 days and name a loan from a bank, employer or private lender as their main source."
+    definition_fr: "Part de l'ensemble des adultes qui déclarent pouvoir réunir des fonds d'urgence en 30 jours et citent comme source principale un prêt d'une banque, d'un employeur ou d'un prêteur privé."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin24bor, etl_contract]
+      uncertainties:
+        - "The denominator is all adults aged 15+, not only adults able to raise emergency funds."
+        - "Excludes family or friends (fin24fam), which Findex records as a separate source."
+    source: {dataset: findex, indicator: fin24bor, official_indicator: fin24bor}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin24bor
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
+    subgroup: total_population
+    reference_period: at survey time; 30-day horizon
+    valid_years: [2021, 2022, 2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [emergency_funds, borrowing_rate]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  mobile_money_account:
+    definition_version: "1.0.0"
+    name: "Mobile money account"
+    name_fr: "Compte de monnaie mobile"
+    business_objective: digital_finance
+    definition: "Share of adults who report personally using a mobile money service in the past year."
+    definition_fr: "Part des adultes qui déclarent avoir personnellement utilisé un service de monnaie mobile au cours de l'année écoulée."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_mobileaccount, etl_contract]
+      uncertainties:
+        - "Defined by use of a mobile money service in the past year, not by registration alone."
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+    source: {dataset: findex, indicator: mobileaccount_t_d, official_indicator: mobileaccount.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: mobileaccount_t_d
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: country_year
+      wide_column: mobile_account
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: mobile_account}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
+    subgroup: total_population
+    reference_period: past_year
+    valid_years: [2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [account_ownership, fiaccount_t_d]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  inactive_accounts:
+    definition_version: "1.0.0"
+    name: "Has an inactive account"
+    name_fr: "Compte inactif"
+    business_objective: financial_inclusion
+    definition: "Share of all adults who have an account but report neither a deposit into nor a withdrawal from it (including any digital payment) in the past year."
+    definition_fr: "Part de l'ensemble des adultes qui ont un compte mais ne déclarent ni dépôt ni retrait sur ce compte (paiement numérique compris) au cours de l'année écoulée."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_inactive, etl_contract]
+      uncertainties:
+        - "The denominator is all adults aged 15+, not account owners only."
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+    source: {dataset: findex, indicator: inactive_t_d, official_indicator: inactive.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: inactive_t_d
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: country_year
+      wide_column: inactive
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: inactive}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
+    subgroup: total_population
+    reference_period: past_year
+    valid_years: [2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [unbanked_share]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  account_ownership_women:
+    definition_version: "1.0.0"
+    name: "Account ownership - women"
+    name_fr: "Détention d'un compte - femmes"
+    business_objective: financial_inclusion
+    definition: "Share of women who own a bank or similar financial-institution account or a mobile-money account."
+    definition_fr: "Part des femmes qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_account, findex_subgroups, etl_contract]
+      uncertainties:
+        - "Subgroup survey estimate; its sampling error is larger than the total-population estimate and is not propagated."
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: gender
+      dimension_value: "women"
+      wide_table: country_year
+      wide_column: account_female
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: account_female}
+    unit: percent
+    denominator: {population: "surveyed adults aged 15+ in the subgroup gender = women", basis: survey_weighted_population_share}
+    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « femmes » ; part pondérée selon le plan de sondage."
+    subgroup: gender_women
+    reference_period: ownership at survey time; mobile-money eligibility follows the source definition
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: findex_subgroups
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  account_ownership_men:
+    definition_version: "1.0.0"
+    name: "Account ownership - men"
+    name_fr: "Détention d'un compte - hommes"
+    business_objective: financial_inclusion
+    definition: "Share of men who own a bank or similar financial-institution account or a mobile-money account."
+    definition_fr: "Part des hommes qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_account, findex_subgroups, etl_contract]
+      uncertainties:
+        - "Subgroup survey estimate; its sampling error is larger than the total-population estimate and is not propagated."
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: gender
+      dimension_value: "men"
+      wide_table: country_year
+      wide_column: account_male
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: account_male}
+    unit: percent
+    denominator: {population: "surveyed adults aged 15+ in the subgroup gender = men", basis: survey_weighted_population_share}
+    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « hommes » ; part pondérée selon le plan de sondage."
+    subgroup: gender_men
+    reference_period: ownership at survey time; mobile-money eligibility follows the source definition
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: findex_subgroups
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  account_ownership_poorest_40:
+    definition_version: "1.0.0"
+    name: "Account ownership - the poorest 40% of households"
+    name_fr: "Détention d'un compte - 40 % des ménages les plus pauvres"
+    business_objective: financial_inclusion
+    definition: "Share of the poorest 40% of households who own a bank or similar financial-institution account or a mobile-money account."
+    definition_fr: "Part des 40 % des ménages les plus pauvres qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_account, findex_subgroups, etl_contract]
+      uncertainties:
+        - "Subgroup survey estimate; its sampling error is larger than the total-population estimate and is not propagated."
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: income
+      dimension_value: "poorest 40%"
+      wide_table: country_year
+      wide_column: account_poorest_40
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: account_poorest_40}
+    unit: percent
+    denominator: {population: "surveyed adults aged 15+ in the subgroup income = poorest 40%", basis: survey_weighted_population_share}
+    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « 40 % des ménages les plus pauvres » ; part pondérée selon le plan de sondage."
+    subgroup: income_poorest_40
+    reference_period: ownership at survey time; mobile-money eligibility follows the source definition
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: findex_subgroups
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  account_ownership_richest_60:
+    definition_version: "1.0.0"
+    name: "Account ownership - the richest 60% of households"
+    name_fr: "Détention d'un compte - 60 % des ménages les plus riches"
+    business_objective: financial_inclusion
+    definition: "Share of the richest 60% of households who own a bank or similar financial-institution account or a mobile-money account."
+    definition_fr: "Part des 60 % des ménages les plus riches qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_account, findex_subgroups, etl_contract]
+      uncertainties:
+        - "Subgroup survey estimate; its sampling error is larger than the total-population estimate and is not propagated."
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: income
+      dimension_value: "richest 60%"
+      wide_table: country_year
+      wide_column: account_richest_60
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: account_richest_60}
+    unit: percent
+    denominator: {population: "surveyed adults aged 15+ in the subgroup income = richest 60%", basis: survey_weighted_population_share}
+    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « 60 % des ménages les plus riches » ; part pondérée selon le plan de sondage."
+    subgroup: income_richest_60
+    reference_period: ownership at survey time; mobile-money eligibility follows the source definition
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: findex_subgroups
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  account_ownership_age_15_24:
+    definition_version: "1.0.0"
+    name: "Account ownership - adults aged 15-24"
+    name_fr: "Détention d'un compte - adultes de 15 à 24 ans"
+    business_objective: financial_inclusion
+    definition: "Share of adults aged 15-24 who own a bank or similar financial-institution account or a mobile-money account."
+    definition_fr: "Part des adultes de 15 à 24 ans qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_account, findex_subgroups, etl_contract]
+      uncertainties:
+        - "Subgroup survey estimate; its sampling error is larger than the total-population estimate and is not propagated."
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: age_cat
+      dimension_value: "ages 15-24"
+      wide_table: country_year
+      wide_column: account_age_15_24
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: account_age_15_24}
+    unit: percent
+    denominator: {population: "surveyed adults aged 15+ in the subgroup age_cat = ages 15-24", basis: survey_weighted_population_share}
+    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « adultes de 15 à 24 ans » ; part pondérée selon le plan de sondage."
+    subgroup: age_cat_ages_15_24
+    reference_period: ownership at survey time; mobile-money eligibility follows the source definition
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: findex_subgroups
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  account_ownership_age_25_plus:
+    definition_version: "1.0.0"
+    name: "Account ownership - adults aged 25+"
+    name_fr: "Détention d'un compte - adultes de 25 ans et plus"
+    business_objective: financial_inclusion
+    definition: "Share of adults aged 25+ who own a bank or similar financial-institution account or a mobile-money account."
+    definition_fr: "Part des adultes de 25 ans et plus qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_account, findex_subgroups, etl_contract]
+      uncertainties:
+        - "Subgroup survey estimate; its sampling error is larger than the total-population estimate and is not propagated."
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: age_cat
+      dimension_value: "age 25+"
+      wide_table: country_year
+      wide_column: account_age_25_plus
+      wide_input_unit: percent
+    formula: {from_fact: "100 * value", from_wide: account_age_25_plus}
+    unit: percent
+    denominator: {population: "surveyed adults aged 15+ in the subgroup age_cat = age 25+", basis: survey_weighted_population_share}
+    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « adultes de 25 ans et plus » ; part pondérée selon le plan de sondage."
+    subgroup: age_cat_age_25_plus
+    reference_period: ownership at survey time; mobile-money eligibility follows the source definition
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: findex_subgroups
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  account_ownership_primary_or_less:
+    definition_version: "1.0.0"
+    name: "Account ownership - adults with primary education or less"
+    name_fr: "Détention d'un compte - niveau primaire ou moins"
+    business_objective: financial_inclusion
+    definition: "Share of adults with primary education or less who own a bank or similar financial-institution account or a mobile-money account."
+    definition_fr: "Part des adultes de niveau d'études primaire ou moins qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
+      uncertainties:
+        - "Subgroup survey estimate; its sampling error is larger than the total-population estimate and is not propagated."
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: education
+      dimension_value: "prim edu or less"
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "surveyed adults aged 15+ in the subgroup education = prim edu or less", basis: survey_weighted_population_share}
+    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « niveau primaire ou moins » ; part pondérée selon le plan de sondage."
+    subgroup: education_prim_edu_or_less
+    reference_period: ownership at survey time; mobile-money eligibility follows the source definition
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: findex_subgroups_extended
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  account_ownership_secondary_or_more:
+    definition_version: "1.0.0"
+    name: "Account ownership - adults with secondary education or more"
+    name_fr: "Détention d'un compte - niveau secondaire ou plus"
+    business_objective: financial_inclusion
+    definition: "Share of adults with secondary education or more who own a bank or similar financial-institution account or a mobile-money account."
+    definition_fr: "Part des adultes de niveau d'études secondaire ou plus qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
+      uncertainties:
+        - "Subgroup survey estimate; its sampling error is larger than the total-population estimate and is not propagated."
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: education
+      dimension_value: "secondary edu or more"
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "surveyed adults aged 15+ in the subgroup education = secondary edu or more", basis: survey_weighted_population_share}
+    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « niveau secondaire ou plus » ; part pondérée selon le plan de sondage."
+    subgroup: education_secondary_edu_or_more
+    reference_period: ownership at survey time; mobile-money eligibility follows the source definition
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: findex_subgroups_extended
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  account_ownership_out_of_laborforce:
+    definition_version: "1.0.0"
+    name: "Account ownership - adults out of the labor force"
+    name_fr: "Détention d'un compte - hors population active"
+    business_objective: financial_inclusion
+    definition: "Share of adults out of the labor force who own a bank or similar financial-institution account or a mobile-money account."
+    definition_fr: "Part des adultes hors population active qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
+      uncertainties:
+        - "Subgroup survey estimate; its sampling error is larger than the total-population estimate and is not propagated."
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: laborforce
+      dimension_value: "out of laborforce"
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "surveyed adults aged 15+ in the subgroup laborforce = out of laborforce", basis: survey_weighted_population_share}
+    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « hors population active » ; part pondérée selon le plan de sondage."
+    subgroup: laborforce_out_of_laborforce
+    reference_period: ownership at survey time; mobile-money eligibility follows the source definition
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: findex_subgroups_extended
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  account_ownership_in_laborforce:
+    definition_version: "1.0.0"
+    name: "Account ownership - adults in the labor force"
+    name_fr: "Détention d'un compte - population active"
+    business_objective: financial_inclusion
+    definition: "Share of adults in the labor force who own a bank or similar financial-institution account or a mobile-money account."
+    definition_fr: "Part des adultes de la population active qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
+      uncertainties:
+        - "Subgroup survey estimate; its sampling error is larger than the total-population estimate and is not propagated."
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: laborforce
+      dimension_value: "in laborforce"
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "surveyed adults aged 15+ in the subgroup laborforce = in laborforce", basis: survey_weighted_population_share}
+    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « population active » ; part pondérée selon le plan de sondage."
+    subgroup: laborforce_in_laborforce
+    reference_period: ownership at survey time; mobile-money eligibility follows the source definition
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: findex_subgroups_extended
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  account_ownership_rural:
+    definition_version: "1.0.0"
+    name: "Account ownership - adults living in rural areas"
+    name_fr: "Détention d'un compte - milieu rural"
+    business_objective: financial_inclusion
+    definition: "Share of adults living in rural areas who own a bank or similar financial-institution account or a mobile-money account."
+    definition_fr: "Part des adultes vivant en milieu rural qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
+      uncertainties:
+        - "Subgroup survey estimate; its sampling error is larger than the total-population estimate and is not propagated."
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: urbanicity
+      dimension_value: "rural"
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "surveyed adults aged 15+ in the subgroup urbanicity = rural", basis: survey_weighted_population_share}
+    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « milieu rural » ; part pondérée selon le plan de sondage."
+    subgroup: urbanicity_rural
+    reference_period: ownership at survey time; mobile-money eligibility follows the source definition
+    valid_years: [2024]
+    year_evidence: findex_subgroups_extended
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  account_ownership_urban:
+    definition_version: "1.0.0"
+    name: "Account ownership - adults living in urban areas"
+    name_fr: "Détention d'un compte - milieu urbain"
+    business_objective: financial_inclusion
+    definition: "Share of adults living in urban areas who own a bank or similar financial-institution account or a mobile-money account."
+    definition_fr: "Part des adultes vivant en milieu urbain qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
+      uncertainties:
+        - "Subgroup survey estimate; its sampling error is larger than the total-population estimate and is not propagated."
+        - "Detailed historical questionnaire comparability has not been independently reverified."
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: urbanicity
+      dimension_value: "urban"
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "surveyed adults aged 15+ in the subgroup urbanicity = urban", basis: survey_weighted_population_share}
+    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « milieu urbain » ; part pondérée selon le plan de sondage."
+    subgroup: urbanicity_urban
+    reference_period: ownership at survey time; mobile-money eligibility follows the source definition
+    valid_years: [2024]
+    year_evidence: findex_subgroups_extended
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  barrier_too_far:
+    definition_version: "1.0.0"
+    name: "No bank account because financial institutions are too far away"
+    name_fr: "Pas de compte : institutions financières trop éloignées"
+    business_objective: financial_exclusion_vulnerability
+    definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because financial institutions are too far away. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
+    definition_fr: "Part de l'ensemble des adultes (15 ans et plus) qui déclarent ne pas avoir de compte dans une banque ou une institution financière similaire parce que les institutions financières sont trop éloignées. Le dénominateur est l'ensemble des adultes, pas seulement les adultes sans compte ; les comptes de monnaie mobile n'entrent pas dans la question."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin11a, etl_contract]
+      uncertainties:
+        - "Several reasons can be cited by the same person: barrier shares do not add up to 100% and must never be summed."
+        - "The reason refers to a bank or similar financial-institution account only; mobile money is excluded."
+        - "Observed for the 2024 wave only in the local Findex file."
+    source: {dataset: findex, indicator: fin11a, official_indicator: fin11a}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin11a
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
+    subgroup: total_population
+    reference_period: at survey time
+    valid_years: [2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [unbanked_share]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  barrier_too_expensive:
+    definition_version: "1.0.0"
+    name: "No bank account because financial services are too expensive"
+    name_fr: "Pas de compte : services financiers trop chers"
+    business_objective: financial_exclusion_vulnerability
+    definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because financial services are too expensive. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
+    definition_fr: "Part de l'ensemble des adultes (15 ans et plus) qui déclarent ne pas avoir de compte dans une banque ou une institution financière similaire parce que les services financiers sont trop chers. Le dénominateur est l'ensemble des adultes, pas seulement les adultes sans compte ; les comptes de monnaie mobile n'entrent pas dans la question."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin11b, etl_contract]
+      uncertainties:
+        - "Several reasons can be cited by the same person: barrier shares do not add up to 100% and must never be summed."
+        - "The reason refers to a bank or similar financial-institution account only; mobile money is excluded."
+        - "Observed for the 2024 wave only in the local Findex file."
+    source: {dataset: findex, indicator: fin11b, official_indicator: fin11b}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin11b
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
+    subgroup: total_population
+    reference_period: at survey time
+    valid_years: [2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [unbanked_share]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  barrier_no_documents:
+    definition_version: "1.0.0"
+    name: "No bank account because they lack the documentation needed to open one"
+    name_fr: "Pas de compte : documents requis manquants"
+    business_objective: financial_exclusion_vulnerability
+    definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because they lack the documentation needed to open one. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
+    definition_fr: "Part de l'ensemble des adultes (15 ans et plus) qui déclarent ne pas avoir de compte dans une banque ou une institution financière similaire faute des documents nécessaires pour en ouvrir un. Le dénominateur est l'ensemble des adultes, pas seulement les adultes sans compte ; les comptes de monnaie mobile n'entrent pas dans la question."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin11c, etl_contract]
+      uncertainties:
+        - "Several reasons can be cited by the same person: barrier shares do not add up to 100% and must never be summed."
+        - "The reason refers to a bank or similar financial-institution account only; mobile money is excluded."
+        - "Observed for the 2024 wave only in the local Findex file."
+    source: {dataset: findex, indicator: fin11c, official_indicator: fin11c}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin11c
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
+    subgroup: total_population
+    reference_period: at survey time
+    valid_years: [2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [unbanked_share]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  barrier_insufficient_funds:
+    definition_version: "1.0.0"
+    name: "No bank account because they do not have enough money to use one"
+    name_fr: "Pas de compte : pas assez d'argent"
+    business_objective: financial_exclusion_vulnerability
+    definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because they do not have enough money to use one. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
+    definition_fr: "Part de l'ensemble des adultes (15 ans et plus) qui déclarent ne pas avoir de compte dans une banque ou une institution financière similaire parce qu'ils n'ont pas assez d'argent pour en utiliser un. Le dénominateur est l'ensemble des adultes, pas seulement les adultes sans compte ; les comptes de monnaie mobile n'entrent pas dans la question."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin11d, etl_contract]
+      uncertainties:
+        - "Several reasons can be cited by the same person: barrier shares do not add up to 100% and must never be summed."
+        - "The reason refers to a bank or similar financial-institution account only; mobile money is excluded."
+        - "Observed for the 2024 wave only in the local Findex file."
+    source: {dataset: findex, indicator: fin11d, official_indicator: fin11d}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin11d
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
+    subgroup: total_population
+    reference_period: at survey time
+    valid_years: [2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [unbanked_share]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  barrier_family_has_account:
+    definition_version: "1.0.0"
+    name: "No bank account because someone else in their family already has one"
+    name_fr: "Pas de compte : un membre de la famille en a déjà un"
+    business_objective: financial_exclusion_vulnerability
+    definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because someone else in their family already has one. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
+    definition_fr: "Part de l'ensemble des adultes (15 ans et plus) qui déclarent ne pas avoir de compte dans une banque ou une institution financière similaire parce qu'un autre membre de leur famille en a déjà un. Le dénominateur est l'ensemble des adultes, pas seulement les adultes sans compte ; les comptes de monnaie mobile n'entrent pas dans la question."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin11e, etl_contract]
+      uncertainties:
+        - "Several reasons can be cited by the same person: barrier shares do not add up to 100% and must never be summed."
+        - "The reason refers to a bank or similar financial-institution account only; mobile money is excluded."
+        - "Observed for the 2024 wave only in the local Findex file."
+    source: {dataset: findex, indicator: fin11e, official_indicator: fin11e}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin11e
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
+    subgroup: total_population
+    reference_period: at survey time
+    valid_years: [2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [unbanked_share]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  barrier_no_trust:
+    definition_version: "1.0.0"
+    name: "No bank account because they do not trust financial institutions"
+    name_fr: "Pas de compte : manque de confiance dans les institutions financières"
+    business_objective: financial_exclusion_vulnerability
+    definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because they do not trust financial institutions. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
+    definition_fr: "Part de l'ensemble des adultes (15 ans et plus) qui déclarent ne pas avoir de compte dans une banque ou une institution financière similaire parce qu'ils n'ont pas confiance dans les institutions financières. Le dénominateur est l'ensemble des adultes, pas seulement les adultes sans compte ; les comptes de monnaie mobile n'entrent pas dans la question."
+    verification:
+      status: verified
+      evidence: [findex_2025_glossary_fin11f, etl_contract]
+      uncertainties:
+        - "Several reasons can be cited by the same person: barrier shares do not add up to 100% and must never be summed."
+        - "The reason refers to a bank or similar financial-institution account only; mobile money is excluded."
+        - "Observed for the 2024 wave only in the local Findex file."
+    source: {dataset: findex, indicator: fin11f, official_indicator: fin11f}
+    warehouse:
+      fact_table: fact
+      indicator_code: fin11f
+      source: findex
+      input_unit: fraction
+      dimension: all
+      dimension_value: all
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    formula: {from_fact: "100 * value", from_wide: null}
+    unit: percent
+    denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
+    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
+    subgroup: total_population
+    reference_period: at survey time
+    valid_years: [2024]
+    year_evidence: observed_availability
+    not_equivalent_to: [unbanked_share]
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  education_gap:
+    definition_version: "1.0.0"
+    name: Account ownership education gap
+    name_fr: "Écart d'éducation de détention d'un compte"
+    business_objective: financial_inclusion
+    definition: Account ownership of adults with secondary education or more minus adults with primary education or less, same country and survey year, in percentage points.
+    definition_fr: "Détention d'un compte des adultes de niveau d'études secondaire ou plus moins celle des adultes de niveau primaire ou moins, même pays et même année d'enquête, en points de pourcentage."
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: education
+      dimension_value: "secondary edu or more"
+      subtrahend_dimension_value: "prim edu or less"
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: education, dimension_value: "secondary edu or more"}
+      - {source: findex, indicator_code: account_t_d, dimension: education, dimension_value: "prim edu or less"}
+    formula: {from_fact: "100 * (value[secondary edu or more] - value[prim edu or less])", from_wide: null}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    denominator_fr: "Adultes de 15 ans et plus de chacun des sous-groupes comparés ; différence entre les parts pondérées des sous-groupes."
+    subgroup: education_secondary_or_more_minus_primary_or_less
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  laborforce_gap:
+    definition_version: "1.0.0"
+    name: Account ownership labor force gap
+    name_fr: "Écart d'activité de détention d'un compte"
+    business_objective: financial_inclusion
+    definition: Account ownership of adults in the labor force minus adults out of the labor force, same country and survey year, in percentage points.
+    definition_fr: "Détention d'un compte des adultes de la population active moins celle des adultes hors population active, même pays et même année d'enquête, en points de pourcentage."
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: laborforce
+      dimension_value: "in laborforce"
+      subtrahend_dimension_value: "out of laborforce"
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: laborforce, dimension_value: "in laborforce"}
+      - {source: findex, indicator_code: account_t_d, dimension: laborforce, dimension_value: "out of laborforce"}
+    formula: {from_fact: "100 * (value[in laborforce] - value[out of laborforce])", from_wide: null}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    denominator_fr: "Adultes de 15 ans et plus de chacun des sous-groupes comparés ; différence entre les parts pondérées des sous-groupes."
+    subgroup: laborforce_in_minus_out
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []
+
+  urban_gap:
+    definition_version: "1.0.0"
+    name: Account ownership urban-rural gap
+    name_fr: "Écart urbain-rural de détention d'un compte"
+    business_objective: financial_inclusion
+    definition: Account ownership of urban adults minus rural adults, same country and survey year, in percentage points.
+    definition_fr: "Détention d'un compte des adultes urbains moins celle des adultes ruraux, même pays et même année d'enquête, en points de pourcentage."
+    verification:
+      status: derived_verified
+      evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
+      uncertainties:
+        - Difference of two survey estimates; sampling error of each subgroup is not propagated.
+        - Detailed historical questionnaire comparability has not been independently reverified.
+    source: {dataset: findex, indicator: account_t_d, official_indicator: account.t.d}
+    warehouse:
+      fact_table: fact
+      indicator_code: account_t_d
+      source: findex
+      input_unit: fraction
+      dimension: urbanicity
+      dimension_value: "urban"
+      subtrahend_dimension_value: "rural"
+      wide_table: null
+      wide_column: null
+      wide_input_unit: null
+    fact_dependencies:
+      - {source: findex, indicator_code: account_t_d, dimension: urbanicity, dimension_value: "urban"}
+      - {source: findex, indicator_code: account_t_d, dimension: urbanicity, dimension_value: "rural"}
+    formula: {from_fact: "100 * (value[urban] - value[rural])", from_wide: null}
+    unit: percentage_points
+    denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
+    denominator_fr: "Adultes de 15 ans et plus de chacun des sous-groupes comparés ; différence entre les parts pondérées des sous-groupes."
+    subgroup: urbanicity_urban_minus_rural
+    reference_period: same survey year for both subgroups; ownership at survey time
+    valid_years: [2024]
+    year_evidence: observed_availability
+    aggregation: {country_year: unique_observation, over_time: none, subgroup_rollup: none, country_rollup: conditional_adult_population_weighted_mean}
+    missing_data_policy: preserve_missing_v1
+    aggregation_policy: compatible_denominators_v1
+    traceability_policy: retain_input_lineage_v1
+    publication_review_policy: review_flagged_dependencies_v1
+    dependencies: []

@@ -34,6 +34,45 @@ def sha256_file(path: str | Path, chunk_size: int = 1 << 20) -> str:
     return digest.hexdigest()
 
 
+# Cache des empreintes par (chemin, taille, mtime_ns) : un fichier inchange n'est
+# hache qu'une fois par processus ; toute modification change la cle.
+_HASH_CACHE: dict[tuple[str, int, int], str] = {}
+
+
+def file_stat(path: str | Path) -> dict[str, int]:
+    """Taille et date de modification (ns) servant de cle au cache des hash."""
+    stat = Path(path).stat()
+    return {"size_bytes": int(stat.st_size), "mtime_ns": int(stat.st_mtime_ns)}
+
+
+def _hash_key(path: str | Path) -> tuple[str, int, int]:
+    p = Path(path).resolve()
+    stat = file_stat(p)
+    return str(p), stat["size_bytes"], stat["mtime_ns"]
+
+
+def cached_sha256_file(path: str | Path) -> str:
+    """sha256_file avec cache : recalcule seulement si taille ou mtime changent."""
+    key = _hash_key(path)
+    if key not in _HASH_CACHE:
+        _HASH_CACHE[key] = sha256_file(path)
+    return _HASH_CACHE[key]
+
+
+def remember_sha256(path: str | Path, sha256: Any, size_bytes: Any, mtime_ns: Any) -> bool:
+    """Reutilise un hash deja calcule (ex. collector) si le fichier est inchange."""
+    if not isinstance(sha256, str) or len(sha256) != 64:
+        return False
+    try:
+        key = _hash_key(path)
+    except OSError:
+        return False
+    if key[1:] != (size_bytes, mtime_ns):
+        return False
+    _HASH_CACHE[key] = sha256.lower()
+    return True
+
+
 # --------------------------------------------------------------------------- CSV
 def _detect_encoding(path: Path, sample_size: int = 1 << 16) -> str:
     with open(path, "rb") as f:
@@ -123,11 +162,35 @@ def load_source(source_cfg: dict[str, Any], **kwargs: Any) -> pd.DataFrame:
     raise ValueError(f"Format de source non supporte : {fmt} ({path.name})")
 
 
-def write_csv(df: pd.DataFrame, path: str | Path) -> Path:
-    """Ecrit un CSV UTF-8 avec BOM (Excel) et cree le dossier parent."""
+FORMULA_PREFIXES = ("=", "+", "-", "@")
+
+
+def neutralize_cell(value: Any) -> Any:
+    """S6 : un texte commencant par = + - @ est prefixe d'une apostrophe (jamais
+    interprete comme formule par un tableur). Les nombres ne sont pas touches."""
+    if isinstance(value, str) and value.startswith(FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
+def neutralize_formulas(df: pd.DataFrame) -> pd.DataFrame:
+    """Copie du tableau avec en-tetes, index et cellules texte neutralises (S6)."""
+    out = df.copy()
+    out.columns = [neutralize_cell(c) for c in out.columns]
+    if out.index.dtype == object:
+        out.index = [neutralize_cell(i) for i in out.index]
+    for column in out.columns:
+        if out[column].dtype == object:
+            out[column] = out[column].map(neutralize_cell)
+    return out
+
+
+def write_csv(df: pd.DataFrame, path: str | Path, *, index: bool = False) -> Path:
+    """Ecrit un CSV d'export UTF-8 avec BOM (Excel) et cree le dossier parent ;
+    les cellules texte sont neutralisees contre l'injection de formule (S6)."""
     out = resolve(path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(out, index=False, encoding="utf-8-sig")
+    neutralize_formulas(df).to_csv(out, index=index, encoding="utf-8-sig")
     return out
 
 
@@ -214,8 +277,13 @@ __all__ = [
     "sha256_file",
     "read_csv_smart",
     "load_source",
+    "neutralize_cell",
+    "neutralize_formulas",
     "write_csv",
     "save_json",
+    "cached_sha256_file",
+    "file_stat",
+    "remember_sha256",
     "load_json",
     "existing_files",
 ]

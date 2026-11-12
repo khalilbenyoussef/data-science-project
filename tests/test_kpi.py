@@ -1,11 +1,13 @@
 """KPI calculations use temporary databases only; no production writes or network."""
 from dataclasses import FrozenInstanceError
 import hashlib
+import os
 import json
 
 import duckdb
 import pytest
 import yaml
+from pathlib import Path
 
 from biflow.tools.kpi import CatalogError, KpiCalculator, load_catalog
 
@@ -25,11 +27,42 @@ def warehouse(tmp_path):
             ("TUN", 2024, "findex", "dig_acc", "all", "all", .99, "fraction"),
             ("TUN", 2024, "findex", "save_any_t_d", "all", "all", .23, "fraction"),
             ("TUN", 2024, "findex", "borrow_any_t_d", "all", "all", .31, "fraction"),
+            ("TUN", 2024, "findex", "fin17a", "all", "all", .21, "fraction"),
+            ("TUN", 2024, "findex", "fin22a", "all", "all", .04, "fraction"),
+            ("TUN", 2024, "findex", "fin17a", "gender", "men", .29, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "gender", "men", .55, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "gender", "women", .30, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "income", "richest 60%", .50, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "income", "poorest 40%", .20, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "age_cat", "age 25+", .48, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "age_cat", "ages 15-24", .12, "fraction"),
             ("TUN", 2024, "findex", "save_any_t_d", "gender", "female", .91, "fraction"),
             ("TUN", 2024, "findex", "borrow_any_t_d", "gender", "male", .92, "fraction"),
             ("TUN", 2024, "fas", "branch_density", "bank_type", "commercial_banks", 12.5, "per_100k_adults"),
             ("TUN", 2024, "fas", "branch_density", "bank_type", "other_banks", 99, "per_100k_adults"),
             ("TUN", 2024, "fas", "loans_pct_gdp", "bank_type", "commercial_banks", 20000, "percent_of_gdp"),
+            # catalogue 1.4.0 : series FAS et Findex ajoutees, sous-groupes de detention de compte
+            ("TUN", 2024, "fas", "atm_density", "bank_type", "commercial_banks", 35.4, "per_100k_adults"),
+            ("TUN", 2024, "fas", "depositors_per_1k", "bank_type", "commercial_banks", 1063.3, "per_1k_adults"),
+            ("TUN", 2024, "fas", "borrowers_per_1k", "bank_type", "commercial_banks", 253.7, "per_1k_adults"),
+            ("TUN", 2024, "fas", "deposit_accounts_per_1k", "bank_type", "commercial_banks", 1500.0, "per_1k_adults"),
+            ("TUN", 2024, "fas", "loan_accounts_per_1k", "bank_type", "commercial_banks", 400.0, "per_1k_adults"),
+            ("TUN", 2024, "fas", "deposits_pct_gdp", "bank_type", "commercial_banks", 71.7, "percent_of_gdp"),
+            ("TUN", 2024, "findex", "fin24aP", "all", "all", .88, "fraction"),
+            ("TUN", 2024, "findex", "fin24sav", "all", "all", .19, "fraction"),
+            ("TUN", 2024, "findex", "fin24bor", "all", "all", .06, "fraction"),
+            ("TUN", 2024, "findex", "mobileaccount_t_d", "all", "all", .03, "fraction"),
+            ("TUN", 2024, "findex", "inactive_t_d", "all", "all", .03, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "education", "prim edu or less", .29, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "education", "secondary edu or more", .46, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "laborforce", "out of laborforce", .25, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "laborforce", "in laborforce", .52, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "urbanicity", "rural", .30, "fraction"),
+            ("TUN", 2024, "findex", "account_t_d", "urbanicity", "urban", .47, "fraction"),
+            # catalogue 1.5.0 : barrieres fin11a-f (part de tous les adultes)
+            *[("TUN", 2024, "findex", code, "all", "all", value, "fraction") for code, value in (
+                ("fin11a", .09), ("fin11b", .12), ("fin11c", .13), ("fin11d", .46),
+                ("fin11e", .22), ("fin11f", .16))],
             ("XKX", 2024, "findex", "account_t_d", "all", "all", .6, "fraction"),
             ("PSE", 2024, "findex", "account_t_d", "all", "all", .7, "fraction"),
         ])
@@ -54,7 +87,7 @@ def test_verified_values_subgroups_units_and_metadata(warehouse, kpi, expected, 
     assert result.iso3 == "TUN" and result.observation_year == 2024
     assert result.availability_status == "available" and result.reason is None
     assert result.definition == load_catalog()["kpis"][kpi]["definition"]
-    assert result.catalog_version == result.definition_version == "1.0.0"
+    assert result.catalog_version == "1.8.0" and result.definition_version == "1.0.0"
     assert len(result.catalog_sha256) == 64
     assert result.publication_status == "not_evaluated"
     with pytest.raises(FrozenInstanceError):
@@ -164,7 +197,7 @@ def test_unknown_and_out_of_scope_kpis_rejected(warehouse, kpi):
     lambda c: c["kpis"]["branch_density"].update(valid_years=[True]),
     lambda c: c["missing_data_policy"].update(zero_fill=True),
     lambda c: c["kpis"]["account_ownership"].update(missing_data_policy="unknown"),
-    lambda c: c["kpis"]["saving_rate"]["verification"].update(status="verified"),
+    lambda c: c["kpis"]["saving_rate"]["verification"].update(status="provisional"),
     lambda c: c["kpis"]["borrowing_rate"]["warehouse"].update(dimension_value="female"),
     lambda c: c["kpis"]["unbanked_share"].update(dependencies=[]),
     lambda c: c["kpis"]["unbanked_share"].update(dependencies=["unbanked_share"]),
@@ -221,9 +254,11 @@ def test_database_schema_errors_are_not_disguised_as_missing_data(tmp_path):
 
 
 NEW_KPIS = [
-    ("saving_rate", "save_any_t_d", 23, "provisional"),
-    ("borrowing_rate", "borrow_any_t_d", 31, "provisional"),
+    ("saving_rate", "save_any_t_d", 23, "verified"),
+    ("borrowing_rate", "borrow_any_t_d", 31, "verified"),
     ("unbanked_share", "account_t_d", 58, "derived_verified"),
+    ("formal_saving_rate", "fin17a", 21, "verified"),
+    ("formal_borrowing_rate", "fin22a", 4, "verified"),
 ]
 
 
@@ -391,9 +426,15 @@ def test_provenance_for_all_six_kpis(warehouse, provenance_files, kpi):
     assert not p.issues and not r.quality_warnings
     assert r.requires_review == (r.verification_status == "provisional")
     assert r.review_reasons == (("provisional_definition",) if r.requires_review else ())
-    assert r.input_fact_key == ("TUN", 2024, r.source, r.indicator_code,
-                                "bank_type" if r.source == "fas" else "all",
-                                "commercial_banks" if r.source == "fas" else "all")
+    if kpi in GAPS:
+        assert r.input_fact_key is None and len(r.component_inputs) == 2
+    else:  # dimension et valeur du fait = celles declarees au catalogue (sous-groupes inclus)
+        mapping = load_catalog()["kpis"][kpi]["warehouse"]
+        assert r.input_fact_key == ("TUN", 2024, r.source, r.indicator_code,
+                                    mapping["dimension"], mapping["dimension_value"])
+        assert (mapping["dimension"], mapping["dimension_value"]) == (
+            ("bank_type", "commercial_banks") if r.source == "fas"
+            else ("all", "all") if r.subgroup == "total_population" else (mapping["dimension"], mapping["dimension_value"]))
     assert r.formula == load_catalog()["kpis"][kpi]["formula"]["from_fact"]
     assert r.publication_status == "not_evaluated"
 
@@ -541,3 +582,125 @@ def test_current_report_format_is_explicitly_unverified(provenance_files):
     assert r.provenance.quality_gate_passed is True
     assert r.quality_warnings[0].association_status == "unverified"
     assert r.requires_review and r.publication_status == "not_evaluated"
+
+
+GAPS = {
+    "gender_gap": ("gender", "men", "women", 25),
+    "income_gap": ("income", "richest 60%", "poorest 40%", 30),
+    "age_gap": ("age_cat", "age 25+", "ages 15-24", 36),
+    # catalogue 1.6.0
+    "education_gap": ("education", "secondary edu or more", "prim edu or less", 17),
+    "laborforce_gap": ("laborforce", "in laborforce", "out of laborforce", 27),
+    "urban_gap": ("urbanicity", "urban", "rural", 17),
+}
+
+
+@pytest.mark.parametrize("kpi", GAPS)
+def test_gap_is_same_year_subgroup_difference_in_points(warehouse, kpi):
+    dimension, first, second, expected = GAPS[kpi]
+    r = KpiCalculator(warehouse).calculate("TUN", 2024, kpi)
+    assert r.value == pytest.approx(expected)
+    assert r.unit == "percentage_points" and r.availability_status == "available"
+    assert r.verification_status == "derived_verified" and r.input_unit == "fraction"
+    keys = [key for key, _ in r.component_inputs]
+    assert keys == [("TUN", 2024, "findex", "account_t_d", dimension, first),
+                    ("TUN", 2024, "findex", "account_t_d", dimension, second)]
+    assert r.input_value is None and r.input_fact_key is None
+
+
+@pytest.mark.parametrize("kpi", GAPS)
+@pytest.mark.parametrize("missing", [0, 1])
+def test_gap_missing_subgroup_is_unavailable_never_zero(warehouse, kpi, missing):
+    dimension, first, second, _ = GAPS[kpi]
+    value = (first, second)[missing]
+    change(warehouse, "DELETE FROM fact WHERE indicator_code='account_t_d' AND dimension=? "
+           "AND dimension_value=?", [dimension, value])
+    r = KpiCalculator(warehouse).calculate("TUN", 2024, kpi)
+    assert r.value is None and r.availability_status == "unavailable"
+    assert r.reason == "missing_observation" and not r.component_inputs
+
+
+@pytest.mark.parametrize("kpi", GAPS)
+def test_gap_never_mixes_years(warehouse, kpi):
+    dimension, first, _, _ = GAPS[kpi]
+    # Le premier sous-groupe en 2021 ne doit pas etre combine avec l'autre en 2024
+    change(warehouse, "UPDATE fact SET year=2021 WHERE indicator_code='account_t_d' AND dimension=? "
+           "AND dimension_value=?", [dimension, first])
+    calc = KpiCalculator(warehouse)
+    valid = load_catalog()["kpis"][kpi]["valid_years"]
+    for year in (2021, 2024):
+        r = calc.calculate("TUN", year, kpi)
+        assert r.value is None
+        assert r.reason == ("missing_observation" if year in valid else "out_of_catalog_year")
+
+
+@pytest.mark.parametrize("kpi", GAPS)
+def test_gap_bad_subgroup_input_requires_review(warehouse, kpi):
+    dimension, _, second, _ = GAPS[kpi]
+    change(warehouse, "UPDATE fact SET value=1.5 WHERE indicator_code='account_t_d' AND dimension=? "
+           "AND dimension_value=?", [dimension, second])
+    r = KpiCalculator(warehouse).calculate("TUN", 2024, kpi)
+    assert r.value is None and r.availability_status == "requires_review"
+    assert "out_of_range_input" in r.review_reasons
+
+
+def test_gap_catalog_dependencies_must_match_subgroup_facts(tmp_path, warehouse):
+    catalog = load_catalog()
+    catalog["kpis"]["income_gap"]["fact_dependencies"][1]["dimension_value"] = "poorest 20%"
+    path = tmp_path / "bad.yaml"
+    path.write_text(yaml.safe_dump(catalog), encoding="utf-8")
+    with pytest.raises(CatalogError):
+        load_catalog(path)
+
+
+def test_gap_years_must_match_its_subgroup_kpis(tmp_path):
+    # urbanicity n'est observe qu'en 2024 : un ecart ne peut pas declarer 2021
+    catalog = load_catalog()
+    catalog["kpis"]["urban_gap"]["valid_years"] = [2021, 2024]
+    path = tmp_path / "bad.yaml"
+    path.write_text(yaml.safe_dump(catalog), encoding="utf-8")
+    with pytest.raises(CatalogError, match="urban_gap"):
+        load_catalog(path)
+
+
+def test_pct_gdp_plausibility_flag_reviews_only_the_flagged_row(provenance_files):
+    """Catalogue 1.4.0 : seule la ligne signalee (pays, annee, serie) requiert une revue."""
+    _, quality, calculator = provenance_files
+    quality["diagnostics"] = [diagnostic(
+        source="fas", indicator_code="loans_pct_gdp", code="fas_pct_gdp_plausibility",
+        series_code="TUN.OUTL_COMBANK.POGDP.A", value=20000.0, unit="percent_of_gdp",
+        reason="Value exceeds diagnostic threshold of 1000% GDP")]
+    calc = calculator()
+    loans = calc.calculate("TUN", 2024, "loans_pct_gdp")
+    assert loans.value == 20000 and loans.availability_status == "available"  # jamais plafonne
+    assert "unresolved_input_quality_warning" in loans.review_reasons
+    for other in ("deposits_pct_gdp", "branch_density", "atm_density"):  # aucune revue par association
+        result = calc.calculate("TUN", 2024, other)
+        assert not result.quality_warnings and not result.requires_review, other
+
+
+# --------------------------------------------------------------- S7 : chemins de lineage
+@pytest.mark.parametrize("outside", [
+    lambda root: str(root.parent / "ailleurs" / "source.csv"),            # hors du projet
+    lambda root: str(root / ".." / "ailleurs" / "source.csv"),            # remontee ..
+    lambda root: "C:/Windows/win.ini" if os.name == "nt" else "/etc/passwd",
+])
+def test_lineage_paths_outside_the_project_are_never_read(warehouse, provenance_files, monkeypatch, outside):
+    from biflow import config
+    from biflow.tools import kpi_provenance
+
+    monkeypatch.setenv("BIFLOW_ALLOWED_ROOTS", str(warehouse.parent))  # racine des fixtures uniquement
+    read = []
+    original = kpi_provenance.cached_sha256_file
+    monkeypatch.setattr(kpi_provenance, "cached_sha256_file", lambda p: read.append(Path(p)) or original(p))
+    lineage, _, calculator = provenance_files
+    target = outside(config.ROOT)
+    for source in lineage["inputs"].values():
+        source["path"] = target
+    lineage["outputs"]["warehouse"] = target
+    p = calculator().calculate("TUN", 2024, "account_ownership").provenance
+    assert "raw_source_path_outside_project" in p.issues and "lineage_warehouse_path_invalid" in p.issues
+    assert p.observed_raw_sha256 is None
+    assert all(Path(item).resolve() != Path(config.resolve(target)).resolve() for item in read)
+    with pytest.raises(config.PathOutsideProject, match="hors du projet"):
+        config.within_project(target)

@@ -1,178 +1,163 @@
-# BIFlow — Automatisation d'un pipeline BI multi-agents
+# FinOVA (BIFlow) — plateforme BI multi-agents auditée pour l'inclusion financière
 
-Pipeline Business Intelligence automatique : **données brutes → profilage →
-qualité → ETL**, orchestré par un graphe LangGraph et des agents LLM
-(Gemini, Groq).
+Pipeline BI automatisé (LangGraph) qui transforme les données officielles Findex, FAS et WDI en 44 KPI audités,
+puis les sert dans le tableau de bord FinOVA avec un assistant conversationnel dont chaque chiffre est vérifié.
 
-Cette version couvre le **P1 — Données** : collecte, profilage, quality gate et
-construction du modèle en étoile.
+**Équipe** : Najeh Ben Rebeh, Mohamed Ali Jabri, Farah Baklouti, Eya Guirat, Khalil Ben Youssef, Mohamed Khalil Kamessi
+**ESPRIT** — Advanced Data Science Project 2026
 
-Domaine : **Économie & Finance / inclusion financière**.
+## Sommaire
 
-Sources de données :
+1. [Prérequis](#prérequis)
+2. [Installation](#installation)
+3. [Exécution](#exécution)
+4. [Résultats attendus](#résultats-attendus)
+5. [Structure du projet](#structure-du-projet)
+6. [Architecture](#architecture)
+7. [Documentation](#documentation)
 
-| Source | Rôle | Fichier |
-|---|---|---|
-| World Bank **Global Findex** | demande / usage des services financiers | `data/raw/findex.csv` |
-| IMF **Financial Access Survey (FAS)** | offre (agences, ATM, dépôts, crédits) | `data/raw/fas.csv` |
-| World Bank **WDI** (PIB) | contexte macroéconomique | `data/raw/gdp.csv` |
+## Prérequis
 
-## État d'avancement
+- **Git**.
+- **Python 3.10** (`requirements.lock` est généré pour Windows / Python 3.10 ; vérifié avec 3.10.11).
+- **Node.js >= 18** pour construire le front FinOVA (vérifié avec Node 24).
+- **Accès réseau** au premier lancement : le PIB (WDI) est téléchargé depuis l'API World Bank.
+- Windows 11 / PowerShell pour `start.ps1` et `stop.ps1` (sous Linux/macOS, uvicorn est lancé directement).
 
-- [x] **P0 — Socle** : configuration, package `biflow`, couche LLM multi-provider,
-      vérification des clés.
-- [x] **P1 — Données** : collector, profiler, quality gate, ETL (nœuds LangGraph).
+## Installation
 
-Cette branche est limitée au périmètre P1. Les phases KPI, analyse, dashboard et
-XAI ne sont pas incluses.
-
-## Architecture (P1)
-
-```
-main.py / scripts/check_llm.py
-src/biflow/
-  config.py        configuration YAML + chemins
-  llm.py           providers, fallback, cache, compteur de tokens
-  state.py         etat partage du pipeline
-  graph.py         graphe LangGraph + repli sequentiel
-  agents/          base, collector, profiler, quality, etl
-  tools/           dictionnaire d'indicateurs (libelles, unites)
-  utils/           io, logger, pays (ISO3)
-config/config.yaml     chemins, LLM, sources, seuils
-data/                  raw, staging, processed, profiles, quality
-outputs/               reports, profiles, logs, cache LLM
-```
-
-## Pipeline (S6 → S9)
-
-| Etape | Agent | Sorties principales |
-|---|---|---|
-| S6 | `collector` | `data/raw/*.csv` + SHA-256, telechargement WDI pagine |
-| S7 | `profiler` | `outputs/profiles/profile_*.{json,md}`, couverture indicateurs |
-| S8 | `quality` | `data/quality/quality_report.{json,md}`, gate PASS/FAIL |
-| S9 | `etl` | `data/processed/*.parquet`, `warehouse.duckdb`, `lineage.json` |
-
-Chaque execution ecrit un rapport dans `outputs/reports/<run_id>/`.
-
-## Démarrage
+### Windows (PowerShell)
 
 ```powershell
-# 1. Environnement
-.\.venv-adsp\Scripts\Activate.ps1
-pip install -r requirements.txt
+git clone --branch main https://github.com/khalilbenyoussef/data-science-project.git data-science-project
+cd data-science-project
 
-# 2. Clés LLM (optionnelles pour l'ETL, utiles au quality gate)
-Copy-Item .env.example .env
-# renseigner GOOGLE_API_KEY, GROQ_API_KEY
+py -3.10 -m venv .venv
+.\.venv\Scripts\python -m pip install --upgrade pip      # le pip 23 livré avec Python 3.10 refuse le verrou
+.\.venv\Scripts\python -m pip install --require-hashes -r requirements.lock
 
-# 3. Vérification des providers
-python scripts/check_llm.py
-
-# 4. Pipeline complet P1 (collector -> etl)
-python main.py run
-
-# Etapes ciblees
-python main.py steps
-python main.py run --only quality
-python main.py run --from etl
-python main.py run --to etl --no-llm
-
-# 5. Tests
-python -m pytest tests -q
+Copy-Item .env.example .env                              # clés optionnelles, voir ci-dessous
 ```
 
-## Sorties P1
+### Linux / macOS (bash)
 
-- `data/raw/` : sources brutes et empreintes SHA-256 ;
-- `outputs/profiles/` : profils JSON/Markdown et diagnostics de couverture ;
-- `data/quality/` : rapport qualité JSON/Markdown, anomalies et gate PASS/FAIL ;
-- `data/processed/` : tables Parquet, `warehouse.duckdb` et `lineage.json` ;
-- `outputs/reports/<run_id>/` : rapport standardisé de chaque agent.
+`requirements.lock` est propre à Windows : installer `requirements.txt`, ou régénérer le verrou
+(`python -m uv pip compile requirements.txt --generate-hashes --python-version 3.10 --python-platform <plateforme> -o requirements.lock`).
 
-## Données et périmètre
+```bash
+git clone --branch main https://github.com/khalilbenyoussef/data-science-project.git data-science-project
+cd data-science-project
+python3.10 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
+cp .env.example .env
+```
 
-- Findex : vagues 2011, 2014, 2017, 2021, 2022 (partielle), 2024 ; les agrégats
-  régionaux sont conservés mais signalés comme non-pays.
-- FAS : séries `FA26N.PHTADLT_NUM`, `FA18N.PHTADLT_NUM`,
-  `FA29N_COMBANK.PTADLT_NUM`, `FA21N_COMBANK.PTADLT_NUM`,
-  `LOANACCN_COMBANK.PTADLT_NUM`, `FA30N_COMBANK.PTADLT_NUM` ; 2025 exclue car
-  incomplète.
-- WDI : PIB et PIB par habitant, lignes sans code ISO3 ignorées.
-- Codes non ISO3 normalisés : `KOS -> XKX`, `WBG -> PSE` ; agrégats `EAP`,
-  `WLD`, etc. conservés dans `country_dim` mais identifiés comme agrégats.
+### Fichier `.env` (optionnel)
 
-## Choix techniques
+`GROQ_API_KEY` et/ou `GOOGLE_API_KEY` (clés personnelles, jamais commitées). Sans clé, le pipeline et le
+dashboard fonctionnent ; seuls l'assistance LLM du quality gate et Ask FinOVA en mode IA sont désactivés.
+Vérification : `python scripts/check_llm.py`. Réglages de connexion et SMTP : voir
+[docs/TECHNICAL.md](docs/TECHNICAL.md#authentification-comptes-finova).
 
-- **LangGraph** : graphe d'états explicite et traçabilité ; repli séquentiel si
-  l'import LangGraph est indisponible.
-- **LLM pour le quality gate** : routage primaire/fallback, température 0,
-  sorties JSON validées, cache disque et plafond d'appels. Les décisions
-  PASS/FAIL restent déterministes.
-- **ETL déterministe** : pandas / DuckDB pour l'harmonisation, les jointures et
-  le modèle en étoile ; le LLM ne calcule aucun chiffre.
-- **Traçabilité** : SHA-256 des sources, volumes rejetés, contrôles ETL et
-  `lineage.json`.
+### Fichiers de données (absents de Git)
 
-## Livrables P1
+| Fichier | Obligatoire | Emplacement | Téléchargement | SHA-256 (fichiers de l'équipe) |
+|---|---|---|---|---|
+| `findex.csv` | oui | `data/raw/findex.csv` | [World Bank Global Findex 2025 — Download data](https://www.worldbank.org/en/publication/globalfindex/download-data) (base niveau pays) | `35f3fa934adf940c3ec20603b64e8ed81b4315ff550bdb08d61968e38fc0bf66` |
+| `fas.csv` | oui | `data/raw/fas.csv` | [IMF Financial Access Survey](https://data.imf.org/Datasets/FAS) (export large, `;`) | `f60b4d1b3de68e15b6b29c286b2954942d6d226c86e1f13c42e372965ac5e9b5` |
+| `gdp.csv` | non | `data/raw/gdp.csv` | téléchargé automatiquement par le Collector (API World Bank WDI) | `b746f41a1c591493feca1490d64f937ca00c227e7661b6694779735e79886c17` (2026-11-04) |
 
-Code et architecture, pipeline automatisé, documentation des sources,
-Data Quality Report, tables du modèle en étoile, lineage et tests unitaires.
+Contrôle : `Get-FileHash data\raw\findex.csv` (PowerShell) ou `sha256sum data/raw/*.csv`. Les résultats
+attendus ci-dessous supposent ces empreintes ; sans `findex.csv` ou `fas.csv`, `main.py run` s'arrête au Collector.
 
-## Findex digital indicator definitions (verified 2026-10-22)
+## Exécution
 
-| Raw/fact code | Meaning | `country_year` column |
+Commandes Windows depuis la racine du projet (sous Linux/macOS : `.venv/bin/python` et `PYTHONPATH=src`).
+
+1. **Route 1 — pipeline de données** (collector → snapshot → profiler → quality → etl → semantic_kpi → auditor, ~1 min) :
+   ```powershell
+   .\.venv\Scripts\python main.py run
+   ```
+   Étapes disponibles : `python main.py steps`.
+2. **Route 2 — contrat publié du dashboard** (Tunisie 2024, ~1 min) :
+   ```powershell
+   $env:PYTHONPATH = "src"
+   .\.venv\Scripts\python -c "from biflow.route2_graph import run_route2; run_route2(use_llm=False)"
+   ```
+3. **Build du front FinOVA** :
+   ```powershell
+   cd dashboard_app\web; npm ci; npm run build; cd ..\..
+   ```
+4. **Créer le premier administrateur** (avant `start.ps1` ; aucune inscription publique, mot de passe demandé en interactif) :
+   ```powershell
+   $env:PYTHONPATH = "src"
+   .\.venv\Scripts\python -m dashboard_app.auth.cli create-admin --email admin@finova.tn --name "Admin"
+   ```
+   Autres commandes : `invite`, `reset`, `disable`, `enable`, `list` (`--help`).
+5. **Démarrer le serveur** :
+   ```powershell
+   .\start.ps1        # -NoBrowser, -Port 8001 ; si bloqué : powershell -ExecutionPolicy Bypass -File .\start.ps1
+   ```
+   Linux/macOS : `PYTHONPATH=src .venv/bin/python -m uvicorn dashboard_app.api.app:app --host 127.0.0.1 --port 8000`.
+6. **Ouvrir <http://127.0.0.1:8000>** et se connecter avec le compte administrateur.
+7. **Arrêter** : `.\stop.ps1` (n'arrête que le serveur lancé par `start.ps1`).
+8. **Tests** (~11 min) :
+   ```powershell
+   $env:PYTHONPATH = "src"; .\.venv\Scripts\python -m pytest -q
+   ```
+
+Évaluations (facultatif) : `python scripts/evaluate_auditor.py` (injection de fautes),
+`python scripts/baseline_reference.py` (recalcul naïf de référence), `python scripts/build_deliverables.py`
+(régénère `docs/deliverables/` et `docs/DEMO.md`).
+
+## Résultats attendus
+
+Avec les fichiers de données ci-dessus, un run reproductible doit donner :
+
+| Contrôle | Valeur attendue | Où le lire |
 |---|---|---|
-| `dig_acc` | Adults with a digitally enabled account: mobile money, or a bank/similar account allowing payments by card or phone. This measures account ownership/enabling, not transaction frequency. | `digitally_enabled_account` |
-| `g20_any` | Adults who made or received a digital payment in the past year. The measure includes several payment purposes, not just remittances. | `digital_payment` |
+| Statut du run | `success` | sortie de `main.py run`, `outputs/reports/<run_id>/run.json` |
+| Quality gate | **PASS**, score **0.936** | `data/quality/quality_report.json` |
+| KPI calculés | **44 KPI**, **1 620 valeurs** (catalogue 1.8.0) | table `kpi_values` |
+| Publication | **1 509** approuvées / **111** avec note de revue / **0** bloquée | `data/audit/audit_report.json` |
+| Verdict d'audit | `pass_with_warnings` : **17** pass / **2** warn / **0** fail | `data/audit/audit_report.json` |
+| Injection de fautes | **9/9** fautes détectées | `data/audit/evaluation.json` |
+| Référence naïve | **132/132** valeurs identiques (tolérance 1e-9) | `outputs/evaluation/baseline.json` |
+| Tests | **1 395** tests passés | `python -m pytest -q` |
 
-For total-population estimates, the population is adults aged 15+; facts also
-retain the survey subgroups. Both raw/fact measures remain fractions. The wide
-table continues to display percentages (`100 * value`), preserving missing values.
+## Structure du projet
 
-Sources: [World Bank indicator `dig-acc`](https://genderdata.worldbank.org/en/indicator/dig-acc),
-[Little Data Book 2025, glossary p. 160](https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/Little-Data-Book-2025-Web.pdf),
-and [Global Findex 2025 glossary, sheet `Glossary`, row 118, code `g20.any`](https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindex2025-glossary.xlsx).
-The official portal/glossary use hyphens/dots in codes; the local CSV uses underscores.
+```
+main.py                   CLI : run, steps, analyze, dashboard, add-source, remove-source, explain
+start.ps1 / stop.ps1      démarrage / arrêt du serveur FinOVA (Windows)
+src/biflow/agents/        agents : collector, snapshot, profiler, quality, etl, semantic_kpi, auditor, bi_analyst, analyst, dashboard, ask, mapper
+src/biflow/tools/         outils déterministes : KPI, snapshots, contrôles d'audit, explications, insights, recommandations, sources utilisateur
+src/biflow/graph.py       graphe LangGraph Route 1 (+ route2_graph.py, analysis_graph.py, semantic_graph.py, state.py, llm.py, config.py)
+config/                   config.yaml, catalogue KPI kpi_catalog.v1.yaml (1.8.0), recommendations.yaml, questions d'évaluation
+dashboard_app/api/        API FastAPI (spec, Ask FinOVA, sources, audit, rapports PDF)
+dashboard_app/auth/       comptes, sessions, invitations, CLI d'administration
+dashboard_app/web/        front React / Vite / TypeScript
+scripts/                  check_llm, evaluate_auditor, evaluate_agents, baseline_reference, build_deliverables
+tests/                    suite pytest (1 395 tests)
+docs/                     documentation technique, démo, livrables générés, exemples
+legacy/dashboard/         ancien front React/ECharts, retiré du service
+data/, outputs/           données, warehouse, audits, rapports de run — générés localement, non versionnés
+```
 
-Schema correction: `digital_payment` previously contained `dig_acc`; it now
-contains `g20_any`. The misleading `remittance_use` column is removed rather
-than retained as a false remittance measure. Consumers must update references;
-existing warehouse files are not migrated by this code change.
+## Architecture
 
-No remittance-specific or digital-account transaction-frequency KPI has been
-verified from these two columns. Do not infer either one or substitute one
-measure when the other is missing. This verification does not certify other
-Findex labels or every historical wave's detailed questionnaire construction.
+- **Route 1 — Données** : six agents orchestrés par **LangGraph** (`src/biflow/graph.py`) : collecte, snapshot versionné, profilage, quality gate, ETL vers DuckDB, calcul déterministe des KPI, suivis de l'Auditor. Aucun chiffre n'est calculé par un LLM.
+- **BI Auditor** : agent indépendant qui recalcule chaque valeur depuis les faits, contrôle unités, entités, traçabilité et catalogue, puis décide la publication ligne par ligne (`approved`, `approved_with_review_note`, `blocked`).
+- **Route 2 — Analyse** : BI Analyst et Dashboard lisent le warehouse en lecture seule via les contrats KPI et produisent la spec FinOVA (constats rattachés à des preuves).
+- **Ask FinOVA** : assistant conversationnel ; les chiffres ne viennent que d'outils sur les valeurs auditées et tout nombre non retrouvé est rejeté.
+- **Orchestrateur** : retry borné, arrêt sur gate FAIL, rapport `run.json` par exécution ; repli séquentiel si LangGraph est indisponible.
 
-## Source schema validation
+Détails (pipeline S06→S12, contrôles A1–F1, sources utilisateur, mode banquier, endpoints) : [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
-Quality checks use the mandatory column lists from the ETL. Missing columns,
-null/blank keys, malformed country/indicator/annual FAS series codes, and
-nonnumeric, nonfinite or fractional key years are critical errors. FAS also
-requires at least one four-digit year column. Country aliases and aggregate
-codes retain their existing treatment; unknown three-letter codes retain warnings.
+## Documentation
 
-Minimum structural indicator coverage is one selected Findex column, one
-configured FAS series, and one configured GDP indicator code. The Quality Agent
-passes its source configuration into these checks. Standalone checks without
-source configuration use dictionary indicators (Findex/GDP) or structural FAS
-series coverage. Missing optional indicators are listed in schema metrics.
-No complete annual panel, survey-wave list, or non-null value per indicator is
-required. Existing row-count, missingness, duplicate and range scoring still
-applies; missing observations alone are not new critical schema errors.
-
-## FAS percentage plausibility diagnostics
-
-`quality.fas_pct_gdp_threshold` defaults to `1000.0` (% GDP). Finite values
-strictly above this diagnostic threshold are flagged only for
-`OUTD_COMBANK.POGDP` (`deposits_pct_gdp`) and `OUTL_COMBANK.POGDP`
-(`loans_pct_gdp`). The check covers all four-digit year columns in the raw
-source, including years outside the ETL analysis period.
-
-Flags appear under `diagnostics` in the quality JSON, in a separate Markdown
-section, and in `quality_diagnostics.csv`. Each records country/ISO3, year,
-original series code and value, numeric value, unit, threshold and review reason.
-They are separate from structural/scored `issues` and do not change scores,
-critical issue counts or gate decisions. No value is dropped, clamped or rescaled.
-The threshold is a review trigger, not an official IMF validity limit; the
-underlying values and their denominators still require source verification.
+- [docs/TECHNICAL.md](docs/TECHNICAL.md) — documentation technique complète.
+- [docs/DEMO.md](docs/DEMO.md) — script de démonstration (10 minutes).
+- [AUDIT_REPORT.md](AUDIT_REPORT.md) — rapport d'audit du projet.
+- [docs/deliverables/](docs/deliverables/) — livrables générés (architecture, qualité, catalogue KPI, évaluation, insights).

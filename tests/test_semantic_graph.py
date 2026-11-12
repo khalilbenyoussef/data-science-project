@@ -29,7 +29,8 @@ def setup_route(warehouse, tmp_path, monkeypatch, backend):
     def forbidden(*args, **kwargs):
         raise AssertionError("Semantic routing must not execute data agents or LLMs")
     for cls in graph.AGENT_CLASSES.values():
-        monkeypatch.setattr(cls, "run", forbidden)
+        if cls is not SemanticKpiAgent:  # pipeline step; request mode is recorded below
+            monkeypatch.setattr(cls, "run", forbidden)
     monkeypatch.setattr("biflow.agents.base.build_agent_llm", forbidden)
     monkeypatch.setattr(BaseAgent, "ask_text", forbidden)
     monkeypatch.setattr(BaseAgent, "ask_json", forbidden)
@@ -67,11 +68,11 @@ def test_six_actions_graph_and_fallback_exactly_once(setup_route, payload):
     response = result["semantic_kpi_response"]
     assert response["action"] == payload["action"]
     RESPONSE_ADAPTER.validate_python(response)
-    agent_report = json.loads((Path(cfg["paths"]["reports"]) / "query/semantic_kpi.json").read_text())
+    agent_report = json.loads((Path(cfg["paths"]["reports"]) / "query/semantic_kpi.json").read_text(encoding="utf-8"))
     assert response == agent_report["outputs"]["semantic_kpi_response"]
     assert result["warnings"] == agent_report["outputs"]["warnings"]
     assert len(result["warnings"]) == len(set(result["warnings"]))
-    summary = json.loads((Path(cfg["paths"]["reports"]) / "query/run.json").read_text())
+    summary = json.loads((Path(cfg["paths"]["reports"]) / "query/run.json").read_text(encoding="utf-8"))
     assert summary["semantic_kpi_response"] == response
     assert summary["semantic_kpi_request"] == payload
     assert result["profiles"] == result["raw_paths"] == result["sources"] == {}
@@ -178,7 +179,7 @@ def test_normal_pipeline_still_runs_original_order(tmp_path, monkeypatch, backen
     for name in graph.STEP_ORDER:
         monkeypatch.setitem(graph.AGENT_CLASSES,name,lambda name=name, **kwargs:FakeAgent(name))
     state = graph.run_pipeline(cfg={"paths":{"reports":str(tmp_path)}}, use_llm=False)
-    assert calls == graph.STEP_ORDER == ["collector","profiler","quality","etl"]
+    assert calls == graph.STEP_ORDER == ["collector","snapshot","profiler","quality","etl","semantic_kpi","auditor"]
     assert state["status"] == "success" and "semantic_kpi_request" not in state
     assert "semantic_kpi_response" not in graph._summary(state)
     assert graph._gate({"quality":{"passed":True}}) == "etl"

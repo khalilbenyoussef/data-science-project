@@ -26,6 +26,25 @@ def resolve(path: str | Path) -> Path:
     return p if p.is_absolute() else ROOT / p
 
 
+class PathOutsideProject(ValueError):
+    """Chemin lu depuis un artefact (lineage) hors des racines autorisees (S7)."""
+
+
+def allowed_roots() -> list[Path]:
+    """Racine du projet, plus les racines de BIFLOW_ALLOWED_ROOTS (tests : dossier temporaire)."""
+    extra = [Path(item) for item in os.getenv("BIFLOW_ALLOWED_ROOTS", "").split(os.pathsep) if item.strip()]
+    return [ROOT.resolve(), *(root.resolve() for root in extra)]
+
+
+def within_project(path: str | Path) -> Path:
+    """Chemin resolu s'il reste sous une racine autorisee ; sinon PathOutsideProject
+    (le fichier n'est alors ni lu ni empreinte)."""
+    target = resolve(path).resolve()
+    if not any(target == root or root in target.parents for root in allowed_roots()):
+        raise PathOutsideProject(f"Chemin hors du projet refusé : {path}")
+    return target
+
+
 def load_config(path: str | Path | None = None) -> dict[str, Any]:
     """Charge config/config.yaml (ou le chemin fourni)."""
     cfg_path = resolve(path or os.getenv("BIFLOW_CONFIG", "config/config.yaml"))
@@ -35,7 +54,34 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         cfg = yaml.safe_load(f) or {}
     if not isinstance(cfg, dict):
         raise ConfigError(f"Configuration invalide (objet attendu) : {cfg_path}")
+    register_user_sources(cfg)
     return cfg
+
+
+def register_user_sources(cfg: dict[str, Any]) -> list[str]:
+    """Ajoute a cfg["sources"] chaque mapping confirme de config/sources/*.yaml
+    (type: user). Une source deja declaree (officielle) n'est jamais remplacee ;
+    la validite du mapping est verifiee par le collector. config.yaml n'est
+    jamais reecrit."""
+    folder = resolve(os.getenv("BIFLOW_SOURCES_DIR")
+                     or (cfg.get("uploads") or {}).get("mappings_dir", "config/sources"))
+    if not folder.is_dir():
+        return []
+    sources = cfg.setdefault("sources", {})
+    added = []
+    for path in sorted(folder.glob("*.yaml")):
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            data = {}
+        name = data.get("name") if isinstance(data, dict) else None
+        name = name or path.stem
+        if name in sources:
+            continue
+        sources[name] = {"type": "user", "path": data.get("file") if isinstance(data, dict) else None,
+                         "mapping": str(path)}
+        added.append(name)
+    return added
 
 
 def path_of(cfg: dict[str, Any], key: str) -> Path:

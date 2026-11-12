@@ -163,7 +163,7 @@ def test_pipeline_only_reaches_etl_when_all_sources_pass(
         "quality": {"min_rows": 10, "score_threshold": 0.9},
     }
     state = graph.run_pipeline(
-        start="quality", cfg=cfg, run_id="gate_test", use_llm=False,
+        start="quality", stop="etl", cfg=cfg, run_id="gate_test", use_llm=False,
     )
 
     if failure in ("valid", "row_count"):

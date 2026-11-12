@@ -1,0 +1,190 @@
+# Reference statique Finova.
+#
+# AUCUNE valeur n'est calculee ici : chaque entree est une copie datee d'une
+# source publique, avec son URL et sa date de consultation. Le dashboard affiche
+# le chip "Static reference" et n'utilise jamais ces valeurs comme observation
+# Findex. Une valeur non verifiable reste null et s'affiche "To load".
+schema_version: 1
+catalog_id: finova_static_reference
+snapshot_date: "2026-10-29"
+entries:
+  # ----------------------------------------------------------- benchmarks Findex
+  - id: benchmark_mena
+    label: "MENA hors revenu eleve"
+    metric: account_ownership
+    value: 52.9089186737193
+    unit: percent
+    year: 2024
+    source: "World Bank Global Findex 2025 - agregation officielle « Middle East & North Africa (excluding high income) »"
+    source_url: "https://www.worldbank.org/en/publication/globalfindex"
+    static: true
+    verification: aggregate_snapshot
+    caveat: >-
+      Agregat region Findex 2025 (vague 2024), instantane. Ce n'est pas une
+      serie « Arab LMIC » : la definition exacte est MENA hors revenu eleve.
+  - id: benchmark_lmic
+    label: "Revenu intermediaire inferieur"
+    metric: account_ownership
+    value: 70.38717036789251
+    unit: percent
+    year: 2024
+    source: "World Bank Global Findex 2025 - agregation officielle « Lower middle income »"
+    source_url: "https://www.worldbank.org/en/publication/globalfindex"
+    static: true
+    verification: aggregate_snapshot
+    caveat: "Agregat de groupe de revenu Findex 2025 (vague 2024)."
+  - id: benchmark_world
+    label: "Monde"
+    metric: account_ownership
+    value: 78.7424041479406
+    unit: percent
+    year: 2024
+    source: "World Bank Global Findex 2025 - agregation officielle « World »"
+    source_url: "https://www.worldbank.org/en/publication/globalfindex"
+    static: true
+    verification: aggregate_snapshot
+    caveat: "Moyenne mondiale Findex 2025 (vague 2024)."
+
+  # ------------------------------------------------------------------- SMIG
+  - id: smig_2025
+    label: "SMIG 2025 (40 h/semaine)"
+    metric: smig
+    value: 448.238
+    unit: TND_per_month
+    year: 2025
+    source: "Bareme de paie tunisien - augmentation du SMIG de janvier 2025"
+    source_url: "https://chaexpert.com/janvier-2025-augmentation-smig/"
+    static: true
+    verification: secondary_source
+    caveat: "Montant brut mensuel, regime 40 h. Verifier le Journal officiel (JORT)."
+  - id: smig_2026
+    label: "SMIG 2026 (40 h/semaine)"
+    metric: smig
+    value: 470.251
+    unit: TND_per_month
+    year: 2026
+    source: "Bareme SMIG/SMAG 2026-2028 - paie-tunisie.com"
+    source_url: "https://paie-tunisie.com/369/fr/smig-et-smag"
+    static: true
+    verification: secondary_source
+    caveat: "Revalorisation programmee; verifier le texte officiel avant usage contractuel."
+  - id: smig_2027
+    label: "SMIG 2027 (40 h/semaine)"
+    metric: smig
+    value: 493.304
+    unit: TND_per_month
+    year: 2027
+    source: "Bareme SMIG/SMAG 2026-2028 - paie-tunisie.com"
+    source_url: "https://paie-tunisie.com/369/fr/smig-et-smag"
+    static: true
+    verification: secondary_source
+    caveat: "Revalorisation programmee; verifier le texte officiel avant usage contractuel."
+  - id: smig_2028
+    label: "SMIG 2028 (40 h/semaine)"
+    metric: smig
+    value: 517.571
+    unit: TND_per_month
+    year: 2028
+    source: "Bareme SMIG/SMAG 2026-2028 - paie-tunisie.com"
+    source_url: "https://paie-tunisie.com/369/fr/smig-et-smag"
+    static: true
+    verification: secondary_source
+    caveat: "Revalorisation programmee; verifier le texte officiel avant usage contractuel."
+
+  # --------------------------------------------------------------- Pauvrete INS
+  - id: poverty_rate_2021
+    label: "Taux de pauvrete national"
+    metric: poverty_rate
+    value: 16.6
+    unit: percent
+    year: 2021
+    source: "INS - Enquete nationale sur le budget, la consommation et le niveau de vie des menages 2021"
+    source_url: "http://www.ins.tn/enquetes/enquete-nationale-sur-le-budget-la-consommation-et-le-niveau-de-vie-des-menages-2021"
+    static: true
+    verification: official_source
+    caveat: "Seuil national de pauvrete; enquete 2021, publiee par l'INS."
+  - id: poverty_rate_extreme_2021
+    label: "Taux de pauvrete extreme"
+    metric: poverty_rate_extreme
+    value: 2.9
+    unit: percent
+    year: 2021
+    source: "INS - ENBCNV 2021"
+    source_url: "http://www.ins.tn/enquetes/enquete-nationale-sur-le-budget-la-consommation-et-le-niveau-de-vie-des-menages-2021"
+    static: true
+    verification: official_source
+    caveat: "Pauvrete extreme, seuil national, enquete 2021."
+  - id: poverty_rate_urban_2021
+    label: "Pauvrete - milieu urbain"
+    metric: poverty_rate_urban
+    value: 12.7
+    unit: percent
+    year: 2021
+    source: "INS - ENBCNV 2021"
+    source_url: "http://www.ins.tn/enquetes/enquete-nationale-sur-le-budget-la-consommation-et-le-niveau-de-vie-des-menages-2021"
+    static: true
+    verification: official_source
+    caveat: "Ventilation urbaine, enquete 2021."
+  - id: poverty_rate_rural_2021
+    label: "Pauvrete - milieu rural"
+    metric: poverty_rate_rural
+    value: 24.8
+    unit: percent
+    year: 2021
+    source: "INS - ENBCNV 2021"
+    source_url: "http://www.ins.tn/enquetes/enquete-nationale-sur-le-budget-la-consommation-et-le-niveau-de-vie-des-menages-2021"
+    static: true
+    verification: official_source
+    caveat: "Ventilation rurale, enquete 2021."
+  - id: poverty_rate_2015
+    label: "Taux de pauvrete national"
+    metric: poverty_rate
+    value: 15.2
+    unit: percent
+    year: 2015
+    source: "INS - ENBCNV 2015 (reprend dans la serie de l'enquete 2021)"
+    source_url: "https://www.ins.tn/sites/default/files/2021-03/Mesure_de_pauvrete_en_Tunisie.pdf"
+    static: true
+    verification: official_source
+    caveat: "Point de comparaison 2015 de la serie INS."
+
+  # ------------------------------------------------------------------ Change
+  - id: fx_tnd_usd_2024
+    label: "Taux de change officiel moyen 2024"
+    metric: fx_tnd_usd
+    value: 3.107
+    unit: TND_per_USD
+    year: 2024
+    source: "World Bank WDI - PA.NUS.FCRF (taux de change officiel, moyenne annuelle)"
+    source_url: "https://data.worldbank.org/indicator/PA.NUS.FCRF?locations=TN"
+    static: true
+    verification: official_source
+    caveat: "Contexte macro, pas un indicateur d'inclusion."
+
+  # ------------------------------------------------------- Contexte qualitatif
+  - id: context_undp
+    label: "Inclusion financiere et developpement humain (UNDP)"
+    metric: context
+    value: null
+    unit: null
+    year: null
+    source: "UNDP - Human Development Report (cadre analytique)"
+    source_url: "https://hdr.undp.org/"
+    static: true
+    verification: qualitative
+    caveat: >-
+      Carte de contexte sans chiffre : aucune valeur n'est affichee tant qu'une
+      serie UNDP verifiable n'a pas ete chargee.
+  - id: context_oif
+    label: "Francophonie et inclusion financiere (OIF)"
+    metric: context
+    value: null
+    unit: null
+    year: null
+    source: "Organisation internationale de la Francophonie"
+    source_url: "https://www.francophonie.org/"
+    static: true
+    verification: qualitative
+    caveat: >-
+      Carte de contexte sans chiffre : l'OIF ne publie pas de serie
+      d'inclusion financiere comparable a Findex.
