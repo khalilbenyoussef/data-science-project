@@ -431,6 +431,8 @@ export interface ComparableKpi {
   unit: string;
   definition: string | null;
   denominator: string | null;
+  definition_en?: string | null;
+  denominator_en?: string | null;
 }
 
 export interface ComparisonValue {
@@ -450,6 +452,7 @@ export interface ComparisonRow {
   kpi: string;
   definition: string | null;
   denominator: string | null;
+  definition_en?: string | null;
   user: ComparisonValue | null;
   official: ComparisonValue | null;
   status: "ok" | "unit_mismatch" | "unknown_kpi" | "no_user_value" | "no_official_value";

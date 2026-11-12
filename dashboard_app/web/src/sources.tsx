@@ -690,6 +690,9 @@ function ComparableChoice({
           {chosen.denominator && (
             <p className="small muted">{t("Dénominateur : {value}", { value: plainText(chosen.denominator) })}</p>
           )}
+          {chosen.definition_en && (
+            <p className="small muted" lang="en">{t("Source (EN) : {value}", { value: chosen.definition_en })}</p>
+          )}
           <label className="inline-check required-check">
             <input type="checkbox" checked={item.same_definition === true}
               onChange={(event) => update(code, { same_definition: event.target.checked })} />

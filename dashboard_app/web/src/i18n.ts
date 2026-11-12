@@ -732,6 +732,7 @@ const EN: Record<string, string> = {
   "Envoyer vos données à {provider} ?": "Send your data to {provider}?",
   "J'accepte que mes données soient envoyées à {provider} pour cette session": "I agree that my data is sent to {provider} for this session",
   "Activer": "Enable",
+  "Source (EN) : {value}": "Source (EN): {value}",
   "Aucune clé IA configurée : les réponses restent locales.": "No AI key configured: answers stay local.",
   "Option désactivée par l'administrateur : les réponses restent locales.": "Option turned off by the administrator: answers stay local.",
 };
@@ -1455,6 +1456,7 @@ const AR: Record<string, string> = {
   "Envoyer vos données à {provider} ?": "إرسال بياناتك إلى {provider}؟",
   "J'accepte que mes données soient envoyées à {provider} pour cette session": "أوافق على إرسال بياناتي إلى {provider} لهذه الجلسة",
   "Activer": "تفعيل",
+  "Source (EN) : {value}": "المصدر (EN): {value}",
   "Aucune clé IA configurée : les réponses restent locales.": "لا يوجد مفتاح ذكاء اصطناعي مُعدّ: تبقى الإجابات محلية.",
   "Option désactivée par l'administrateur : les réponses restent locales.": "الخيار معطّل من قبل المسؤول: تبقى الإجابات محلية.",
 };

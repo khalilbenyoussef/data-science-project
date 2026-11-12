@@ -71,6 +71,9 @@ function ComparisonItem({ row }: { row: ComparisonRow }) {
             : ""}
         </p>
       )}
+      {row.definition_en && (
+        <p className="small muted" lang="en">{t("Source (EN) : {value}", { value: row.definition_en })}</p>
+      )}
       {row.notes.length > 0 && (
         <p className="small comparison-notes">{row.notes.map(plainText).join(" · ")}</p>
       )}

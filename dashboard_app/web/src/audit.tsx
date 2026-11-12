@@ -584,9 +584,9 @@ function EvaluationPanel({ summary }: { summary: AuditSummary }) {
                     {fault.detected ? t("Oui") : t("Non")}
                   </span>
                 </td>
-                <td>
+                <td title={fault.failing_checks.join(", ") || undefined}>
                   {t(VERDICTS[fault.verdict] ?? fault.verdict)}
-                  {fault.failing_checks.length ? ` (${fault.failing_checks.join(", ")})` : ""}
+                  {fault.failing_checks.length ? ` (${fault.failing_checks.map((id) => id.split("_")[0]).join(", ")})` : ""}
                 </td>
               </tr>
             ))}
