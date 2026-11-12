@@ -17,9 +17,13 @@ from langchain_core.messages import AIMessage
 from biflow.agents.ask import USER_POLICY_REASON
 from biflow.config import load_config
 from biflow.tools.user_sources.data import USER_MARKER
+from auth_support import TEST_EMAIL, TEST_PASSWORD, authenticated_client
 from dashboard_app.api.app import create_app
-from dashboard_app.api.ask_mode import NO_KEY, SWITCH_OFF, session_hash
+from dashboard_app.api.ask_mode import NO_KEY, SWITCH_OFF
 from test_dashboard_api import _spec, spec_path  # noqa: F401 - fixture reutilisee
+
+OTHER_EMAIL = "autre@finova.tn"
+OTHER_PASSWORD = "Second-Compte-2026!"
 
 SECRET = ("7319.53", "61.37", "7 319,53", "61,37", "7319,53")
 QUESTION = "Quel est le taux de clients digitaux de ma banque ?"
@@ -63,14 +67,16 @@ def world(tmp_path, spec_path):
     base["uploads"] = {**(base.get("uploads") or {}), "mappings_dir": str(sources)}
 
     def make(*, ask=None, provider="Groq", model=None, user_model=None):
+        """Client connecte (compte de test) ; ``client.app`` sert a ouvrir d'autres sessions."""
         cfg = copy.deepcopy(base)
         cfg["llm"]["ask"] = {**cfg["llm"]["ask"], **(ask or {})}
         app = create_app(spec_path=spec_path, warehouse_path=warehouse, reports_dir=tmp_path / "reports",
                          history_dir=tmp_path / "history", web_dist=tmp_path / "dist",
                          spec_builder=lambda iso3, year: _spec(iso3, year), prewarm=False, config=cfg,
                          ask_model=model, ask_user_model=user_model, ask_provider=provider,
-                         consent_log=tmp_path / "logs" / "user_data_consent.log")
-        return TestClient(app)
+                         consent_log=tmp_path / "logs" / "user_data_consent.log",
+                         auth_db=tmp_path / "auth.sqlite3")
+        return authenticated_client(app)
 
     make.log = tmp_path / "logs" / "user_data_consent.log"
     return make
@@ -185,7 +191,53 @@ def test_consent_log_has_no_question_and_no_value(world):
     set_mode(client, False, session="secret-session")
     lines = [json.loads(line) for line in world.log.read_text(encoding="utf-8").splitlines()]
     assert [(line["enabled"], line["provider"]) for line in lines] == [(True, "Groq"), (False, "Groq")]
-    assert all(line["session"] == session_hash("secret-session") for line in lines)
+    # portee hachee (compte + session de connexion + onglet), identique pour les deux lignes
+    assert len({line["session"] for line in lines}) == 1 and len(lines[0]["session"]) == 16
     raw = world.log.read_text(encoding="utf-8")
     assert "secret-session" not in raw and "digitaux" not in raw and not any(v in raw for v in SECRET)
+    assert TEST_EMAIL not in raw and QUESTION not in raw
     assert set(lines[0]) == {"timestamp", "session", "enabled", "provider"}
+
+
+# ------------------------------------------------------------------ authentification
+def test_routes_require_login(world):
+    client = world(model=RecordingLLM())
+    anonymous = TestClient(client.app)
+    assert anonymous.get("/api/ask/user-data-mode", params={"session_id": "s1"}).status_code == 401
+    response = anonymous.post("/api/ask/user-data-mode",
+                              json={"session_id": "s1", "enabled": True, "consent": True})
+    assert response.status_code == 401
+    assert anonymous.post("/api/ask", json={"question": QUESTION, "session_id": "s1"}).status_code == 401
+    # connecte : accepte
+    assert client.get("/api/ask/user-data-mode", params={"session_id": "s1"}).status_code == 200
+    assert set_mode(client, True, consent=True).status_code == 200
+
+
+def test_one_account_cannot_see_or_change_another_accounts_setting(world):
+    alice = world(model=RecordingLLM())
+    bob = authenticated_client(alice.app, email=OTHER_EMAIL, password=OTHER_PASSWORD, role="user")
+    assert set_mode(alice, True, consent=True, session="s1").json()["enabled"] is True
+    # meme identifiant d'onglet, autre compte : rien d'active, et son « off » ne touche pas alice
+    assert mode(bob, "s1")["enabled"] is False
+    assert set_mode(bob, False, session="s1").status_code == 200
+    assert mode(alice, "s1")["enabled"] is True
+    # bob active pour lui seul ; alice desactive pour elle seule
+    assert set_mode(bob, True, consent=True, session="s1").json()["enabled"] is True
+    assert set_mode(alice, False, session="s1").json()["enabled"] is False
+    assert mode(bob, "s1")["enabled"] is True
+
+
+def test_logout_resets_the_setting_to_local(world):
+    llm = RecordingLLM()
+    user_llm = RecordingLLM(AIMessage("ok"))
+    client = world(model=llm, user_model=user_llm)
+    assert set_mode(client, True, consent=True).json()["enabled"] is True
+    csrf = client.cookies.get("finova_csrf") or ""
+    assert client.post("/api/auth/logout", headers={"X-CSRF-Token": csrf}).status_code == 204
+    # l'ancien jeton ne sert plus a rien
+    assert client.get("/api/ask/user-data-mode", params={"session_id": "s1"}).status_code == 401
+    # nouvelle connexion, meme compte, meme onglet : retour au traitement local
+    again = authenticated_client(client.app, email=TEST_EMAIL, password=TEST_PASSWORD)
+    assert mode(again)["enabled"] is False
+    body = ask(again)
+    assert body["user_data_policy"]["llm_allowed"] is False and user_llm.seen == []
