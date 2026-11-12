@@ -1,22 +1,14 @@
 import type {
   AgentsTimeline, AskResult, ComparableKpi, ComparisonsResult, DetectResult, DryRunResult, RecommendationsResult, RunSummary, SourceData, SourceJob,
   SourceMappingInput,
-  SourcesList, Spec, UserDataMode,
+  SourcesList, Spec,
 } from "./types";
+import { ApiError, apiFetch } from "./auth";
 
-export class ApiError extends Error {
-  status: number;
-  detail: string;
-
-  constructor(status: number, detail: string) {
-    super(detail);
-    this.status = status;
-    this.detail = detail;
-  }
-}
+export { ApiError } from "./auth";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  const response = await apiFetch(url, init);
   if (!response.ok) {
     let detail = `Erreur HTTP ${response.status}`;
     try {
@@ -42,7 +34,7 @@ export async function fetchSpec(
   signal?: AbortSignal,
 ): Promise<{ spec: Spec; source: string }> {
   const url = `/api/spec?iso3=${encodeURIComponent(iso3)}&year=${year}`;
-  const response = await fetch(url, { signal });
+  const response = await apiFetch(url, { signal });
   if (!response.ok) {
     let detail = `Erreur HTTP ${response.status}`;
     try {
@@ -93,19 +85,6 @@ function sourceBody(upload_id: string, name: string, mapping: SourceMappingInput
 
 export function dryRunSource(uploadId: string, name: string, mapping: SourceMappingInput): Promise<DryRunResult> {
   return request<DryRunResult>("/api/sources/dry-run", sourceBody(uploadId, name, mapping));
-}
-
-// « Vos données : IA externe » (choix par session, consentement obligatoire pour activer)
-export function fetchUserDataMode(sessionId: string): Promise<UserDataMode> {
-  return request<UserDataMode>(`/api/ask/user-data-mode?session_id=${encodeURIComponent(sessionId)}`);
-}
-
-export function setUserDataMode(sessionId: string, enabled: boolean, consent: boolean): Promise<UserDataMode> {
-  return request<UserDataMode>("/api/ask/user-data-mode", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sessionId, enabled, consent }),
-  });
 }
 
 export function confirmSource(

@@ -171,8 +171,10 @@ def test_route2_pregenerates_peer_views_into_the_api_cache(tmp_path, finova_ware
         spec_path=tmp_path / "public" / "finova.json", warehouse_path=finova_warehouse,
         reports_dir=tmp_path / "reports", history_dir=tmp_path / "history",
         generated_dir=tmp_path / "generated", web_dist=tmp_path / "dist", prewarm=False,
+        auth_db=tmp_path / "auth.sqlite3",
     )
-    response = TestClient(app).get("/api/spec", params={"iso3": "MAR", "year": 2024})
+    from auth_support import authenticated_client
+    response = authenticated_client(app).get("/api/spec", params={"iso3": "MAR", "year": 2024})
     assert response.status_code == 200
     assert response.headers["X-Finova-Source"] == "generated"
     assert response.json()["country"]["iso3"] == "MAR"

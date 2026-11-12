@@ -1,11 +1,29 @@
 import type { Chip, Notice } from "./types";
+import { englishNumbers, localizeProse } from "./i18n";
+import { getLang, type Lang } from "./preferences";
 
-const ISO_NAMES: Record<string, string> = {
+const ISO_NAMES_FR: Record<string, string> = {
   TUN: "Tunisie",
   DZA: "Algérie",
   EGY: "Égypte",
   JOR: "Jordanie",
   MAR: "Maroc",
+};
+
+const ISO_NAMES_EN: Record<string, string> = {
+  TUN: "Tunisia",
+  DZA: "Algeria",
+  EGY: "Egypt",
+  JOR: "Jordan",
+  MAR: "Morocco",
+};
+
+const ISO_NAMES_AR: Record<string, string> = {
+  TUN: "تونس",
+  DZA: "الجزائر",
+  EGY: "مصر",
+  JOR: "الأردن",
+  MAR: "المغرب",
 };
 
 const TEXT_RULES: [RegExp, string][] = [
@@ -111,15 +129,12 @@ const TEXT_RULES: [RegExp, string][] = [
   [/Encours de dépôts/g, "Dépôts bancaires"],
   [/Encours des prets/g, "Crédits bancaires"],
   [/Encours des depots/g, "Dépôts bancaires"],
-  [/Taux de pauvrete/g, "Taux de pauvreté"],
-  [/Pauvrete/g, "Pauvreté"],
   [/Deposants/g, "Déposants"],
   [/Bareme/g, "Barème"],
   [/Enquete/g, "Enquête"],
   [/menages/g, "ménages"],
   [/programmee/g, "programmée"],
   [/Verifier/g, "Vérifier"],
-  [/augmentation du SMIG de janvier 2025/g, "revalorisation du SMIG de janvier 2025"],
   [/annees -> lignes/g, "années mises en ligne"],
   [/echelles verifiees/g, "échelles vérifiées"],
   [/fractions converties en % au pivot/g, "fractions converties en pourcentages"],
@@ -135,10 +150,14 @@ const TEXT_RULES: [RegExp, string][] = [
 
 export function plainText(text: string | null | undefined): string {
   if (!text) return "";
+  if (getLang() !== "fr") {
+    const localized = localizeProse(text);
+    return getLang() === "en" ? englishNumbers(localized) : localized;
+  }
   let out = text;
   for (const [pattern, replacement] of TEXT_RULES) out = out.replace(pattern, replacement);
   // décimales à la française, hors suffixes de version (2.0) et codes
-  out = out.replace(/(\d)\.(\d)/g, (match, before: string, after: string) =>
+  out = out.replace(/(\d)\.(\d)/g, (_match, before: string, after: string) =>
     `${before},${after}`,
   );
   // séparateur de milliers à la française pour les nombres à quatre chiffres
@@ -146,7 +165,28 @@ export function plainText(text: string | null | undefined): string {
   return out;
 }
 
-export const METRIC_LABELS: Record<string, string> = {
+function L(fr: string, en: string, ar: string): string {
+  const lang = getLang();
+  return lang === "en" ? en : lang === "ar" ? ar : fr;
+}
+
+function localizedMap<T>(
+  fr: Record<string, T>,
+  en: Record<string, T> | undefined,
+  ar: Record<string, T> | undefined,
+): Record<string, T> {
+  return new Proxy(fr, {
+    get(target, prop, receiver) {
+      if (typeof prop !== "string") return Reflect.get(target, prop, receiver);
+      const lang = getLang();
+      if (lang === "en") return en && prop in en ? en[prop] : target[prop];
+      if (lang === "ar") return ar && prop in ar ? ar[prop] : target[prop];
+      return target[prop];
+    },
+  });
+}
+
+const METRIC_LABELS_FR: Record<string, string> = {
   account_ownership: "Taux de détention d'un compte",
   digital_payment_rate: "Paiement numérique utilisé",
   saving_rate: "Épargne (toute forme)",
@@ -159,25 +199,61 @@ export const METRIC_LABELS: Record<string, string> = {
   deposits_pct_gdp: "Dépôts bancaires (% du PIB)",
   urban_account: "Compte — milieu urbain",
   rural_account: "Compte — milieu rural",
-  smig_2025: "SMIG 2025",
-  smig_2028: "SMIG 2028 (prévu)",
-  poverty_rate_2021: "Taux de pauvreté national",
-  poverty_rate_extreme_2021: "Taux de pauvreté extrême",
 };
 
-export const INFO_LABELS: Record<string, string> = {
+const METRIC_LABELS_EN: Record<string, string> = {
+  account_ownership: "Account ownership rate",
+  digital_payment_rate: "Digital payment used",
+  saving_rate: "Savings (any form)",
+  emergency_money: "Emergency funds within 30 days: possible",
+  atm_per_100k: "ATMs",
+  branch_density: "Bank branches",
+  depositors_per_1k: "Depositors per 1,000 adults",
+  borrowers_per_1k: "Borrowers per 1,000 adults",
+  loans_pct_gdp: "Bank credit (% of GDP)",
+  deposits_pct_gdp: "Bank deposits (% of GDP)",
+  urban_account: "Account — urban areas",
+  rural_account: "Account — rural areas",
+};
+
+const METRIC_LABELS_AR: Record<string, string> = {
+  account_ownership: "معدل امتلاك حساب",
+  digital_payment_rate: "استخدام الدفع الرقمي",
+  saving_rate: "الادخار (بأي شكل)",
+  emergency_money: "أموال طارئة خلال 30 يومًا: ممكن",
+  atm_per_100k: "الصرافات الآلية",
+  branch_density: "الفروع البنكية",
+  depositors_per_1k: "المودعون لكل 1000 بالغ",
+  borrowers_per_1k: "المقترضون لكل 1000 بالغ",
+  loans_pct_gdp: "الائتمان البنكي (% من الناتج)",
+  deposits_pct_gdp: "الودائع البنكية (% من الناتج)",
+  urban_account: "حساب — المدن",
+  rural_account: "حساب — الريف",
+};
+
+export const METRIC_LABELS = localizedMap(METRIC_LABELS_FR, METRIC_LABELS_EN, METRIC_LABELS_AR);
+
+const INFO_LABELS_FR: Record<string, string> = {
   "macro-gdp_pc": "PIB par habitant",
   fx_tnd_usd_2024: "Taux de change officiel moyen 2024",
-  smig_2025: "SMIG 2025 (40 h/semaine)",
-  poverty_rate_urban_2021: "Pauvreté — milieu urbain",
-  poverty_rate_rural_2021: "Pauvreté — milieu rural",
-  context_undp: "Inclusion financière et développement humain (PNUD)",
-  context_oif: "Francophonie et inclusion financière (OIF)",
-  poverty_rate_2021: "Taux de pauvreté national",
   derived_monthly_magnitude: "Ordre de grandeur mensuel (calculé)",
 };
 
-export const PAGE_COPY: Record<string, { title: string; subtitle: string }> = {
+const INFO_LABELS_EN: Record<string, string> = {
+  "macro-gdp_pc": "GDP per capita",
+  fx_tnd_usd_2024: "Official average exchange rate 2024",
+  derived_monthly_magnitude: "Monthly order of magnitude (calculated)",
+};
+
+const INFO_LABELS_AR: Record<string, string> = {
+  "macro-gdp_pc": "الناتج المحلي للفرد",
+  fx_tnd_usd_2024: "سعر الصرف الرسمي المتوسط 2024",
+  derived_monthly_magnitude: "حجم شهري تقريبي (محسوب)",
+};
+
+export const INFO_LABELS = localizedMap(INFO_LABELS_FR, INFO_LABELS_EN, INFO_LABELS_AR);
+
+const PAGE_COPY_FR: Record<string, { title: string; subtitle: string }> = {
   overview: {
     title: "Vue d'ensemble",
     subtitle: "L'accès et l'usage des services financiers, chiffres à l'appui.",
@@ -194,17 +270,61 @@ export const PAGE_COPY: Record<string, { title: string; subtitle: string }> = {
     title: "Pourquoi l'exclusion ?",
     subtitle: "Obstacles déclarés, différence entre villes et campagnes, analyse prudente des causes.",
   },
-  poverty: {
-    title: "Pauvreté et SMIG",
-    subtitle: "SMIG, pauvreté INS 2021 et simulateur de frais — références disponibles pour la Tunisie uniquement.",
-  },
   pipeline: {
     title: "Sources et qualité",
     subtitle: "D'où viennent les chiffres, comment ils sont contrôlés et mis à jour.",
   },
 };
 
-export const CHART_TITLES: Record<string, string> = {
+const PAGE_COPY_EN: Record<string, { title: string; subtitle: string }> = {
+  overview: {
+    title: "Overview",
+    subtitle: "Access to and use of financial services, backed by figures.",
+  },
+  inclusion: {
+    title: "Inclusion and inequalities",
+    subtitle: "Who uses financial services, and how the gaps evolve.",
+  },
+  access: {
+    title: "Access and credit",
+    subtitle: "Banking network, deposits, credit and the balance between supply and demand.",
+  },
+  exclusion: {
+    title: "Why exclusion?",
+    subtitle: "Reported barriers, urban–rural differences and a careful analysis of causes.",
+  },
+  pipeline: {
+    title: "Sources and quality",
+    subtitle: "Where the figures come from, how they are checked and updated.",
+  },
+};
+
+const PAGE_COPY_AR: Record<string, { title: string; subtitle: string }> = {
+  overview: {
+    title: "نظرة عامة",
+    subtitle: "الوصول إلى الخدمات المالية واستخدامها، بالأرقام.",
+  },
+  inclusion: {
+    title: "الإدماج والفوارق",
+    subtitle: "من يستخدم الخدمات المالية، وكيف تتطور الفجوات.",
+  },
+  access: {
+    title: "الوصول والائتمان",
+    subtitle: "الشبكة البنكية والودائع والائتمان والتوازن بين العرض والطلب.",
+  },
+  exclusion: {
+    title: "لماذا الإقصاء؟",
+    subtitle: "العوائق المعلنة والفروق بين المدن والأرياف وتحليل حذر للأسباب.",
+  },
+  pipeline: {
+    title: "المصادر والجودة",
+    subtitle: "من أين تأتي الأرقام وكيف تُفحص وتُحدَّث.",
+  },
+};
+
+export const PAGE_COPY = localizedMap(PAGE_COPY_FR, PAGE_COPY_EN, PAGE_COPY_AR);
+
+const CHART_TITLES_FR: Record<string, string> = {
   account_ownership_history: "Détention d'un compte, par enquête Findex",
   account_ownership_peers: "Comparaison régionale — détention d'un compte",
   inclusion_funnel: "Du compte à l'usage formel",
@@ -215,18 +335,61 @@ export const CHART_TITLES: Record<string, string> = {
   atm_peers: "Distributeurs automatiques pour 100 000 adultes — comparaison régionale",
   barriers_heatmap: "Obstacles à l'ouverture d'un compte",
   urban_rural: "Détention d'un compte : villes et zones rurales",
-  smig_trajectory: "SMIG 2025-2028 (40 h/semaine)",
 };
 
-export const STEP_LABELS: Record<string, string> = {
+const CHART_TITLES_EN: Record<string, string> = {
+  account_ownership_history: "Account ownership, by Findex survey",
+  account_ownership_peers: "Regional comparison — account ownership",
+  inclusion_funnel: "From account to formal use",
+  formal_vs_any: "Formal and informal use",
+  account_ownership_groups: "Account ownership by group",
+  physical_network: "Physical network (2015-2024)",
+  supply_demand_index: "Supply and demand, 2017 = 100",
+  atm_peers: "ATMs per 100,000 adults — regional comparison",
+  barriers_heatmap: "Barriers to opening an account",
+  urban_rural: "Account ownership: urban and rural areas",
+};
+
+const CHART_TITLES_AR: Record<string, string> = {
+  account_ownership_history: "ملكية الحساب حسب موجة Findex",
+  account_ownership_peers: "مقارنة إقليمية — ملكية الحساب",
+  inclusion_funnel: "من الحساب إلى الاستخدام الرسمي",
+  formal_vs_any: "الاستخدام الرسمي وغير الرسمي",
+  account_ownership_groups: "ملكية الحساب حسب المجموعة",
+  physical_network: "الشبكة الفيزيائية (2015-2024)",
+  supply_demand_index: "العرض والطلب، أساس 100 في 2017",
+  atm_peers: "الصرافات الآلية لكل 100 ألف بالغ — مقارنة إقليمية",
+  barriers_heatmap: "عوائق فتح حساب",
+  urban_rural: "ملكية الحساب: المدن والمناطق الريفية",
+};
+
+export const CHART_TITLES = localizedMap(CHART_TITLES_FR, CHART_TITLES_EN, CHART_TITLES_AR);
+
+const STEP_LABELS_FR: Record<string, string> = {
   account_ownership: "Détention d'un compte",
   digital_payment_rate: "Paiement numérique",
   formal_saving: "Épargne formelle",
   formal_borrowing: "Emprunt formel",
 };
 
+const STEP_LABELS_EN: Record<string, string> = {
+  account_ownership: "Account ownership",
+  digital_payment_rate: "Digital payment",
+  formal_saving: "Formal savings",
+  formal_borrowing: "Formal borrowing",
+};
+
+const STEP_LABELS_AR: Record<string, string> = {
+  account_ownership: "ملكية حساب",
+  digital_payment_rate: "دفع رقمي",
+  formal_saving: "ادخار رسمي",
+  formal_borrowing: "اقتراض رسمي",
+};
+
+export const STEP_LABELS = localizedMap(STEP_LABELS_FR, STEP_LABELS_EN, STEP_LABELS_AR);
+
 // Libellés du glossaire Findex 2025 (lignes 6 à 11)
-export const HEATMAP_ROW_LABELS: Record<string, string> = {
+const HEATMAP_ROW_LABELS_FR: Record<string, string> = {
   fin11a: "Trop éloigné",
   fin11b: "Trop cher",
   fin11c: "Documents manquants",
@@ -235,15 +398,59 @@ export const HEATMAP_ROW_LABELS: Record<string, string> = {
   fin11f: "Manque de confiance",
 };
 
+const HEATMAP_ROW_LABELS_EN: Record<string, string> = {
+  fin11a: "Too far",
+  fin11b: "Too expensive",
+  fin11c: "Missing documents",
+  fin11d: "Insufficient funds",
+  fin11e: "A relative already has one",
+  fin11f: "Lack of trust",
+};
+
+const HEATMAP_ROW_LABELS_AR: Record<string, string> = {
+  fin11a: "بعيد جدًا",
+  fin11b: "مكلف جدًا",
+  fin11c: "وثائق ناقصة",
+  fin11d: "أموال غير كافية",
+  fin11e: "أحد الأقارب لديه حساب",
+  fin11f: "غياب الثقة",
+};
+
+export const HEATMAP_ROW_LABELS = localizedMap(
+  HEATMAP_ROW_LABELS_FR,
+  HEATMAP_ROW_LABELS_EN,
+  HEATMAP_ROW_LABELS_AR,
+);
+
 // Statut de publication fixé par l'Auditor ; « en attente de validation » reprend la règle not_evaluated ci-dessus.
-export const PUBLICATION_LABELS: Record<string, string> = {
+const PUBLICATION_LABELS_FR: Record<string, string> = {
   approved: "Approuvé",
   approved_with_review_note: "Approuvé avec réserve",
   blocked: "Bloqué",
   not_evaluated: "En attente de validation",
 };
 
-export const DEFINITION_STATUS: Record<string, string> = {
+const PUBLICATION_LABELS_EN: Record<string, string> = {
+  approved: "Approved",
+  approved_with_review_note: "Approved with reservation",
+  blocked: "Blocked",
+  not_evaluated: "Awaiting validation",
+};
+
+const PUBLICATION_LABELS_AR: Record<string, string> = {
+  approved: "معتمد",
+  approved_with_review_note: "معتمد بتحفظ",
+  blocked: "محجوب",
+  not_evaluated: "في انتظار التحقق",
+};
+
+export const PUBLICATION_LABELS = localizedMap(
+  PUBLICATION_LABELS_FR,
+  PUBLICATION_LABELS_EN,
+  PUBLICATION_LABELS_AR,
+);
+
+const DEFINITION_STATUS_FR: Record<string, string> = {
   verified: "Définition vérifiée",
   verified_metadata: "Métadonnées vérifiées",
   provisional: "Définition provisoire",
@@ -252,7 +459,31 @@ export const DEFINITION_STATUS: Record<string, string> = {
   official_source: "Source officielle",
 };
 
-export const REVIEW_REASONS: Record<string, string> = {
+const DEFINITION_STATUS_EN: Record<string, string> = {
+  verified: "Verified definition",
+  verified_metadata: "Verified metadata",
+  provisional: "Provisional definition",
+  hors_catalogue: "Complementary indicator",
+  secondary_source: "Secondary source",
+  official_source: "Official source",
+};
+
+const DEFINITION_STATUS_AR: Record<string, string> = {
+  verified: "تعريف متحقق منه",
+  verified_metadata: "بيانات وصفية متحقق منها",
+  provisional: "تعريف مؤقت",
+  hors_catalogue: "مؤشر تكميلي",
+  secondary_source: "مصدر ثانوي",
+  official_source: "مصدر رسمي",
+};
+
+export const DEFINITION_STATUS = localizedMap(
+  DEFINITION_STATUS_FR,
+  DEFINITION_STATUS_EN,
+  DEFINITION_STATUS_AR,
+);
+
+const REVIEW_REASONS_FR: Record<string, string> = {
   source_version_incomplete: "Référence de la source incomplète",
   warehouse_content_binding_unverified: "Empreinte de la base non confirmée",
   quality_provenance_unverified: "Contrôle qualité non rattaché à la collecte",
@@ -264,6 +495,34 @@ export const REVIEW_REASONS: Record<string, string> = {
   qualitative: "Donnée qualitative",
   derived_value: "Valeur calculée",
 };
+
+const REVIEW_REASONS_EN: Record<string, string> = {
+  source_version_incomplete: "Incomplete source reference",
+  warehouse_content_binding_unverified: "Database fingerprint not confirmed",
+  quality_provenance_unverified: "Quality check not linked to collection",
+  provisional_definition: "Provisional definition",
+  not_in_kpi_catalog: "Outside the indicator catalogue",
+  warehouse_definition_unverified: "Definition not confirmed",
+  dictionary_label_mismatch: "Dictionary label to confirm",
+  secondary_source: "Secondary source",
+  qualitative: "Qualitative data",
+  derived_value: "Calculated value",
+};
+
+const REVIEW_REASONS_AR: Record<string, string> = {
+  source_version_incomplete: "مرجع المصدر غير مكتمل",
+  warehouse_content_binding_unverified: "بصمة قاعدة البيانات غير مؤكدة",
+  quality_provenance_unverified: "فحص الجودة غير مرتبط بالجمع",
+  provisional_definition: "تعريف مؤقت",
+  not_in_kpi_catalog: "خارج فهرس المؤشرات",
+  warehouse_definition_unverified: "تعريف غير مؤكد",
+  dictionary_label_mismatch: "تسمية القاموس بحاجة إلى تأكيد",
+  secondary_source: "مصدر ثانوي",
+  qualitative: "بيانات نوعية",
+  derived_value: "قيمة محسوبة",
+};
+
+export const REVIEW_REASONS = localizedMap(REVIEW_REASONS_FR, REVIEW_REASONS_EN, REVIEW_REASONS_AR);
 
 const DEFINITION_FR: Record<string, string> = {
   account_ownership:
@@ -285,26 +544,58 @@ const DEFINITION_FR: Record<string, string> = {
     "Encours des dépôts dans les banques commerciales, en pourcentage du produit intérieur brut (PIB).",
   urban_account: "Part des adultes vivant en ville qui détiennent un compte.",
   rural_account: "Part des adultes vivant en zone rurale qui détiennent un compte.",
-  smig_2025:
-    "Salaire minimum interprofessionnel garanti (SMIG) brut mensuel, régime de 40 heures par semaine, en 2025.",
-  smig_2028:
-    "Montant du SMIG prévu par le barème publié pour 2028 ; revalorisation à confirmer au Journal officiel.",
-  poverty_rate_2021:
-    "Part de la population sous le seuil national de pauvreté, selon l'enquête de l'INS de 2021.",
-  poverty_rate_extreme_2021:
-    "Part de la population sous le seuil national de pauvreté extrême, selon l'enquête de l'INS de 2021.",
 };
 
-const CAVEAT_FR: Record<string, string> = {
-  smig_2025:
-    "Montant brut mensuel, régime de 40 heures par semaine. Vérifier le Journal officiel (JORT).",
-  smig_2028:
-    "Revalorisation programmée ; à vérifier dans le texte officiel avant tout usage contractuel.",
-  poverty_rate_2021: "Seuil national de pauvreté ; enquête 2021 publiée par l'INS.",
-  poverty_rate_extreme_2021: "Pauvreté extrême, seuil national, enquête 2021.",
+const DEFINITION_EN: Record<string, string> = {
+  account_ownership:
+    "Share of adults who have an account at a bank or financial institution, or a mobile money account.",
+  digital_payment_rate:
+    "Share of adults who made or received a digital payment in the past year, for any purpose.",
+  saving_rate:
+    "Share of adults who saved or set aside money, for any reason and in any form, in the past year.",
+  emergency_money:
+    "Share of adults who say they could raise emergency money within 30 days.",
+  atm_per_100k: "Number of automated teller machines (ATMs) per 100,000 adults.",
+  branch_density:
+    "Number of commercial bank branches per 100,000 adults, according to the International Monetary Fund (FAS).",
+  depositors_per_1k: "Number of depositors at commercial banks per 1,000 adults.",
+  borrowers_per_1k: "Number of borrowers from commercial banks per 1,000 adults.",
+  loans_pct_gdp:
+    "Outstanding loans by commercial banks as a percentage of gross domestic product (GDP).",
+  deposits_pct_gdp:
+    "Outstanding deposits at commercial banks as a percentage of gross domestic product (GDP).",
+  urban_account: "Share of adults living in cities who have an account.",
+  rural_account: "Share of adults living in rural areas who have an account.",
 };
+
+const DEFINITION_AR: Record<string, string> = {
+  account_ownership:
+    "نسبة البالغين الذين يمتلكون حسابًا في بنك أو مؤسسة مالية، أو حساب أموال عبر الهاتف المحمول.",
+  digital_payment_rate:
+    "نسبة البالغين الذين أجروا أو استلموا دفعة رقمية خلال السنة الماضية، لأي غرض.",
+  saving_rate:
+    "نسبة البالغين الذين ادّخروا أو خصّصوا أموالًا، لأي سبب وبأي شكل، خلال السنة الماضية.",
+  emergency_money:
+    "نسبة البالغين الذين يقولون إنهم يستطيعون جمع أموال طارئة خلال 30 يومًا.",
+  atm_per_100k: "عدد الصرافات الآلية لكل 100 ألف بالغ.",
+  branch_density:
+    "عدد فروع البنوك التجارية لكل 100 ألف بالغ، وفق صندوق النقد الدولي (FAS).",
+  depositors_per_1k: "عدد المودعين في البنوك التجارية لكل 1000 بالغ.",
+  borrowers_per_1k: "عدد المقترضين من البنوك التجارية لكل 1000 بالغ.",
+  loans_pct_gdp:
+    "الائتمان القائم الممنوح من البنوك التجارية كنسبة من الناتج المحلي الإجمالي.",
+  deposits_pct_gdp:
+    "الودائع القائمة في البنوك التجارية كنسبة من الناتج المحلي الإجمالي.",
+  urban_account: "نسبة البالغين المقيمين في المدن الذين يمتلكون حسابًا.",
+  rural_account: "نسبة البالغين المقيمين في المناطق الريفية الذين يمتلكون حسابًا.",
+};
+
+const CAVEAT_FR: Record<string, string> = {};
 
 export function friendlyDefinition(metricId: string, definition: string | null): string {
+  const lang = getLang();
+  if (lang === "en") return DEFINITION_EN[metricId] ?? (plainText(definition) || "—");
+  if (lang === "ar") return DEFINITION_AR[metricId] ?? (plainText(definition) || "—");
   return DEFINITION_FR[metricId] ?? (plainText(definition) || "—");
 }
 
@@ -313,7 +604,7 @@ export function friendlyCaveat(metricId: string, caveat: string | null): string 
   return CAVEAT_FR[metricId] ?? plainText(caveat);
 }
 
-const FILTER_TOKENS: Record<string, string> = {
+const FILTER_TOKENS_FR: Record<string, string> = {
   total_population: "population totale",
   commercial_banks_all_adults: "banques commerciales, tous adultes",
   "bank_type=commercial_banks": "banques commerciales",
@@ -322,46 +613,102 @@ const FILTER_TOKENS: Record<string, string> = {
   "all=all": "ensemble des adultes",
 };
 
+const FILTER_TOKENS_EN: Record<string, string> = {
+  total_population: "total population",
+  commercial_banks_all_adults: "commercial banks, all adults",
+  "bank_type=commercial_banks": "commercial banks",
+  "urbanicity=urban": "urban areas",
+  "urbanicity=rural": "rural areas",
+  "all=all": "all adults",
+};
+
+const FILTER_TOKENS_AR: Record<string, string> = {
+  total_population: "إجمالي السكان",
+  commercial_banks_all_adults: "بنوك تجارية، جميع البالغين",
+  "bank_type=commercial_banks": "بنوك تجارية",
+  "urbanicity=urban": "المناطق الحضرية",
+  "urbanicity=rural": "المناطق الريفية",
+  "all=all": "جميع البالغين",
+};
+
 export function friendlyFilter(filter: string | null): string {
+  const lang = getLang();
   if (!filter) return "—";
-  if (filter.startsWith("référence statique")) return "Référence nationale, sans filtre pays";
+  if (filter.startsWith("référence statique")) {
+    return L(
+      "Référence nationale, sans filtre pays",
+      "National reference, no country filter",
+      "مرجع وطني، دون تصفية حسب البلد",
+    );
+  }
+  const iso = lang === "en" ? ISO_NAMES_EN : lang === "ar" ? ISO_NAMES_AR : ISO_NAMES_FR;
+  const tokens = lang === "en" ? FILTER_TOKENS_EN : lang === "ar" ? FILTER_TOKENS_AR : FILTER_TOKENS_FR;
   const parts = filter
     .split(" · ")
     .map((part) => {
-      const iso = part.match(/^iso3=([A-Z]{3})$/);
-      if (iso) return ISO_NAMES[iso[1]] ?? iso[1];
-      if (FILTER_TOKENS[part]) return FILTER_TOKENS[part];
+      const match = part.match(/^iso3=([A-Z]{3})$/);
+      if (match) return iso[match[1]] ?? match[1];
+      if (tokens[part]) return tokens[part];
       if (/^[a-z0-9_]+$/.test(part)) return null;
       return plainText(part);
     })
     .filter(Boolean);
-  return parts.length ? parts.join(" · ") : "Population totale";
+  return parts.length
+    ? parts.join(" · ")
+    : L("Population totale", "Total population", "إجمالي السكان");
 }
 
-const SOURCE_NAMES: Record<string, string> = {
+const SOURCE_NAMES_FR: Record<string, string> = {
   findex: "enquête Findex (Banque mondiale)",
   fas: "FMI — accès aux services financiers (FAS)",
   gdp: "indicateurs mondiaux (Banque mondiale)",
   wdi: "indicateurs mondiaux (Banque mondiale)",
 };
 
+const SOURCE_NAMES_EN: Record<string, string> = {
+  findex: "Findex survey (World Bank)",
+  fas: "IMF — Financial Access Survey (FAS)",
+  gdp: "World Development Indicators (World Bank)",
+  wdi: "World Development Indicators (World Bank)",
+};
+
+const SOURCE_NAMES_AR: Record<string, string> = {
+  findex: "مسح Findex (البنك الدولي)",
+  fas: "صندوق النقد الدولي — مسح الوصول إلى الخدمات المالية (FAS)",
+  gdp: "مؤشرات التنمية العالمية (البنك الدولي)",
+  wdi: "مؤشرات التنمية العالمية (البنك الدولي)",
+};
+
 export function friendlySource(source: string | null): string {
+  const lang = getLang();
   if (!source) return "—";
+  const names = lang === "en" ? SOURCE_NAMES_EN : lang === "ar" ? SOURCE_NAMES_AR : SOURCE_NAMES_FR;
   const catalog = source.match(/^KPI catalog · ([a-z0-9_]+)/);
-  if (catalog) return `Catalogue d'indicateurs · ${SOURCE_NAMES[catalog[1]] ?? catalog[1]}`;
-  if (source.startsWith("Warehouse DuckDB")) {
-    return "Base de données interne · FMI (FAS) et enquête Findex";
+  if (catalog) {
+    const prefix = L("Catalogue d'indicateurs", "Indicator catalogue", "فهرس المؤشرات");
+    return `${prefix} · ${names[catalog[1]] ?? catalog[1]}`;
   }
-  if (source.startsWith("Bareme de paie tunisien")) {
-    return "Barème de paie tunisien — revalorisation du SMIG de janvier 2025";
-  }
-  if (source.startsWith("Bareme SMIG/SMAG")) {
-    return "Barème SMIG/SMAG 2026-2028 — paie-tunisie.com";
+  if (source.startsWith("Warehouse DuckDB") || source.startsWith("Base de données")) {
+    return L(
+      "Base de données interne · FMI (FAS) et enquête Findex",
+      "Internal database · IMF (FAS) and Findex survey",
+      "قاعدة بيانات داخلية · صندوق النقد الدولي (FAS) ومسح Findex",
+    );
   }
   if (source.startsWith("INS - Enquete nationale")) {
-    return "INS — enquête sur le budget et le niveau de vie des ménages (2021)";
+    return L(
+      "INS — enquête sur le budget et le niveau de vie des ménages (2021)",
+      "INS — national household budget and living standards survey (2021)",
+      "المعهد الوطني للإحصاء — مسح ميزانية الأسر ومستويات المعيشة (2021)",
+    );
   }
-  if (source.startsWith("INS - ENBCNV")) return "INS — enquête ENBCNV 2021";
+  if (source.startsWith("INS - ENBCNV")) {
+    return L(
+      "INS — enquête ENBCNV 2021",
+      "INS — ENBCNV survey 2021",
+      "المعهد الوطني للإحصاء — مسح ENBCNV 2021",
+    );
+  }
   return plainText(source);
 }
 
@@ -370,13 +717,17 @@ export function chipLabel(chip: Chip | null): string {
   const kind = chip.label.split("·").pop()?.trim() ?? "";
   switch (chip.provider) {
     case "semantic":
-      return kind === "provisional" ? "Indicateur provisoire" : "Indicateur suivi";
+      return kind === "provisional"
+        ? L("Indicateur provisoire", "Provisional indicator", "مؤشر مؤقت")
+        : L("Indicateur suivi", "Tracked indicator", "مؤشر متابَع");
     case "warehouse":
-      return "Source interne";
+      return L("Source interne", "Internal source", "مصدر داخلي");
     case "reference":
-      return kind === "secondary_source" ? "Source secondaire" : "Source officielle";
+      return kind === "secondary_source"
+        ? L("Source secondaire", "Secondary source", "مصدر ثانوي")
+        : L("Source officielle", "Official source", "مصدر رسمي");
     case "derived":
-      return "Valeur calculée";
+      return L("Valeur calculée", "Calculated value", "قيمة محسوبة");
     default:
       return plainText(chip.label);
   }
@@ -404,82 +755,125 @@ export function noticeCopy(notice: Notice): NoticeCopy {
   switch (notice.code) {
     case "observation_requires_review":
       return {
-        tag: "À vérifier",
-        message: `${count ?? "Plusieurs"} observations sont signalées : définition provisoire ou traçabilité à compléter.`,
+        tag: L("À vérifier", "To review", "بحاجة إلى مراجعة"),
+        message: L(
+          `${count ?? "Plusieurs"} observations sont signalées : définition provisoire ou traçabilité à compléter.`,
+          `${count ?? "Several"} observations are flagged: provisional definition or incomplete traceability.`,
+          `${count ?? "عدة"} ملاحظات مُشار إليها: تعريف مؤقت أو تتبّع غير مكتمل.`,
+        ),
       };
     case "provisional_definition": {
       const name =
         notice.kpi_id === "saving_rate"
-          ? "L'épargne, toutes formes confondues,"
+          ? L("L'épargne, toutes formes confondues,", "Savings, in any form,", "الادخار، بجميع أشكاله،")
           : notice.kpi_id === "borrowing_rate"
-            ? "L'emprunt, toutes formes confondues,"
-            : "Cet indicateur";
+            ? L("L'emprunt, toutes formes confondues,", "Borrowing, in any form,", "الاقتراض، بجميع أشكاله،")
+            : L("Cet indicateur", "This indicator", "هذا المؤشر");
       return {
-        tag: "Définition provisoire",
-        message: `${name} repose sur une définition provisoire, en attente de validation.`,
+        tag: L("Définition provisoire", "Provisional definition", "تعريف مؤقت"),
+        message: L(
+          `${name} repose sur une définition provisoire, en attente de validation.`,
+          `${name} relies on a provisional definition pending validation.`,
+          `${name} يعتمد على تعريف مؤقت في انتظار التحقق.`,
+        ),
       };
     }
     case "quality_provenance_unverified":
       return {
-        tag: "Traçabilité",
-        message: "Le contrôle qualité n'est pas encore rattaché à la collecte d'origine.",
+        tag: L("Traçabilité", "Traceability", "التتبّع"),
+        message: L(
+          "Le contrôle qualité n'est pas encore rattaché à la collecte d'origine.",
+          "The quality check is not yet linked to the original collection.",
+          "فحص الجودة غير مرتبط بعد بعملية الجمع الأصلية.",
+        ),
       };
     case "source_version_incomplete":
       return {
-        tag: "Traçabilité",
-        message: "La référence complète du fichier source n'est pas disponible.",
+        tag: L("Traçabilité", "Traceability", "التتبّع"),
+        message: L(
+          "La référence complète du fichier source n'est pas disponible.",
+          "The full reference of the source file is not available.",
+          "المرجع الكامل لملف المصدر غير متاح.",
+        ),
       };
     case "warehouse_content_binding_unverified":
       return {
-        tag: "Traçabilité",
-        message:
+        tag: L("Traçabilité", "Traceability", "التتبّع"),
+        message: L(
           "Le lien entre la base de données et les fichiers sources n'a pas encore été confirmé.",
+          "The link between the database and the source files has not yet been confirmed.",
+          "الرابط بين قاعدة البيانات وملفات المصادر لم يُؤكَّد بعد.",
+        ),
       };
     case "source_notice:empty_columns":
       return {
-        tag: "Qualité de la source",
-        message: "Une colonne entièrement vide a été ignorée dans le fichier FAS.",
+        tag: L("Qualité de la source", "Source quality", "جودة المصدر"),
+        message: L(
+          "Une colonne entièrement vide a été ignorée dans le fichier FAS.",
+          "An entirely empty column was ignored in the FAS file.",
+          "تم تجاهل عمود فارغ بالكامل في ملف FAS.",
+        ),
       };
     case "source_notice:negative_values":
       return {
-        tag: "Qualité de la source",
-        message: "Des valeurs négatives ont été détectées dans les colonnes d'années du fichier FAS.",
+        tag: L("Qualité de la source", "Source quality", "جودة المصدر"),
+        message: L(
+          "Des valeurs négatives ont été détectées dans les colonnes d'années du fichier FAS.",
+          "Negative values were detected in the year columns of the FAS file.",
+          "تم رصد قيم سالبة في أعمدة السنوات بملف FAS.",
+        ),
       };
     case "fin24aP_definition":
       return {
-        tag: "Définition à confirmer",
-        message:
+        tag: L("Définition à confirmer", "Definition to confirm", "تعريف بحاجة إلى تأكيد"),
+        message: L(
           "L'indicateur « fonds d'urgence » porte un libellé différent dans le dictionnaire de la Banque mondiale : sa valeur est affichée mais signalée.",
+          "The “emergency funds” indicator has a different label in the World Bank dictionary: its value is shown but flagged.",
+          "مؤشر «الأموال الطارئة» يحمل تسمية مختلفة في قاموس البنك الدولي: تُعرض قيمته مع الإشارة إليها.",
+        ),
       };
     case "warehouse_not_in_catalog":
       return {
-        tag: "Indicateurs complémentaires",
-        message:
+        tag: L("Indicateurs complémentaires", "Complementary indicators", "مؤشرات تكميلية"),
+        message: L(
           "Certains indicateurs (distributeurs, agences, dépôts et crédits) viennent de la base interne et non du catalogue officiel : ils sont à vérifier.",
+          "Some indicators (ATMs, branches, deposits and credit) come from the internal database rather than the official catalogue: they are to be checked.",
+          "بعض المؤشرات (الصرافات والفروع والودائع والائتمان) تأتي من قاعدة البيانات الداخلية لا من الفهرس الرسمي: وهي بحاجة إلى تحقق.",
+        ),
       };
     case "publication_not_evaluated":
       return {
-        tag: "Publication",
-        message: "Les données n'ont pas encore reçu de validation finale pour publication.",
+        tag: L("Publication", "Publication", "النشر"),
+        message: L(
+          "Les données n'ont pas encore reçu de validation finale pour publication.",
+          "The data have not yet received final approval for publication.",
+          "لم تحصل البيانات بعد على الموافقة النهائية للنشر.",
+        ),
       };
     case "loans_pct_gdp_now_available":
       return {
-        tag: "Donnée disponible",
-        message:
+        tag: L("Donnée disponible", "Data available", "بيانات متاحة"),
+        message: L(
           "Les crédits bancaires sont désormais disponibles pour 2024 : la valeur réelle remplace la mention « à charger ».",
+          "Bank credit is now available for 2024: the actual value replaces the “to load” note.",
+          "الائتمان البنكي متاح الآن لعام 2024: القيمة الفعلية تحل محل عبارة «قيد التحميل».",
+        ),
       };
     case "deposits_pct_gdp_now_available":
       return {
-        tag: "Donnée disponible",
-        message:
+        tag: L("Donnée disponible", "Data available", "بيانات متاحة"),
+        message: L(
           "Les dépôts bancaires sont désormais disponibles pour 2024 : la valeur réelle remplace la mention « à charger ».",
+          "Bank deposits are now available for 2024: the actual value replaces the “to load” note.",
+          "الودائع البنكية متاحة الآن لعام 2024: القيمة الفعلية تحل محل عبارة «قيد التحميل».",
+        ),
       };
     default:
-      return { tag: "À savoir", message: plainText(notice.message) };
+      return { tag: L("À savoir", "Good to know", "للمعلومة"), message: plainText(notice.message) };
   }
 }
 
-export const PIPELINE_NODES: Record<string, { label: string; detail: string }> = {
+const PIPELINE_NODES_FR: Record<string, { label: string; detail: string }> = {
   collector: {
     label: "Collecte des sources",
     detail: "Enquêtes internationales et indicateurs mondiaux.",
@@ -506,7 +900,7 @@ export const PIPELINE_NODES: Record<string, { label: string; detail: string }> =
   },
   dashboard: {
     label: "Tableau de bord",
-    detail: "Vue publiée, version 2.0.",
+    detail: "Vue publiée et vérifiée.",
   },
   xai: {
     label: "Explication du constat",
@@ -514,7 +908,79 @@ export const PIPELINE_NODES: Record<string, { label: string; detail: string }> =
   },
 };
 
-export const REJECTED_LABELS: Record<string, string> = {
+const PIPELINE_NODES_EN: Record<string, { label: string; detail: string }> = {
+  collector: {
+    label: "Source collection",
+    detail: "International surveys and global indicators.",
+  },
+  profiler: {
+    label: "File analysis",
+    detail: "Structure, columns and metadata checked.",
+  },
+  quality: {
+    label: "Quality control",
+    detail: "Each source must pass the required threshold.",
+  },
+  etl: {
+    label: "Integration",
+    detail: "Validated data joins the central database.",
+  },
+  semantic_kpi: {
+    label: "Indicator computation",
+    detail: "Catalogue indicators, fixed and reproducible computation.",
+  },
+  analyst: {
+    label: "Automated analysis",
+    detail: "Findings, explanations and leads, without AI computation.",
+  },
+  dashboard: {
+    label: "Dashboard",
+    detail: "Published and verified view.",
+  },
+  xai: {
+    label: "Explaining the finding",
+    detail: "Analysis included; advanced engine out of scope.",
+  },
+};
+
+const PIPELINE_NODES_AR: Record<string, { label: string; detail: string }> = {
+  collector: {
+    label: "جمع المصادر",
+    detail: "مسوحات دولية ومؤشرات عالمية.",
+  },
+  profiler: {
+    label: "تحليل الملفات",
+    detail: "تم التحقق من البنية والأعمدة والبيانات الوصفية.",
+  },
+  quality: {
+    label: "مراقبة الجودة",
+    detail: "يجب أن يتجاوز كل مصدر الحد المطلوب.",
+  },
+  etl: {
+    label: "الدمج",
+    detail: "تنضم البيانات المتحقق منها إلى قاعدة البيانات المركزية.",
+  },
+  semantic_kpi: {
+    label: "حساب المؤشرات",
+    detail: "مؤشرات الفهرس بحساب ثابت وقابل للتكرار.",
+  },
+  analyst: {
+    label: "تحليل آلي",
+    detail: "نتائج وتفسيرات ومسارات، دون حساب بالذكاء الاصطناعي.",
+  },
+  dashboard: {
+    label: "لوحة المعلومات",
+    detail: "عرض منشور ومتحقق منه.",
+  },
+  xai: {
+    label: "تفسير النتيجة",
+    detail: "التحليل مشمول؛ المحرك المتقدم خارج النطاق.",
+  },
+};
+
+export const PIPELINE_NODES = localizedMap(PIPELINE_NODES_FR, PIPELINE_NODES_EN, PIPELINE_NODES_AR);
+
+const REJECTED_LABELS_FR: Record<string, string> = {
   value_missing: "valeur manquante",
   population_missing: "population manquante",
   population_repeated_metadata: "population répétée",
@@ -523,23 +989,52 @@ export const REJECTED_LABELS: Record<string, string> = {
   negative_value: "valeur négative",
 };
 
+const REJECTED_LABELS_EN: Record<string, string> = {
+  value_missing: "missing value",
+  population_missing: "missing population",
+  population_repeated_metadata: "repeated population",
+  year_out_of_range: "year out of range",
+  duplicate: "duplicate",
+  negative_value: "negative value",
+};
+
+const REJECTED_LABELS_AR: Record<string, string> = {
+  value_missing: "قيمة ناقصة",
+  population_missing: "بيانات سكان ناقصة",
+  population_repeated_metadata: "بيانات سكان مكررة",
+  year_out_of_range: "سنة خارج النطاق",
+  duplicate: "تكرار",
+  negative_value: "قيمة سالبة",
+};
+
+export const REJECTED_LABELS = localizedMap(REJECTED_LABELS_FR, REJECTED_LABELS_EN, REJECTED_LABELS_AR);
+
 export function rejectedLabel(key: string): string {
   return REJECTED_LABELS[key] ?? plainText(key.replace(/_/g, " "));
 }
 
 export function sourceName(name: string): string {
-  return SOURCE_NAMES[name] ?? name.toUpperCase();
+  const lang = getLang();
+  const names = lang === "en" ? SOURCE_NAMES_EN : lang === "ar" ? SOURCE_NAMES_AR : SOURCE_NAMES_FR;
+  return names[name] ?? name.toUpperCase();
 }
 
 export function friendlyRule(rule: string): string {
   if (rule.startsWith("Chaque chiffre de la réponse existe dans les faits")) {
-    return "Chaque chiffre cité provient des données affichées.";
+    return L(
+      "Chaque chiffre cité provient des données affichées.",
+      "Every figure cited comes from the displayed data.",
+      "كل رقم مذكور مستمد من البيانات المعروضة.",
+    );
   }
   if (rule.startsWith("Aucune recommandation n'est présentée comme une causalité")) {
-    return "Aucune piste n'est présentée comme une cause prouvée.";
-  }
-  if (rule.startsWith("Le SMIG affiché est la référence statique")) {
-    return "Le SMIG affiché est le barème publié pour 2025.";
+    return L(
+      "Aucune piste n'est présentée comme une cause prouvée.",
+      "No lead is presented as a proven cause.",
+      "لا يُعرض أي مسار كسبب مثبت.",
+    );
   }
   return plainText(rule);
 }
+
+export type { Lang };

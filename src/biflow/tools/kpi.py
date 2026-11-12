@@ -156,13 +156,6 @@ def _validate_catalog(catalog: Any) -> None:
             for field in ("name", "business_objective", "definition", "subgroup", "unit"):
                 if not isinstance(kpi[field], str) or not kpi[field].strip():
                     raise CatalogError(f"Missing {field}: {kpi_id}")
-            # catalogue 1.8.0 : definition et denominateur en francais pour chaque KPI officiel
-            # (traduction de la source anglaise, conservee) ; facultatifs pour les KPI utilisateur
-            official = not str((kpi.get("warehouse") or {}).get("source", "")).startswith("user:")
-            if official and (kpi.get("verification") or {}).get("status") != USER_STATUS:
-                for field in ("definition_fr", "denominator_fr"):
-                    if not isinstance(kpi.get(field), str) or not kpi[field].strip():
-                        raise CatalogError(f"Missing {field}: {kpi_id}")
             years = kpi["valid_years"]
             if (not isinstance(years, list) or not years
                     or any(type(y) is not int or not 1 <= y <= 9999 for y in years)

@@ -1,0 +1,894 @@
+/* ============================================================ signature motion
+   Couche visuelle ajoutée : ambiance lumineuse, navigation qui glisse,
+   progression de lecture, halos au survol, transitions et micro-interactions.
+   Toutes les animations restent optionnelles (prefers-reduced-motion). */
+
+/* ---------------------------------------------------------------- ambiance */
+.app-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ambient-orb {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  filter: blur(90px);
+  will-change: transform;
+}
+
+.orb-a {
+  width: 560px;
+  height: 560px;
+  top: -220px;
+  left: 12%;
+  background: radial-gradient(circle, rgba(232, 168, 0, 0.24), transparent 68%);
+  animation: orb-drift-a 26s ease-in-out infinite alternate;
+}
+
+.orb-b {
+  width: 680px;
+  height: 680px;
+  right: -220px;
+  bottom: -260px;
+  background: radial-gradient(circle, rgba(51, 103, 207, 0.2), transparent 68%);
+  animation: orb-drift-b 34s ease-in-out infinite alternate;
+}
+
+.orb-c {
+  width: 420px;
+  height: 420px;
+  top: 38%;
+  left: 58%;
+  background: radial-gradient(circle, rgba(64, 180, 158, 0.14), transparent 70%);
+  animation: orb-drift-c 22s ease-in-out infinite alternate;
+}
+
+@keyframes orb-drift-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(90px, 60px, 0) scale(1.12); }
+}
+
+@keyframes orb-drift-b {
+  from { transform: translate3d(0, 0, 0) scale(1.05); }
+  to { transform: translate3d(-120px, -70px, 0) scale(0.94); }
+}
+
+@keyframes orb-drift-c {
+  from { transform: translate3d(0, 0, 0) scale(0.96); }
+  to { transform: translate3d(-70px, 90px, 0) scale(1.1); }
+}
+
+/* la barre latérale reste collée en haut : sa hauteur couvre toujours l'écran,
+   même lorsque la page défile (sinon un vide apparaît sous la déconnexion). */
+.shell > .sidebar {
+  position: sticky;
+  z-index: 1;
+}
+
+.shell > .main {
+  position: relative;
+  z-index: 1;
+}
+
+/* --------------------------------------------------------- nav glissante */
+.sidebar nav {
+  position: relative;
+}
+
+.nav-marker {
+  position: absolute;
+  inset-inline-start: -1px;
+  top: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  box-shadow: 0 0 14px rgba(232, 168, 0, 0.55);
+  transition: transform 0.34s cubic-bezier(0.22, 0.7, 0.3, 1),
+    height 0.34s cubic-bezier(0.22, 0.7, 0.3, 1);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.nav-marker::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  transform: translate(calc(-50% + 1.5px), -50%);
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(232, 168, 0, 0.8);
+}
+
+/* la pastille remplace le trait statique de l'élément actif */
+.sidebar nav .nav-item.active::before {
+  display: none;
+}
+
+.nav-item.active svg {
+  transform: scale(1.06);
+}
+
+/* --------------------------------------------------- barre latérale affinée */
+.sidebar {
+  gap: 20px;
+}
+
+.sidebar .brand {
+  padding: 4px 10px 18px;
+}
+
+.sidebar .brand-logo {
+  width: 168px;
+}
+
+.sidebar nav {
+  gap: 5px;
+}
+
+.sidebar nav .nav-item {
+  padding: 8px 11px;
+}
+
+.sidebar nav .nav-item svg {
+  width: 28px;
+  height: 28px;
+  padding: 5.5px;
+  border-radius: 9px;
+  background: rgba(51, 103, 207, 0.06);
+  transition: color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.sidebar nav .nav-item:hover svg {
+  background: rgba(51, 103, 207, 0.12);
+}
+
+.sidebar nav .nav-item.active svg {
+  background: rgba(232, 168, 0, 0.18);
+  transform: scale(1.04);
+}
+
+:root[data-theme="dark"] .sidebar nav .nav-item svg {
+  background: rgba(110, 160, 255, 0.08);
+}
+
+:root[data-theme="dark"] .sidebar nav .nav-item:hover svg {
+  background: rgba(110, 160, 255, 0.14);
+}
+
+:root[data-theme="dark"] .sidebar nav .nav-item.active svg {
+  background: rgba(240, 180, 41, 0.16);
+}
+
+/* ------------------------------------------- page « Pourquoi l'exclusion ? »
+   La colonne de droite (graphique + encart Ask Finova) s'étire sur la hauteur
+   du tableau voisin : plus de zone vide sous le graphique. */
+.exclusion-grid .chart-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  align-self: stretch;
+}
+
+/* la carte du tableau s'étire aussi : les deux colonnes finissent au même niveau */
+.exclusion-grid > .chart-slot:first-child {
+  align-self: stretch;
+}
+
+.exclusion-grid .chart-stack > .chart-slot {
+  flex: 0 0 auto;
+}
+
+.exclusion-grid .chart-stack > .ask-inline {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* --------------------------------------------------------- lecture + barre */
+.topbar {
+  transition: background 0.25s ease, box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.topbar.is-scrolled {
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom-color: rgba(203, 218, 238, 0.95);
+  box-shadow: 0 18px 38px -30px rgba(11, 31, 61, 0.7);
+}
+
+.topbar-crumb strong {
+  animation: rise-in 0.35s cubic-bezier(0.22, 0.7, 0.3, 1);
+}
+
+.read-progress {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 2px;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 45%, var(--series) 100%);
+  box-shadow: 0 1px 8px rgba(232, 168, 0, 0.55);
+  pointer-events: none;
+  z-index: 3;
+}
+
+html[dir="rtl"] .read-progress {
+  transform-origin: right center;
+}
+
+/* ------------------------------------------------------- halos au survol */
+.panel,
+.chart-card,
+.info-card,
+.source-card {
+  position: relative;
+}
+
+.panel::before,
+.chart-card::before,
+.info-card::before,
+.source-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    360px circle at var(--mx, 72%) var(--my, 0%),
+    rgba(51, 103, 207, 0.12),
+    rgba(232, 168, 0, 0.05) 42%,
+    transparent 66%
+  );
+  opacity: 0;
+  transition: opacity 0.38s ease;
+}
+
+.panel:hover::before,
+.chart-card:hover::before,
+.info-card:hover::before,
+.source-card:hover::before {
+  opacity: 1;
+}
+
+.metric-card::after {
+  top: var(--my, 24%);
+  right: auto;
+  left: var(--mx, 82%);
+  width: 320px;
+  height: 320px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    circle,
+    rgba(51, 103, 207, 0.16),
+    rgba(232, 168, 0, 0.06) 46%,
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.metric-card:hover::after {
+  opacity: 1;
+}
+
+.metric-card::before {
+  background-size: 220% 100%;
+  animation: line-shimmer 7s ease-in-out infinite;
+}
+
+.chart-card {
+  transition: box-shadow 0.24s ease, border-color 0.24s ease, transform 0.24s ease;
+}
+
+.chart-card:hover {
+  transform: translateY(-2px);
+}
+
+.info-card {
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.info-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 34px -26px rgba(15, 45, 90, 0.55);
+}
+
+/* --------------------------------------------------------- boutons, FAB */
+.primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.primary-btn.is-busy {
+  pointer-events: none;
+}
+
+.primary-btn.is-busy::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid rgba(42, 30, 0, 0.25);
+  border-top-color: #2a1e00;
+  animation: spin 0.7s linear infinite;
+}
+
+.ask-fab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ask-fab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2a1e00;
+  animation: fab-dot 2.4s ease-out infinite;
+}
+
+@keyframes fab-dot {
+  0% { box-shadow: 0 0 0 0 rgba(42, 30, 0, 0.35); }
+  70%, 100% { box-shadow: 0 0 0 7px rgba(42, 30, 0, 0); }
+}
+
+.ask-fab-key,
+.kbd {
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(42, 30, 0, 0.22);
+  background: rgba(255, 255, 255, 0.28);
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.ask-head-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ask-dock .kbd {
+  border-color: var(--border);
+  background: var(--card-inner);
+  color: var(--muted);
+}
+
+.ask-dock > header {
+  background-image: linear-gradient(120deg, rgba(232, 168, 0, 0.12), transparent 62%);
+}
+
+.bubble {
+  animation: bubble-in 0.3s cubic-bezier(0.22, 0.8, 0.3, 1) backwards;
+}
+
+@keyframes bubble-in {
+  from { opacity: 0; transform: translateY(7px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ------------------------------------------------------------- insights */
+.insight-list li {
+  animation: rise-in 0.45s cubic-bezier(0.22, 0.7, 0.3, 1) backwards;
+}
+
+.insight-list li:nth-child(2) { animation-delay: 0.05s; }
+.insight-list li:nth-child(3) { animation-delay: 0.1s; }
+.insight-list li:nth-child(4) { animation-delay: 0.15s; }
+.insight-list li:nth-child(5) { animation-delay: 0.2s; }
+
+/* --------------------------------------------------------------- courbes */
+.heatmap tbody tr {
+  animation: soft-fade 0.5s ease backwards;
+}
+
+.heatmap tbody tr:nth-child(2) { animation-delay: 0.05s; }
+.heatmap tbody tr:nth-child(3) { animation-delay: 0.1s; }
+.heatmap tbody tr:nth-child(4) { animation-delay: 0.15s; }
+.heatmap tbody tr:nth-child(5) { animation-delay: 0.2s; }
+.heatmap tbody tr:nth-child(6) { animation-delay: 0.25s; }
+
+.db-link {
+  transform-origin: left center;
+  animation: grow-link 0.9s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+html[dir="rtl"] .db-link {
+  transform-origin: right center;
+}
+
+@keyframes grow-link {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.db-dot {
+  animation: dot-pop 0.5s 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.25) backwards;
+}
+
+@keyframes dot-pop {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+
+.bar-fill {
+  transition: filter 0.15s ease;
+}
+
+.bar-fill:hover {
+  filter: brightness(1.08);
+}
+
+.chart-svg .point-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.15s ease;
+}
+
+.chart-svg .point-dot:hover {
+  transform: scale(1.35);
+}
+
+/* ---------------------------------------------------------- chargement */
+.loading-screen {
+  min-height: 56vh;
+}
+
+.loading-orbit {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  margin-bottom: 6px;
+}
+
+.loading-orbit::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--accent);
+  border-right-color: rgba(51, 103, 207, 0.45);
+  animation: spin 1.5s linear infinite;
+}
+
+.loading-orbit::after {
+  content: "";
+  position: absolute;
+  inset: 11px;
+  border-radius: 50%;
+  border: 1px dashed rgba(51, 103, 207, 0.28);
+  animation: spin 9s linear infinite reverse;
+}
+
+.loading-core {
+  width: 52px;
+  height: 52px;
+  border-radius: 15px;
+  object-fit: cover;
+  box-shadow: 0 16px 32px -16px rgba(15, 45, 90, 0.65),
+    0 0 0 6px rgba(255, 255, 255, 0.75);
+  animation: core-breathe 3.2s ease-in-out infinite;
+}
+
+@keyframes core-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+.loading-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(920px, 100%);
+  margin-top: 26px;
+  opacity: 0.72;
+  animation: soft-fade 0.6s 0.15s ease backwards;
+}
+
+.loading-skeleton .sk-grid {
+  width: 100%;
+}
+
+.sk-grid > .sk-card:nth-child(2) { animation-delay: -0.2s; }
+.sk-grid > .sk-card:nth-child(3) { animation-delay: -0.45s; }
+.sk-grid > .sk-card:nth-child(4) { animation-delay: -0.7s; }
+
+/* --------------------------------------------------------------- connexion */
+.login-card {
+  transition: box-shadow 0.3s ease;
+  animation: login-card-in 0.7s cubic-bezier(0.22, 0.7, 0.3, 1) backwards,
+    card-glow 7s 1.4s ease-in-out infinite;
+}
+
+@keyframes card-glow {
+  0%, 100% {
+    box-shadow: 0 34px 80px -28px rgba(3, 12, 32, 0.65),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+  50% {
+    box-shadow: 0 38px 90px -28px rgba(3, 12, 32, 0.7),
+      0 0 0 6px rgba(232, 168, 0, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+}
+
+.login-card::after {
+  content: "";
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: -55%;
+  width: 42%;
+  background: linear-gradient(100deg, transparent, rgba(232, 168, 0, 0.16), transparent);
+  transform: skewX(-13deg);
+  animation: card-sheen 9s 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes card-sheen {
+  0%, 62% { left: -55%; }
+  84%, 100% { left: 130%; }
+}
+
+.login-word {
+  background-size: 220% 100%;
+  animation: logo-sheen 7s ease-in-out infinite;
+}
+
+@keyframes logo-sheen {
+  0%, 100% { background-position: 0% 0; }
+  50% { background-position: 100% 0; }
+}
+
+.login-media video {
+  animation: login-video-in 1400ms ease both,
+    login-video-drift 32s ease-in-out infinite alternate;
+}
+
+@keyframes login-video-drift {
+  from { transform: scale(1); }
+  to { transform: scale(1.055); }
+}
+
+.login-card input {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.login-card input:focus {
+  transform: translateY(-1px);
+}
+
+.login-field svg {
+  transition: color 0.18s ease, transform 0.18s ease;
+}
+
+.login-field:focus-within svg {
+  color: var(--accent-ink);
+  transform: scale(1.06);
+}
+
+.login-card .auth-subtitle {
+  animation: rise-in 0.55s 0.12s cubic-bezier(0.22, 0.7, 0.3, 1) backwards;
+}
+
+.login-card form > label {
+  animation: rise-in 0.5s cubic-bezier(0.22, 0.7, 0.3, 1) backwards;
+}
+
+.login-card form > label:nth-of-type(1) { animation-delay: 0.16s; }
+.login-card form > label:nth-of-type(2) { animation-delay: 0.22s; }
+.login-card form > label:nth-of-type(3) { animation-delay: 0.28s; }
+
+.auth-error {
+  animation: field-shake 0.4s ease;
+}
+
+@keyframes field-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  55% { transform: translateX(3px); }
+  80% { transform: translateX(-2px); }
+}
+
+/* ------------------------------------------------------------ thème sombre */
+:root[data-theme="dark"] .orb-a {
+  background: radial-gradient(circle, rgba(232, 168, 0, 0.13), transparent 68%);
+}
+
+:root[data-theme="dark"] .orb-b {
+  background: radial-gradient(circle, rgba(70, 122, 232, 0.16), transparent 68%);
+}
+
+:root[data-theme="dark"] .orb-c {
+  background: radial-gradient(circle, rgba(64, 180, 158, 0.09), transparent 70%);
+}
+
+:root[data-theme="dark"] .topbar.is-scrolled {
+  background: rgba(14, 28, 48, 0.92);
+  border-bottom-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 18px 40px -30px rgba(0, 0, 0, 0.9);
+}
+
+:root[data-theme="dark"] .panel::before,
+:root[data-theme="dark"] .chart-card::before,
+:root[data-theme="dark"] .info-card::before,
+:root[data-theme="dark"] .source-card::before {
+  background: radial-gradient(
+    360px circle at var(--mx, 72%) var(--my, 0%),
+    rgba(92, 146, 255, 0.16),
+    rgba(232, 168, 0, 0.05) 42%,
+    transparent 66%
+  );
+}
+
+:root[data-theme="dark"] .metric-card::after {
+  background: radial-gradient(
+    circle,
+    rgba(92, 146, 255, 0.2),
+    rgba(232, 168, 0, 0.06) 46%,
+    transparent 70%
+  );
+}
+
+:root[data-theme="dark"] .nav-marker {
+  box-shadow: 0 0 14px rgba(232, 168, 0, 0.7);
+}
+
+:root[data-theme="dark"] .loading-core {
+  box-shadow: 0 16px 32px -16px rgba(0, 0, 0, 0.8),
+    0 0 0 6px rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme="dark"] .ask-fab-key,
+:root[data-theme="dark"] .kbd {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+:root[data-theme="dark"] .ask-dock .kbd {
+  background: var(--card-inner);
+}
+
+:root[data-theme="dark"] .login-card {
+  animation: login-card-in 0.7s cubic-bezier(0.22, 0.7, 0.3, 1) backwards,
+    card-glow-dark 7s 1.4s ease-in-out infinite;
+}
+
+@keyframes card-glow-dark {
+  0%, 100% {
+    box-shadow: 0 34px 80px -28px rgba(0, 0, 0, 0.8),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+  50% {
+    box-shadow: 0 38px 90px -28px rgba(0, 0, 0, 0.85),
+      0 0 0 6px rgba(232, 168, 0, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* ---------------------------------------------------------------- adaptatif */
+@media (hover: none) {
+  .ask-fab-key {
+    display: none;
+  }
+}
+
+@media (max-width: 1024px) {
+  /* barre repliée : l'avatar seul identifie le compte, l'e-mail reste en infobulle */
+  .sidebar-user {
+    justify-content: center;
+    padding: 6px;
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .sidebar-user:hover {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .sidebar-user-info {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .login-media::after {
+    background:
+      linear-gradient(180deg, rgba(5, 10, 31, 0.74) 0%, rgba(5, 10, 31, 0.58) 55%, rgba(5, 10, 31, 0.86) 100%),
+      radial-gradient(circle at 30% 44%, rgba(5, 10, 31, 0.18), rgba(5, 10, 31, 0.55) 84%);
+  }
+
+  /* connexion mobile : formulaire visible sans avoir à faire défiler */
+  .login-brand {
+    padding: 96px 24px 22px;
+    gap: 14px;
+  }
+
+  /* priorité au formulaire : le texte d'introduction reste sur tablette et bureau */
+  .login-brand p {
+    display: none;
+  }
+
+  .login-logo {
+    width: min(184px, 46vw);
+  }
+
+  /* sur la connexion, le sélecteur de thème n'a pas la place de cohabiter
+     avec le logo : il reste disponible dans la barre supérieure après connexion */
+  .login .theme-switch {
+    display: none;
+  }
+
+  .login-card {
+    padding: 28px 22px;
+    margin-bottom: 28px;
+  }
+
+  .login-card form {
+    gap: 14px;
+    margin-top: 20px;
+  }
+
+  /* le bouton Ask Finova ne masque plus la fin de la page */
+  .content {
+    padding-bottom: 104px;
+  }
+
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .app-ambient .orb-c {
+    display: none;
+  }
+
+  .ambient-orb {
+    filter: blur(70px);
+  }
+
+  .loading-skeleton {
+    display: none;
+  }
+
+  .ask-fab-key {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------- fiche « Pourquoi ? »
+   La fiche est rendue dans un portail : elle flotte au-dessus de l'interface
+   au lieu d'être coincée dans la carte (qui crée un contexte de position). */
+.sheet-overlay.explain-overlay {
+  align-items: center;
+  padding: 32px 24px;
+  background: rgba(6, 14, 32, 0.48);
+  backdrop-filter: blur(6px);
+}
+
+.sheet.explain-sheet {
+  width: min(780px, 100%);
+  max-height: min(86vh, 860px);
+  border-radius: 22px;
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 44px 100px -36px rgba(9, 30, 66, 0.6);
+  animation: explain-in 0.26s cubic-bezier(0.22, 0.7, 0.3, 1);
+}
+
+@keyframes explain-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.explain-sheet .sheet-head {
+  gap: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.explain-sheet .sheet-head h3 {
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+}
+
+.explain-sheet .icon-btn {
+  flex: none;
+}
+
+.explain-sheet .explain-body {
+  gap: 10px;
+}
+
+html[dir="rtl"] .explain-sheet {
+  direction: rtl;
+}
+
+@media (max-width: 760px) {
+  .sheet-overlay.explain-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .sheet.explain-sheet {
+    width: 100%;
+    max-height: 90vh;
+    border-radius: 20px 20px 0 0;
+    border-bottom: 0;
+  }
+}
+
+/* -------------------------------------------------------------- mouvement */
+@media (prefers-reduced-motion: reduce) {
+  .ambient-orb,
+  .nav-marker,
+  .ask-fab-dot,
+  .loading-orbit::before,
+  .loading-orbit::after,
+  .loading-core,
+  .login-card,
+  .login-card::after,
+  .topbar-crumb strong,
+  .login-word,
+  .login-media video,
+  .bubble,
+  .insight-list li,
+  .heatmap tbody tr,
+  .db-link,
+  .db-dot,
+  .metric-card::before,
+  .loading-skeleton,
+  .explain-sheet {
+    animation: none !important;
+  }
+
+  .login-card,
+  .login-card input:focus,
+  .chart-card:hover,
+  .info-card:hover {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .nav-marker {
+    transition: none !important;
+  }
+
+  .panel::before,
+  .chart-card::before,
+  .info-card::before,
+  .source-card::before,
+  .metric-card::after {
+    display: none !important;
+  }
+}

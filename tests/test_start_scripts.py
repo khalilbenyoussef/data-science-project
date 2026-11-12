@@ -15,7 +15,7 @@ def test_start_checks_env_build_port_and_records_pid():
     for needle in (r".venv\Scripts\python.exe", r"dashboard_app\web\dist\index.html",
                    "Get-NetTCPConnection -LocalPort $Port -State Listen", "OwningProcess",
                    '$env:PYTHONPATH = "src"', '"--host", "127.0.0.1"', "$Port = 8000",
-                   "dashboard_app.api.app:app", ".finova.pid", "/api/health"):
+                   "dashboard_app.api.app:app", ".finova.pid", "/login"):
         assert needle in start, needle
 
 

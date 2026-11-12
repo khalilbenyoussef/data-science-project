@@ -20,3 +20,7 @@ fastapi>=0.115
 uvicorn>=0.30
 python-multipart>=0.0.18   # depots CSV de la page « Mes donnees » (multipart)
 reportlab>=5.1                 # rapports PDF construits a la demande (API, jamais pendant un run)
+
+# Finova auth (module independant du warehouse analytique)
+PyJWT>=2.9                     # jetons d'acces signes HS256
+argon2-cffi>=23.1              # hachage des mots de passe (Argon2id)

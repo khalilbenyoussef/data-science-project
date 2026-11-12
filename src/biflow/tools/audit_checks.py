@@ -621,7 +621,7 @@ def catalog_checks(rows: list[dict[str, Any]], catalog: Mapping[str, Any], catal
     for kpi_id, kpi in catalog["kpis"].items():
         verification = kpi.get("verification") or {}
         if verification.get("status") == "provisional":
-            issues.append({"kpi_id": kpi_id, "reason": "définition provisoire"})
+            issues.append({"kpi_id": kpi_id, "reason": "definition provisoire"})
         if verification.get("status") == USER_STATUS and (
                 not str(kpi["warehouse"]["source"]).startswith("user:")
                 or (kpi.get("formula") or {}).get("from_fact") != "value"):

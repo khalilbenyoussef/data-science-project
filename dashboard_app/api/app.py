@@ -16,21 +16,23 @@ from pathlib import Path
 from typing import Any, Mapping
 
 import duckdb
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
+from dashboard_app.auth import (
+    AuthService, create_auth_router, load_settings, require_user,
+)
 from biflow.agents.ask import (
-    ChatRequest, SessionBudget, answer_chat, ask_settings, available_ask_provider, build_ask_llm,
+    ChatRequest, SessionBudget, answer_chat, ask_settings, build_ask_llm,
 )
 from biflow.config import ROOT, load_config, resolve
 from biflow.tools.dashboard_spec import COUNTRY_LABELS, PEERS, REFERENCE_PATH
 from biflow.tools.audit_text import template_text
 from biflow.tools.deliverables import load_context
 from biflow.tools.user_sources.data import UserData
-from dashboard_app.api.ask_mode import UserDataModes, create_ask_mode_router
 from dashboard_app.api.audit import create_audit_router
 from dashboard_app.api.pipeline import create_pipeline_router
 from dashboard_app.api.reports import create_reports_router
@@ -93,12 +95,9 @@ def create_app(
     ask_model: Any | None = None,
     sources_runner: Any | None = None,
     audit_dir: str | Path | None = None,
-    config: Mapping[str, Any] | None = None,
-    ask_user_model: Any | None = None,
-    ask_provider: str | None = None,
-    consent_log: str | Path | None = None,
+    auth_db: str | Path | None = None,
 ) -> FastAPI:
-    cfg = dict(config) if config is not None else load_config()
+    cfg = load_config()
     dashboard = cfg.get("dashboard") or {}
     paths = cfg.get("paths") or {}
     spec_file = resolve(
@@ -160,9 +159,15 @@ def create_app(
         allow_origins=[
             "http://127.0.0.1:5173", "http://localhost:5173",
         ],
-        allow_methods=["GET", "POST"],
-        allow_headers=["*"],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
     )
+
+    # Authentification : base SQLite dédiée, indépendante du warehouse DuckDB.
+    auth = AuthService(load_settings(auth_db))
+    app.state.auth = auth
+    app.include_router(create_auth_router(auth))
 
     cache: dict[tuple[str, int], dict[str, Any]] = {}
     survey_cache: dict[tuple[str, float], list[int]] = {}
@@ -273,7 +278,7 @@ def create_app(
         payload["survey_years"] = findex_years(wanted_iso)
         return payload, source
 
-    @app.get("/api/health")
+    @app.get("/api/health", dependencies=[Depends(require_user)])
     def health() -> dict[str, Any]:
         exists = spec_file.is_file()
         return {
@@ -284,7 +289,7 @@ def create_app(
             "warehouse_present": warehouse.is_file(),
         }
 
-    @app.get("/api/spec")
+    @app.get("/api/spec", dependencies=[Depends(require_user)])
     def get_spec(
         iso3: str | None = Query(default=None, min_length=3, max_length=3),
         year: int | None = Query(default=None, ge=2000, le=2100),
@@ -292,7 +297,7 @@ def create_app(
         payload, source = resolve_spec(iso3, year)
         return JSONResponse(content=payload, headers={"X-Finova-Source": source})
 
-    @app.get("/api/runs")
+    @app.get("/api/runs", dependencies=[Depends(require_user)])
     def get_runs(limit: int = Query(default=20, ge=1, le=100)) -> dict[str, Any]:
         runs: list[dict[str, Any]] = []
         if reports.is_dir():
@@ -322,41 +327,29 @@ def create_app(
 
     # page « Mes données » : sources CSV de l'utilisateur (recalcul en arriere-plan)
     sources_router, source_jobs = create_sources_router(cfg, warehouse=warehouse, runner=sources_runner)
-    app.include_router(sources_router)
+    app.include_router(sources_router, dependencies=[Depends(require_user)])
     # page « Sources et qualité » : frise des agents du dernier run, relance de la demonstration
     # (meme recalcul hors ligne que les sources utilisateur ; 409 si un recalcul est en cours)
-    app.include_router(create_pipeline_router(context=lambda: load_context(cfg), jobs=source_jobs))
+    app.include_router(create_pipeline_router(context=lambda: load_context(cfg), jobs=source_jobs),
+                       dependencies=[Depends(require_user)])
     # page « Audit et confiance » : rapport d'audit, kpi_values et explications (lecture seule)
     audit_root = resolve(audit_dir if audit_dir is not None else paths.get("audit", "data/audit"))
-    app.include_router(create_audit_router(audit_dir=audit_root, warehouse=warehouse, spec_file=spec_file))
+    app.include_router(create_audit_router(audit_dir=audit_root, warehouse=warehouse, spec_file=spec_file),
+                       dependencies=[Depends(require_user)])
     # pistes de recommandation (regles deterministes sur kpi_values auditees), lecture seule
     app.include_router(create_reports_router(warehouse=warehouse, audit_dir=audit_root, spec_file=spec_file,
-                                             spec_for=resolve_spec, user_data=UserData(cfg, warehouse)))
+                                             spec_for=resolve_spec, user_data=UserData(cfg, warehouse)),
+                       dependencies=[Depends(require_user)])
 
     settings = ask_settings(cfg)
     user_data = UserData(cfg, warehouse)  # « Mes donnees » : lecture seule, toujours etiquetee
     budget = SessionBudget(settings["max_calls_per_session"])
     chat_llm: dict[str, Any] = {}
 
-    def ask_llm(with_user_tool: bool = False) -> Any | None:
-        """Deux modeles : sans l'outil utilisateur (defaut) et avec, pour les seules
-        sessions qui ont donne leur consentement."""
-        key = "user" if with_user_tool else "model"
-        if key not in chat_llm:
-            if with_user_tool:
-                chat_llm[key] = (ask_user_model if ask_user_model is not None else ask_model if ask_model is not None
-                                 else build_ask_llm(cfg, with_user_tool=True))
-            else:
-                chat_llm[key] = ask_model if ask_model is not None else build_ask_llm(cfg)
-        return chat_llm[key]
-
-    # « Vos donnees : IA externe » : choix par session, consentement obligatoire, en memoire
-    modes = UserDataModes(
-        switch_available=settings["user_data_llm_switch"], suggested=settings["suggest_user_data_llm"],
-        provider=(lambda: ask_provider) if ask_model is not None else (lambda: available_ask_provider(cfg)),
-        log_path=resolve(consent_log if consent_log is not None
-                         else Path(paths.get("logs", "outputs/logs")) / "user_data_consent.log"))
-    app.include_router(create_ask_mode_router(modes))
+    def ask_llm() -> Any | None:
+        if "model" not in chat_llm:
+            chat_llm["model"] = ask_model if ask_model is not None else build_ask_llm(cfg)
+        return chat_llm["model"]
 
     def explain_reader(kpi_id: str, iso3: str, year: int, lang: str) -> str | None:
         """Explication stockee par l'Auditor (kpi_explanations), lecture seule."""
@@ -371,17 +364,14 @@ def create_app(
             return None
         return template_text(json.loads(row[0]), lang) if row else None
 
-    @app.post("/api/ask")
+    @app.post("/api/ask", dependencies=[Depends(require_user)])
     def ask(payload: ChatRequest) -> dict[str, Any]:
         spec, source = resolve_spec(payload.iso3, payload.year)
         country = (spec.get("country") or {}).get("name") or "Tunisie"
-        # donnees utilisateur vers le LLM : uniquement si CETTE session a donne son consentement
-        consented = modes.enabled(payload.session_id) and modes.provider() is not None
         result = answer_chat(
             payload, lambda code, year: resolve_spec(code, year)[0],
-            iso3=_current_iso3(spec), year=_current_year(spec), llm=ask_llm(with_user_tool=consented),
-            budget=budget, settings={**settings, "allow_user_data_to_llm": consented},
-            explain_reader=explain_reader, user_data=user_data,
+            iso3=_current_iso3(spec), year=_current_year(spec), llm=ask_llm(),
+            budget=budget, settings=settings, explain_reader=explain_reader, user_data=user_data,
         )
         result.update({
             "iso3": _current_iso3(spec),
@@ -413,6 +403,21 @@ def create_app(
             "ui": "dashboard_app/web non construit (npm run build)",
             "root": str(ROOT),
         })
+
+    # Entrées SPA publiques : la page React décide ensuite d'afficher le formulaire
+    # ou le tableau de bord (les données restent protégées côté API).
+    def spa_index() -> Any:
+        page = dist_dir / "index.html"
+        if page.is_file():
+            return FileResponse(page)
+        return JSONResponse(
+            {"detail": "interface non construite (npm run build)"}, status_code=503,
+        )
+
+    for spa_route in (
+        "/login", "/forgot-password", "/reset-password", "/activate", "/admin/users",
+    ):
+        app.add_api_route(spa_route, spa_index, include_in_schema=False, methods=["GET"])
 
     if dist_dir.is_dir():
         app.mount("/", StaticFiles(directory=dist_dir, html=True), name="web")

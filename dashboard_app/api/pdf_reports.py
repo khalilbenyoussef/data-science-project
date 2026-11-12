@@ -13,7 +13,6 @@ de ce jeu (≥, −, espace fine) sont remplaces par un equivalent lisible.
 """
 from __future__ import annotations
 
-import re
 from io import BytesIO
 from typing import Any, Iterable, Mapping, Sequence
 from xml.sax.saxutils import escape
@@ -41,17 +40,10 @@ PUBLICATION = {"approved": "approuvée", "approved_with_review_note": "avec rés
 REPLACE = {"≥": ">=", "≤": "<=", "−": "-", "\u202f": "\u00a0", " ": " ", "→": "->", "✓": "oui", "✗": "non"}
 
 
-NBSP_BEFORE = re.compile(r" (?=%|pts?\b|[;:?!»])")
-
-
 def clean(value: Any) -> str:
     text = "" if value is None else str(value)
     for old, new in REPLACE.items():
         text = text.replace(old, new)
-    # typographie francaise : espace insecable avant « % », « pts », « ; », « : », « ? », « ! » et
-    # « » » (et apres « « ») : un signe ne commence jamais une ligne
-    text = NBSP_BEFORE.sub("\u00a0", text)
-    text = text.replace("« ", "«\u00a0")
     return text.encode("cp1252", errors="replace").decode("cp1252")
 
 
@@ -103,11 +95,6 @@ def grid(headers: Sequence[str], rows: Iterable[Sequence[Any]], widths: Sequence
         ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
     return table
-
-
-def _date(value: Any) -> str:
-    """Horodatage ISO lisible : « 2026-11-05 23:47:38 »."""
-    return str(value).replace("T", " ") if value else NA
 
 
 def named_check(check_id: Any) -> list[Paragraph]:
@@ -187,7 +174,7 @@ def evaluation_pdf(ctx: Context, summary: Mapping[str, Any], checks: Sequence[Ma
             ["Constats non auditables", n(insight.get("not_auditable"))],
         ], [90, 50]),
         P("1. Verdict d'audit", "h1"),
-        P(f"Verdict : {VERDICTS.get(verdict, verdict or NA)}. {n(counts.get('pass'))} contrôles "
+        P(f"Verdict : {VERDICTS.get(verdict, verdict or NA)} ({verdict or NA}). {n(counts.get('pass'))} contrôles "
           f"réussis, {n(counts.get('warn'))} avertissements, {n(counts.get('fail'))} échecs. Snapshot "
           f"{summary.get('snapshot_id') or NA}, run {summary.get('run_id') or NA}, catalogue "
           f"{summary.get('catalog_version') or NA}."),
@@ -207,7 +194,7 @@ def evaluation_pdf(ctx: Context, summary: Mapping[str, Any], checks: Sequence[Ma
     story += [P(f"3. Injection de fautes : {n(evaluation.get('detected'))}/{n(evaluation.get('total'))} "
                 "fautes détectées", "h1"),
               P("Chaque faute est injectée dans une copie des données ; l'Auditor doit la détecter avec le contrôle "
-                f"attendu. Mesure du {_date(evaluation.get('created_at'))}."
+                f"attendu. Mesure du {evaluation.get('created_at') or NA}."
                 + (f" Attention : {STALE}." if evaluation.get("stale") else ""), "body"),
               grid(["Faute injectée", "Contrôle attendu", "Détectée", "Verdict obtenu"],
                    [[f"{i}. {f.get('label')}", named_check(f.get("expected_check")),
@@ -225,7 +212,7 @@ def evaluation_pdf(ctx: Context, summary: Mapping[str, Any], checks: Sequence[Ma
               grid(["Constat", "Statut", "Indicateurs cités"],
                    [[r.get("statement"), "accepté" if r.get("accepted") is True else
                      "rejeté" if r.get("accepted") is False else "non auditable",
-                     " ; ".join(f"{c['kpi']} {c['iso3']} {c['year']}" for c in r.get("cited") or []) or "-"]
+                     "; ".join(f"{c['kpi']} {c['iso3']} {c['year']}" for c in r.get("cited") or []) or "-"]
                     for r in rows], [95, 22, 57])]
     story += [PageBreak(), P("5. Évaluation par agent", "h1"),
               grid(["Agent", "Mode", "Statut", "Durée", "Sortie clé", "LLM"],
@@ -238,7 +225,7 @@ def evaluation_pdf(ctx: Context, summary: Mapping[str, Any], checks: Sequence[Ma
               P(f"Tests unitaires (LLM simulé) : {n(unit.get('passed'))}/{n(unit.get('total'))} réussis"
                 if unit.get("total") else "Tests unitaires (LLM simulé) : non mesuré."),
               P(f"Contrôle en direct : {n(live.get('grounded'))}/{n(live.get('questions'))} réponses dont tous les "
-                f"nombres sont fondés, modèle {live.get('model')}, le {_date(live.get('run_at'))}."
+                f"nombres sont fondés, modèle {live.get('model')}, le {live.get('run_at')}."
                 if live.get("status") == "mesuré" else "Contrôle en direct : non mesuré (aucune clé LLM ou "
                                                         "contrôle non exécuté).")]
     base = ctx.baseline
@@ -250,9 +237,9 @@ def evaluation_pdf(ctx: Context, summary: Mapping[str, Any], checks: Sequence[Ma
             P(f"Recalcul naïf de 4 indicateurs depuis les CSV bruts (pandas), comparé à kpi_values : "
               f"{n(base.get('matched'))}/{n(base.get('compared'))} valeurs identiques (tolérance "
               f"{base.get('tolerance')}). Recalcul naïf {n(timing.get('naive_pandas'), 2)} s ; lecture de "
-              f"kpi_values {n(timing.get('kpi_values_read'), 3)} s. Mesure du {_date(base.get('created_at'))}."),
+              f"kpi_values {n(timing.get('kpi_values_read'), 3)} s. Mesure du {base.get('created_at')}."),
             grid(["Indicateur", "Valeurs comparées", "Identiques", "Temps Excel (manuel)"],
-                 [[(ctx.catalog["kpis"].get(k) or {}).get("name_fr") or k, n(v.get("compared")), n(v.get("matched")),
+                 [[k, n(v.get("compared")), n(v.get("matched")),
                    f"{n(manual.get(k), 1)} min" if isinstance(manual.get(k), (int, float)) else "non mesuré"]
                   for k, v in (base.get("by_kpi") or {}).items()], [60, 35, 30, 45])]
     else:
@@ -266,9 +253,9 @@ def insights_pdf(ctx: Context, scope: Mapping[str, Any], insights: Sequence[Mapp
                  recommendations: Mapping[str, Any], annex: Mapping[str, Any] | None = None) -> bytes:
     """Constats et pistes du perimetre choisi ; annexe facultative « vos données »."""
     label = f"{scope.get('country') or scope.get('iso3')} ({scope.get('iso3')}), {scope.get('year')}"
-    extra = [("Périmètre", label), ("Spec", f"générée le {_date(scope.get('generated_at'))}")]
+    extra = [("Périmètre", label), ("Spec", f"générée le {scope.get('generated_at') or NA}")]
     if annex is not None:
-        extra.append(("Annexe", f"vos données ({USER_CHIP})"))
+        extra.append(("Annexe", "vos données"))
     story = _cover("Constats et pistes de recommandation", label, ctx, extra)
     accepted = sum(1 for i in insights if i.get("accepted") is True)
     story += [P("1. Constats", "h1"),
@@ -285,7 +272,7 @@ def insights_pdf(ctx: Context, scope: Mapping[str, Any], insights: Sequence[Mapp
                   grid(["Constat", "Statut", "Indicateurs cités"],
                        [[i.get("statement"), "accepté" if i.get("accepted") is True else "rejeté"
                          if i.get("accepted") is False else "non auditable",
-                         " ; ".join(f"{c['kpi']} {c['iso3']} {c['year']}" for c in i.get("cited") or []) or "-"]
+                         "; ".join(f"{c['kpi']} {c['iso3']} {c['year']}" for c in i.get("cited") or []) or "-"]
                         for i in items], [95, 22, 57])]
     recs = recommendations.get("recommendations") or []
     story += [P("2. Pistes de recommandation", "h1"),
@@ -320,7 +307,7 @@ def _annex(annex: Mapping[str, Any], scope: Mapping[str, Any]) -> list[Any]:
     dans les constats ni dans les pistes officiels."""
     year = scope.get("year")
     story: list[Any] = [PageBreak(), P("Annexe : vos données", "h1"),
-                        P(f"{USER_CHIP}. Valeurs importées sur la page « Mes données » : BIFlow ne les vérifie pas "
+                        P("Vos données. Valeurs importées sur la page « Mes données » : BIFlow ne les vérifie pas "
                           "et elles ne font partie ni des constats ni des pistes officiels ci-dessus. Pour chaque "
                           f"indicateur : valeur de {year}, sinon de la dernière année antérieure (année indiquée).")]
     values = annex.get("values") or []
@@ -336,13 +323,11 @@ def _annex(annex: Mapping[str, Any], scope: Mapping[str, Any]) -> list[Any]:
         story += [P("Vos indicateurs face aux données officielles", "h2"), P(comp.get("note") or "", "small")]
         story.append(grid(["Votre indicateur (non vérifié)", "Valeur", "Indicateur officiel", "Valeur", "Note"],
                           [[r["label"], _user_value(r.get("user")), r["kpi"], _user_value(r.get("official")),
-                            " ; ".join(r.get("notes") or []) or "-"] for r in rows], [44, 26, 44, 26, 34]))
+                            "; ".join(r.get("notes") or []) or "-"] for r in rows], [44, 26, 44, 26, 34]))
         for r in rows:
             if r.get("definition"):
                 story.append(P(f"{r['kpi']} - définition officielle : {r['definition']}"
-                               + (f" Dénominateur : {r['denominator']}" if r.get("denominator") else ""), "small"))
-                if r.get("definition_en"):
-                    story.append(P(f"Source (EN) : {r['definition_en']}", "cellid"))
+                               + (f" Dénominateur : {r['denominator']}." if r.get("denominator") else ""), "small"))
     recs = annex.get("recommendations") or []
     if recs:
         story += [P("Pistes à partir de vos données", "h2")]

@@ -3,6 +3,8 @@ import type { RecommendationsResult } from "./types";
 import { fetchRecommendations } from "./api";
 import { fmtUnit } from "./format";
 import { UserChip } from "./ui";
+import { t } from "./i18n";
+import { plainText } from "./copy";
 
 // Pistes de recommandation de Vue d'ensemble : regles deterministes appliquees aux
 // valeurs auditees du pays et de l'annee affiches (GET /api/recommendations).
@@ -18,7 +20,7 @@ export function Recommendations({ iso3, year }: { iso3: string; year: number }) 
       .then(setData)
       .catch((err: unknown) => {
         if ((err as { name?: string })?.name === "AbortError") return;
-        setError(err instanceof Error ? err.message : "Pistes indisponibles");
+        setError(err instanceof Error ? err.message : String(err));
       });
     return () => controller.abort();
   }, [iso3, year]);
@@ -27,23 +29,28 @@ export function Recommendations({ iso3, year }: { iso3: string; year: number }) 
     <section className="panel recommendations" aria-labelledby="reco-title">
       <div className="panel-head">
         <div>
-          <h3 id="reco-title">Pistes de recommandation</h3>
+          <h3 id="reco-title">{t("Pistes de recommandation")}</h3>
           <p className="muted small">
-            Règles fixes appliquées aux valeurs auditées · association, pas causalité
+            {t("Règles fixes appliquées aux valeurs auditées · association, pas causalité")}
           </p>
         </div>
         {data && (
           <span className="muted small">
-            {data.recommendations.length} piste{data.recommendations.length > 1 ? "s" : ""} ·{" "}
-            {data.rules_checked} comparaisons
+            {data.recommendations.length > 1
+              ? t("{count} pistes", { count: data.recommendations.length })
+              : t("{count} piste", { count: data.recommendations.length })} ·{" "}
+            {t("{count} comparaisons", { count: data.rules_checked })}
           </span>
         )}
       </div>
-      {error && <p className="muted small">Pistes indisponibles : {error}</p>}
-      {!error && !data && <p className="muted small">Chargement des pistes…</p>}
+      {error && <p className="muted small">{t("Pistes indisponibles : {detail}", { detail: error })}</p>}
+      {!error && !data && <p className="muted small">{t("Chargement des pistes…")}</p>}
       {data && data.recommendations.length === 0 && (
         <p className="muted small">
-          Aucune règle déclenchée pour {data.country} en {data.year} : aucun écart ne dépasse les seuils.
+          {t("Aucune règle déclenchée pour {country} en {year} : aucun écart ne dépasse les seuils.", {
+            country: plainText(data.country),
+            year: data.year,
+          })}
         </p>
       )}
       {data && data.recommendations.length > 0 && (
@@ -52,22 +59,24 @@ export function Recommendations({ iso3, year }: { iso3: string; year: number }) 
             <li key={rec.id} className={rec.review_note ? "sev-review" : "sev-info"}>
               <span className="dot" />
               <div>
-                <p>{rec.text}</p>
+                <p>{plainText(rec.text)}</p>
                 <div className="reco-meta">
-                  <span className="reco-target">Groupe cible : {rec.target_group}</span>
-                  <span className="muted small">Règle : {rec.rule}</span>
+                  <span className="reco-target">{t("Groupe cible : {group}", { group: plainText(rec.target_group) })}</span>
+                  <span className="muted small">{t("Règle : {rule}", { rule: plainText(rec.rule) })}</span>
                 </div>
-                <div className="tag-row" aria-label="Sources">
+                <div className="tag-row" aria-label={t("Sources")}>
                   {rec.evidence.map((ev) => (
                     <code
                       key={ev.id}
                       title={`${ev.id} · ${
-                        ev.publication_status === "approved" ? "approuvée" : "approuvée avec réserve"
+                        ev.publication_status === "approved"
+                          ? t("approuvée")
+                          : t("approuvée avec réserve")
                       }`}
                     >
-                      {ev.kpi} · {ev.iso3 === "PEERS" ? "moyenne des pairs" : ev.iso3} · {ev.year} ·{" "}
+                      {plainText(ev.kpi)} · {ev.iso3 === "PEERS" ? t("moyenne des pairs") : ev.iso3} · {ev.year} ·{" "}
                       {fmtUnit(ev.value, ev.unit)}
-                      {ev.publication_status !== "approved" ? " · avec réserve" : ""}
+                      {ev.publication_status !== "approved" ? ` · ${t("avec réserve")}` : ""}
                     </code>
                   ))}
                 </div>
@@ -79,27 +88,26 @@ export function Recommendations({ iso3, year }: { iso3: string; year: number }) 
       {data && (data.user_recommendations?.length ?? 0) > 0 && (
         <div className="user-recommendations">
           <div className="panel-head">
-            <h4>À partir de vos données</h4>
+            <h4>{t("À partir de vos données")}</h4>
             <UserChip />
           </div>
           <p className="muted small">
-            Même logique de règles fixes, appliquée à vos indicateurs déclarés comparables, seulement quand
-            votre année est celle de la valeur officielle. Comparaison indicative.
+            {t("Même logique de règles fixes, appliquée à vos indicateurs déclarés comparables, seulement quand votre année est celle de la valeur officielle. Comparaison indicative.")}
           </p>
           <ul className="insight-list">
             {data.user_recommendations!.map((rec) => (
               <li key={rec.id} className="sev-info user-reco">
                 <span className="dot" />
                 <div>
-                  <p>{rec.text}</p>
+                  <p>{plainText(rec.text)}</p>
                   <div className="reco-meta">
-                    <span className="reco-target">Groupe cible : {rec.target_group}</span>
-                    <span className="muted small">Règle : {rec.rule}</span>
+                    <span className="reco-target">{t("Groupe cible : {group}", { group: plainText(rec.target_group) })}</span>
+                    <span className="muted small">{t("Règle : {rule}", { rule: plainText(rec.rule) })}</span>
                   </div>
-                  <div className="tag-row" aria-label="Sources">
+                  <div className="tag-row" aria-label={t("Sources")}>
                     {rec.evidence.map((ev) => (
                       <code key={ev.source} className={ev.source === "vos données" ? "user-fact" : undefined}>
-                        {ev.source} · {ev.year} · {fmtUnit(ev.value, ev.unit)}
+                        {plainText(ev.source)} · {ev.year} · {fmtUnit(ev.value, ev.unit)}
                       </code>
                     ))}
                   </div>

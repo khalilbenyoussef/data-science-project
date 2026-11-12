@@ -215,12 +215,11 @@ def test_demo_script_reads_its_numbers(ctx, monkeypatch):
     assert main.count("\n| ") == 1 + 9  # en-tete et 9 etapes (le separateur commence par |---)
     assert banker.count("\n| ") == 1 + 8 and "banque_fictive_exemple.csv" in banker
     assert "données fictives" in banker and "Mon indicateur mesure la même chose" in banker
-    for limit in ("aucune authentification réelle", "Niveau pays uniquement", "Vos données : IA externe"):
+    for limit in ("aucune authentification réelle", "Niveau pays uniquement", "llm.ask.allow_user_data_to_llm"):
         assert limit in banker
-    assert "llm.ask.allow_user_data_to_llm" not in banker  # plus de configuration a modifier : un interrupteur
     assert "Détention d'un compte : 37,8 %" in text and "MAR 44,4 %" in text
     assert "Écart hommes − femmes : 23,0 pts ; revenu : 27,0 pts" in text
     assert "1 pistes ; ex. groupe cible « femmes »" in text
-    assert "conforme : 18 réussis, 1 avertissements, 0 échecs" in text and "fautes 9/9" in text
+    assert "pass : 18 réussis, 1 avertissements, 0 échecs" in text and "fautes 9/9" in text
     assert "contrôle en direct non mesuré" in text and "| 9:30–10:00 | Conclusion | — |" in text
     assert dl.TARGETS["DEMO.md"] == "docs/DEMO.md"

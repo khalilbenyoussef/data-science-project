@@ -230,13 +230,6 @@ export interface AskPayload {
   rules: string[];
 }
 
-export interface SimulatorPayload {
-  default_fee_tnd: number;
-  smig_reference: { value: number; year: number; source: string };
-  formula: string;
-  rules: string[];
-}
-
 export interface PipelinePayload {
   route1: { id: string; label: string; status: string; detail: string }[];
   route2: { id: string; label: string; status: string; detail: string }[];
@@ -423,23 +416,12 @@ export interface IndicatorChoice {
   same_definition?: boolean;
 }
 
-export interface UserDataMode {
-  enabled: boolean;
-  switch_available: boolean;
-  llm_available: boolean;
-  provider: string | null;
-  suggested: boolean;
-  reason: string | null;
-}
-
 export interface ComparableKpi {
   id: string;
   name_fr: string;
   unit: string;
   definition: string | null;
   denominator: string | null;
-  definition_en?: string | null;
-  denominator_en?: string | null;
 }
 
 export interface ComparisonValue {
@@ -459,7 +441,6 @@ export interface ComparisonRow {
   kpi: string;
   definition: string | null;
   denominator: string | null;
-  definition_en?: string | null;
   user: ComparisonValue | null;
   official: ComparisonValue | null;
   status: "ok" | "unit_mismatch" | "unknown_kpi" | "no_user_value" | "no_official_value";

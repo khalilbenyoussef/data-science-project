@@ -50,17 +50,20 @@ if ($listener) {
 # 4. Lancement (PYTHONPATH=src, depuis la racine du projet)
 New-Item -ItemType Directory -Force (Split-Path $logOut) | Out-Null
 $env:PYTHONPATH = "src"
+# Les liens d'invitation/reset envoyes par email doivent pointer vers ce port.
+$env:BIFLOW_PUBLIC_URL = $url
 $process = Start-Process -FilePath $python -WorkingDirectory $root -WindowStyle Hidden -PassThru `
     -RedirectStandardOutput $logOut -RedirectStandardError $logErr `
     -ArgumentList @("-m", "uvicorn", "dashboard_app.api.app:app", "--host", "127.0.0.1", "--port", "$Port")
 Set-Content -Path $pidFile -Value $process.Id -Encoding ascii
 
-# 5. Attente de l'API (60 s max)
+# 5. Attente de l'API (60 s max). /api/health est protégé : on sonde la page
+#    publique de connexion, servie par le même serveur.
 $ready = $false
 for ($i = 0; $i -lt 120; $i++) {
     if ($process.HasExited) { break }
     try {
-        Invoke-WebRequest -Uri "$url/api/health" -UseBasicParsing -TimeoutSec 2 | Out-Null
+        Invoke-WebRequest -Uri "$url/login" -UseBasicParsing -TimeoutSec 2 | Out-Null
         $ready = $true
         break
     } catch {

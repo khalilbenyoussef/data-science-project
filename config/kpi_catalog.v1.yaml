@@ -1,9 +1,9 @@
 # Declarative definitions only. No calculations, publication decisions or agents execute this file.
 schema_version: 1
-catalog_version: "1.8.0"
+catalog_version: "1.7.0"
 catalog_id: biflow_core_kpis
 created_on: "2026-10-22"
-updated_on: "2026-11-05"
+updated_on: "2026-11-04"
 status: draft
 scope: country_year_total_population_and_subgroup_gaps
 versioning:
@@ -262,7 +262,6 @@ kpis:
     name_fr: "Taux de détention d'un compte"
     business_objective: financial_inclusion
     definition: Share of adults owning a bank or similar financial-institution account or a mobile-money account.
-    definition_fr: "Part des adultes qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
     verification:
       status: verified
       evidence: [findex_2025_book, etl_contract]
@@ -281,7 +280,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: account_own}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -299,7 +297,6 @@ kpis:
     name_fr: "Densité des agences des banques commerciales"
     business_objective: banking_infrastructure
     definition: Number of commercial-bank branches per 100000 adults, as reported by IMF FAS.
-    definition_fr: "Nombre d'agences des banques commerciales pour 100 000 adultes, tel que publié par le FAS du FMI."
     verification:
       status: verified_metadata
       evidence: [fas_raw_metadata, etl_contract]
@@ -319,7 +316,6 @@ kpis:
     formula: {from_fact: value, from_wide: brch_per_100k}
     unit: per_100k_adults
     denominator: {population: adult population used by FAS, basis: published_count_per_100000_adults}
-    denominator_fr: "Population adulte retenue par le FAS ; nombre publié pour 100 000 adultes."
     subgroup: commercial_banks_all_adults
     reference_period: annual observation; exact within-year reference date follows FAS metadata
     valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
@@ -337,7 +333,6 @@ kpis:
     name_fr: "Paiement numérique effectué ou reçu"
     business_objective: digital_finance
     definition: Share of adults who made or received a digital payment in the past year, across the payment purposes included by Findex.
-    definition_fr: "Part des adultes qui ont effectué ou reçu un paiement numérique au cours de l'année écoulée, pour les motifs de paiement retenus par le Findex."
     verification:
       status: verified
       evidence: [findex_2025_glossary, etl_contract]
@@ -356,7 +351,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: digital_payment}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: past_year
     valid_years: [2014, 2017, 2021, 2022, 2024]
@@ -375,7 +369,6 @@ kpis:
     name_fr: "Épargne (toute forme)"
     business_objective: savings_deposits
     definition: Share of adults who personally saved or set aside any money, for any reason and using any mode of saving, in the past year.
-    definition_fr: "Part des adultes qui ont personnellement épargné ou mis de l'argent de côté, pour quelque raison et par quelque moyen d'épargne que ce soit, au cours de l'année écoulée."
     verification:
       status: verified
       evidence: [findex_2025_glossary_save_any, etl_contract]
@@ -396,7 +389,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: savings}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: past_year
     valid_years: [2014, 2017, 2021, 2022, 2024]
@@ -415,7 +407,6 @@ kpis:
     name_fr: "Emprunt (toute forme)"
     business_objective: credit
     definition: Share of adults who borrowed any money, alone or together with someone else, for any reason and from any source in the past year.
-    definition_fr: "Part des adultes qui ont emprunté de l'argent, seuls ou avec quelqu'un d'autre, pour quelque raison et auprès de quelque source que ce soit, au cours de l'année écoulée."
     verification:
       status: verified
       evidence: [findex_2025_glossary_borrow_any, etl_contract]
@@ -436,7 +427,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: borrowing}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: past_year
     valid_years: [2014, 2017, 2021, 2022, 2024]
@@ -455,7 +445,6 @@ kpis:
     name_fr: "Adultes sans compte"
     business_objective: financial_exclusion_vulnerability
     definition: Complement of account ownership in the same population and year; includes adults with neither a bank/similar account nor mobile money.
-    definition_fr: "Complément de la détention d'un compte dans la même population et la même année ; comprend les adultes qui n'ont ni compte bancaire ou assimilé, ni monnaie mobile."
     verification:
       status: derived_verified
       evidence: [findex_2025_book, etl_contract]
@@ -475,7 +464,6 @@ kpis:
     formula: {from_fact: "100 * (1 - value)", from_wide: "100 - account_own"}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: same_as_account_ownership
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -493,7 +481,6 @@ kpis:
     name_fr: "Épargne auprès d'une institution financière"
     business_objective: savings_deposits
     definition: Share of adults who saved or set aside any money at a bank or similar financial institution in the past year.
-    definition_fr: "Part des adultes qui ont épargné ou mis de l'argent de côté dans une banque ou une institution financière similaire au cours de l'année écoulée."
     verification:
       status: verified
       evidence: [findex_2025_glossary_fin17a, etl_contract]
@@ -514,7 +501,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: formal_saving}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: past_year
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -533,7 +519,6 @@ kpis:
     name_fr: "Emprunt auprès d'une institution financière"
     business_objective: credit
     definition: Share of adults who borrowed any money from a bank or similar financial institution, or using a credit card, in the past year.
-    definition_fr: "Part des adultes qui ont emprunté de l'argent auprès d'une banque ou d'une institution financière similaire, ou au moyen d'une carte de crédit, au cours de l'année écoulée."
     verification:
       status: verified
       evidence: [findex_2025_glossary_fin22a, etl_contract]
@@ -554,7 +539,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: formal_borrowing}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: past_year
     valid_years: [2014, 2017, 2021, 2022, 2024]
@@ -573,7 +557,6 @@ kpis:
     name_fr: "Écart femmes-hommes de détention d'un compte"
     business_objective: financial_inclusion
     definition: Account ownership of men minus account ownership of women, same country and survey year, in percentage points.
-    definition_fr: "Détention d'un compte des hommes moins détention d'un compte des femmes, même pays et même année d'enquête, en points de pourcentage."
     verification:
       status: derived_verified
       evidence: [findex_2025_book, findex_subgroups, etl_contract]
@@ -598,7 +581,6 @@ kpis:
     formula: {from_fact: "100 * (value[men] - value[women])", from_wide: gender_gap_pp}
     unit: percentage_points
     denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
-    denominator_fr: "Adultes de 15 ans et plus de chacun des sous-groupes comparés ; différence entre les parts pondérées des sous-groupes."
     subgroup: gender_men_minus_women
     reference_period: same survey year for both subgroups; ownership at survey time
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -616,7 +598,6 @@ kpis:
     name_fr: "Écart de revenu de détention d'un compte"
     business_objective: financial_inclusion
     definition: Account ownership of the richest 60% minus the poorest 40% of households, same country and survey year, in percentage points.
-    definition_fr: "Détention d'un compte des 60 % des ménages les plus riches moins celle des 40 % les plus pauvres, même pays et même année d'enquête, en points de pourcentage."
     verification:
       status: derived_verified
       evidence: [findex_2025_book, findex_subgroups, etl_contract]
@@ -641,7 +622,6 @@ kpis:
     formula: {from_fact: "100 * (value[richest 60%] - value[poorest 40%])", from_wide: income_gap_pp}
     unit: percentage_points
     denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
-    denominator_fr: "Adultes de 15 ans et plus de chacun des sous-groupes comparés ; différence entre les parts pondérées des sous-groupes."
     subgroup: income_richest_60_minus_poorest_40
     reference_period: same survey year for both subgroups; ownership at survey time
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -659,7 +639,6 @@ kpis:
     name_fr: "Écart d'âge de détention d'un compte"
     business_objective: financial_inclusion
     definition: Account ownership of adults aged 25+ minus adults aged 15-24, same country and survey year, in percentage points.
-    definition_fr: "Détention d'un compte des adultes de 25 ans et plus moins celle des adultes de 15 à 24 ans, même pays et même année d'enquête, en points de pourcentage."
     verification:
       status: derived_verified
       evidence: [findex_2025_book, findex_subgroups, etl_contract]
@@ -684,7 +663,6 @@ kpis:
     formula: {from_fact: "100 * (value[age 25+] - value[ages 15-24])", from_wide: age_gap_pp}
     unit: percentage_points
     denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
-    denominator_fr: "Adultes de 15 ans et plus de chacun des sous-groupes comparés ; différence entre les parts pondérées des sous-groupes."
     subgroup: age_25_plus_minus_15_24
     reference_period: same survey year for both subgroups; ownership at survey time
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -702,7 +680,6 @@ kpis:
     name_fr: "Densité des distributeurs automatiques"
     business_objective: banking_infrastructure
     definition: "Number of automated teller machines (ATMs) per 100000 adults, as reported by IMF FAS."
-    definition_fr: "Nombre de distributeurs automatiques de billets (DAB) pour 100 000 adultes, tel que publié par le FAS du FMI."
     verification:
       status: verified_metadata
       evidence: [fas_raw_metadata_atm_density, etl_contract]
@@ -723,7 +700,6 @@ kpis:
     formula: {from_fact: value, from_wide: atm_per_100k}
     unit: per_100k_adults
     denominator: {population: "adult population used by FAS", basis: published_count_per_100000_adults}
-    denominator_fr: "Population adulte retenue par le FAS ; nombre publié pour 100 000 adultes."
     subgroup: commercial_banks_all_adults
     reference_period: annual observation; exact within-year reference date follows FAS metadata
     valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
@@ -741,7 +717,6 @@ kpis:
     name_fr: "Déposants des banques commerciales"
     business_objective: savings_deposits
     definition: "Number of depositors with commercial banks per 1000 adults, as reported by IMF FAS."
-    definition_fr: "Nombre de déposants des banques commerciales pour 1 000 adultes, tel que publié par le FAS du FMI."
     verification:
       status: verified_metadata
       evidence: [fas_raw_metadata_depositors_per_1k, etl_contract]
@@ -761,7 +736,6 @@ kpis:
     formula: {from_fact: value, from_wide: depositors_per_1k}
     unit: per_1k_adults
     denominator: {population: "adult population used by FAS", basis: published_count_per_1000_adults}
-    denominator_fr: "Population adulte retenue par le FAS ; nombre publié pour 1 000 adultes."
     subgroup: commercial_banks_all_adults
     reference_period: annual observation; exact within-year reference date follows FAS metadata
     valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
@@ -779,7 +753,6 @@ kpis:
     name_fr: "Emprunteurs des banques commerciales"
     business_objective: credit
     definition: "Number of borrowers from commercial banks per 1000 adults, as reported by IMF FAS."
-    definition_fr: "Nombre d'emprunteurs des banques commerciales pour 1 000 adultes, tel que publié par le FAS du FMI."
     verification:
       status: verified_metadata
       evidence: [fas_raw_metadata_borrowers_per_1k, etl_contract]
@@ -799,7 +772,6 @@ kpis:
     formula: {from_fact: value, from_wide: borrowers_per_1k}
     unit: per_1k_adults
     denominator: {population: "adult population used by FAS", basis: published_count_per_1000_adults}
-    denominator_fr: "Population adulte retenue par le FAS ; nombre publié pour 1 000 adultes."
     subgroup: commercial_banks_all_adults
     reference_period: annual observation; exact within-year reference date follows FAS metadata
     valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
@@ -817,7 +789,6 @@ kpis:
     name_fr: "Comptes de dépôt des banques commerciales"
     business_objective: savings_deposits
     definition: "Number of deposit accounts with commercial banks per 1000 adults, as reported by IMF FAS."
-    definition_fr: "Nombre de comptes de dépôt dans les banques commerciales pour 1 000 adultes, tel que publié par le FAS du FMI."
     verification:
       status: verified_metadata
       evidence: [fas_raw_metadata_deposit_accounts_per_1k, etl_contract]
@@ -837,7 +808,6 @@ kpis:
     formula: {from_fact: value, from_wide: deposit_accounts_per_1k}
     unit: per_1k_adults
     denominator: {population: "adult population used by FAS", basis: published_count_per_1000_adults}
-    denominator_fr: "Population adulte retenue par le FAS ; nombre publié pour 1 000 adultes."
     subgroup: commercial_banks_all_adults
     reference_period: annual observation; exact within-year reference date follows FAS metadata
     valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
@@ -855,7 +825,6 @@ kpis:
     name_fr: "Comptes de prêt des banques commerciales"
     business_objective: credit
     definition: "Number of loan accounts with commercial banks per 1000 adults, as reported by IMF FAS."
-    definition_fr: "Nombre de comptes de prêt dans les banques commerciales pour 1 000 adultes, tel que publié par le FAS du FMI."
     verification:
       status: verified_metadata
       evidence: [fas_raw_metadata_loan_accounts_per_1k, etl_contract]
@@ -875,7 +844,6 @@ kpis:
     formula: {from_fact: value, from_wide: loan_accounts_per_1k}
     unit: per_1k_adults
     denominator: {population: "adult population used by FAS", basis: published_count_per_1000_adults}
-    denominator_fr: "Population adulte retenue par le FAS ; nombre publié pour 1 000 adultes."
     subgroup: commercial_banks_all_adults
     reference_period: annual observation; exact within-year reference date follows FAS metadata
     valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
@@ -893,7 +861,6 @@ kpis:
     name_fr: "Encours des dépôts des banques commerciales"
     business_objective: savings_deposits
     definition: "Outstanding deposits with commercial banks as a percentage of GDP, as published by IMF FAS (ratio not recomputed)."
-    definition_fr: "Encours des dépôts dans les banques commerciales en pourcentage du PIB, tel que publié par le FAS du FMI (ratio non recalculé)."
     verification:
       status: verified_metadata
       evidence: [fas_raw_metadata_deposits_pct_gdp, etl_contract]
@@ -914,7 +881,6 @@ kpis:
     formula: {from_fact: value, from_wide: null}
     unit: percent_of_gdp
     denominator: {population: "GDP of the same country and year, as used by FAS", basis: published_ratio_to_gdp}
-    denominator_fr: "PIB du même pays et de la même année, tel qu'utilisé par le FAS ; ratio au PIB publié."
     subgroup: commercial_banks_all_adults
     reference_period: annual observation; exact within-year reference date follows FAS metadata
     valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
@@ -932,7 +898,6 @@ kpis:
     name_fr: "Encours des prêts des banques commerciales"
     business_objective: credit
     definition: "Outstanding loans from commercial banks as a percentage of GDP, as published by IMF FAS (ratio not recomputed)."
-    definition_fr: "Encours des prêts des banques commerciales en pourcentage du PIB, tel que publié par le FAS du FMI (ratio non recalculé)."
     verification:
       status: verified_metadata
       evidence: [fas_raw_metadata_loans_pct_gdp, etl_contract]
@@ -953,7 +918,6 @@ kpis:
     formula: {from_fact: value, from_wide: null}
     unit: percent_of_gdp
     denominator: {population: "GDP of the same country and year, as used by FAS", basis: published_ratio_to_gdp}
-    denominator_fr: "PIB du même pays et de la même année, tel qu'utilisé par le FAS ; ratio au PIB publié."
     subgroup: commercial_banks_all_adults
     reference_period: annual observation; exact within-year reference date follows FAS metadata
     valid_years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
@@ -971,7 +935,6 @@ kpis:
     name_fr: "Fonds d'urgence mobilisables en 30 jours"
     business_objective: financial_resilience
     definition: "Share of adults who say it is possible (difficult, somewhat difficult or not very difficult) for them to come up with emergency funds within 30 days."
-    definition_fr: "Part des adultes qui déclarent qu'il leur est possible (difficile, assez difficile ou pas très difficile) de réunir des fonds d'urgence en 30 jours."
     verification:
       status: verified
       evidence: [findex_2025_glossary_fin24aP, etl_contract]
@@ -992,7 +955,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: at survey time; 30-day horizon
     valid_years: [2014, 2017, 2021, 2022, 2024]
@@ -1011,7 +973,6 @@ kpis:
     name_fr: "Source principale des fonds d'urgence : épargne"
     business_objective: financial_resilience
     definition: "Share of all adults who say they could come up with emergency funds in 30 days and name savings as their main source."
-    definition_fr: "Part de l'ensemble des adultes qui déclarent pouvoir réunir des fonds d'urgence en 30 jours et citent l'épargne comme source principale."
     verification:
       status: verified
       evidence: [findex_2025_glossary_fin24sav, etl_contract]
@@ -1032,7 +993,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: at survey time; 30-day horizon
     valid_years: [2021, 2022, 2024]
@@ -1051,7 +1011,6 @@ kpis:
     name_fr: "Source principale des fonds d'urgence : prêt (banque, employeur ou prêteur privé)"
     business_objective: financial_resilience
     definition: "Share of all adults who say they could come up with emergency funds in 30 days and name a loan from a bank, employer or private lender as their main source."
-    definition_fr: "Part de l'ensemble des adultes qui déclarent pouvoir réunir des fonds d'urgence en 30 jours et citent comme source principale un prêt d'une banque, d'un employeur ou d'un prêteur privé."
     verification:
       status: verified
       evidence: [findex_2025_glossary_fin24bor, etl_contract]
@@ -1072,7 +1031,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: at survey time; 30-day horizon
     valid_years: [2021, 2022, 2024]
@@ -1091,7 +1049,6 @@ kpis:
     name_fr: "Compte de monnaie mobile"
     business_objective: digital_finance
     definition: "Share of adults who report personally using a mobile money service in the past year."
-    definition_fr: "Part des adultes qui déclarent avoir personnellement utilisé un service de monnaie mobile au cours de l'année écoulée."
     verification:
       status: verified
       evidence: [findex_2025_glossary_mobileaccount, etl_contract]
@@ -1112,7 +1069,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: mobile_account}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: past_year
     valid_years: [2014, 2017, 2021, 2022, 2024]
@@ -1131,7 +1087,6 @@ kpis:
     name_fr: "Compte inactif"
     business_objective: financial_inclusion
     definition: "Share of all adults who have an account but report neither a deposit into nor a withdrawal from it (including any digital payment) in the past year."
-    definition_fr: "Part de l'ensemble des adultes qui ont un compte mais ne déclarent ni dépôt ni retrait sur ce compte (paiement numérique compris) au cours de l'année écoulée."
     verification:
       status: verified
       evidence: [findex_2025_glossary_inactive, etl_contract]
@@ -1152,7 +1107,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: inactive}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: past_year
     valid_years: [2014, 2017, 2021, 2022, 2024]
@@ -1171,7 +1125,6 @@ kpis:
     name_fr: "Détention d'un compte - femmes"
     business_objective: financial_inclusion
     definition: "Share of women who own a bank or similar financial-institution account or a mobile-money account."
-    definition_fr: "Part des femmes qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
     verification:
       status: verified
       evidence: [findex_2025_glossary_account, findex_subgroups, etl_contract]
@@ -1192,7 +1145,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: account_female}
     unit: percent
     denominator: {population: "surveyed adults aged 15+ in the subgroup gender = women", basis: survey_weighted_population_share}
-    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « femmes » ; part pondérée selon le plan de sondage."
     subgroup: gender_women
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -1210,7 +1162,6 @@ kpis:
     name_fr: "Détention d'un compte - hommes"
     business_objective: financial_inclusion
     definition: "Share of men who own a bank or similar financial-institution account or a mobile-money account."
-    definition_fr: "Part des hommes qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
     verification:
       status: verified
       evidence: [findex_2025_glossary_account, findex_subgroups, etl_contract]
@@ -1231,7 +1182,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: account_male}
     unit: percent
     denominator: {population: "surveyed adults aged 15+ in the subgroup gender = men", basis: survey_weighted_population_share}
-    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « hommes » ; part pondérée selon le plan de sondage."
     subgroup: gender_men
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -1249,7 +1199,6 @@ kpis:
     name_fr: "Détention d'un compte - 40 % des ménages les plus pauvres"
     business_objective: financial_inclusion
     definition: "Share of the poorest 40% of households who own a bank or similar financial-institution account or a mobile-money account."
-    definition_fr: "Part des 40 % des ménages les plus pauvres qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
     verification:
       status: verified
       evidence: [findex_2025_glossary_account, findex_subgroups, etl_contract]
@@ -1270,7 +1219,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: account_poorest_40}
     unit: percent
     denominator: {population: "surveyed adults aged 15+ in the subgroup income = poorest 40%", basis: survey_weighted_population_share}
-    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « 40 % des ménages les plus pauvres » ; part pondérée selon le plan de sondage."
     subgroup: income_poorest_40
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -1288,7 +1236,6 @@ kpis:
     name_fr: "Détention d'un compte - 60 % des ménages les plus riches"
     business_objective: financial_inclusion
     definition: "Share of the richest 60% of households who own a bank or similar financial-institution account or a mobile-money account."
-    definition_fr: "Part des 60 % des ménages les plus riches qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
     verification:
       status: verified
       evidence: [findex_2025_glossary_account, findex_subgroups, etl_contract]
@@ -1309,7 +1256,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: account_richest_60}
     unit: percent
     denominator: {population: "surveyed adults aged 15+ in the subgroup income = richest 60%", basis: survey_weighted_population_share}
-    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « 60 % des ménages les plus riches » ; part pondérée selon le plan de sondage."
     subgroup: income_richest_60
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -1327,7 +1273,6 @@ kpis:
     name_fr: "Détention d'un compte - adultes de 15 à 24 ans"
     business_objective: financial_inclusion
     definition: "Share of adults aged 15-24 who own a bank or similar financial-institution account or a mobile-money account."
-    definition_fr: "Part des adultes de 15 à 24 ans qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
     verification:
       status: verified
       evidence: [findex_2025_glossary_account, findex_subgroups, etl_contract]
@@ -1348,7 +1293,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: account_age_15_24}
     unit: percent
     denominator: {population: "surveyed adults aged 15+ in the subgroup age_cat = ages 15-24", basis: survey_weighted_population_share}
-    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « adultes de 15 à 24 ans » ; part pondérée selon le plan de sondage."
     subgroup: age_cat_ages_15_24
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -1366,7 +1310,6 @@ kpis:
     name_fr: "Détention d'un compte - adultes de 25 ans et plus"
     business_objective: financial_inclusion
     definition: "Share of adults aged 25+ who own a bank or similar financial-institution account or a mobile-money account."
-    definition_fr: "Part des adultes de 25 ans et plus qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
     verification:
       status: verified
       evidence: [findex_2025_glossary_account, findex_subgroups, etl_contract]
@@ -1387,7 +1330,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: account_age_25_plus}
     unit: percent
     denominator: {population: "surveyed adults aged 15+ in the subgroup age_cat = age 25+", basis: survey_weighted_population_share}
-    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « adultes de 25 ans et plus » ; part pondérée selon le plan de sondage."
     subgroup: age_cat_age_25_plus
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -1405,7 +1347,6 @@ kpis:
     name_fr: "Détention d'un compte - niveau primaire ou moins"
     business_objective: financial_inclusion
     definition: "Share of adults with primary education or less who own a bank or similar financial-institution account or a mobile-money account."
-    definition_fr: "Part des adultes de niveau d'études primaire ou moins qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
     verification:
       status: verified
       evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
@@ -1426,7 +1367,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "surveyed adults aged 15+ in the subgroup education = prim edu or less", basis: survey_weighted_population_share}
-    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « niveau primaire ou moins » ; part pondérée selon le plan de sondage."
     subgroup: education_prim_edu_or_less
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -1444,7 +1384,6 @@ kpis:
     name_fr: "Détention d'un compte - niveau secondaire ou plus"
     business_objective: financial_inclusion
     definition: "Share of adults with secondary education or more who own a bank or similar financial-institution account or a mobile-money account."
-    definition_fr: "Part des adultes de niveau d'études secondaire ou plus qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
     verification:
       status: verified
       evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
@@ -1465,7 +1404,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "surveyed adults aged 15+ in the subgroup education = secondary edu or more", basis: survey_weighted_population_share}
-    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « niveau secondaire ou plus » ; part pondérée selon le plan de sondage."
     subgroup: education_secondary_edu_or_more
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -1483,7 +1421,6 @@ kpis:
     name_fr: "Détention d'un compte - hors population active"
     business_objective: financial_inclusion
     definition: "Share of adults out of the labor force who own a bank or similar financial-institution account or a mobile-money account."
-    definition_fr: "Part des adultes hors population active qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
     verification:
       status: verified
       evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
@@ -1504,7 +1441,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "surveyed adults aged 15+ in the subgroup laborforce = out of laborforce", basis: survey_weighted_population_share}
-    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « hors population active » ; part pondérée selon le plan de sondage."
     subgroup: laborforce_out_of_laborforce
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -1522,7 +1458,6 @@ kpis:
     name_fr: "Détention d'un compte - population active"
     business_objective: financial_inclusion
     definition: "Share of adults in the labor force who own a bank or similar financial-institution account or a mobile-money account."
-    definition_fr: "Part des adultes de la population active qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
     verification:
       status: verified
       evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
@@ -1543,7 +1478,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "surveyed adults aged 15+ in the subgroup laborforce = in laborforce", basis: survey_weighted_population_share}
-    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « population active » ; part pondérée selon le plan de sondage."
     subgroup: laborforce_in_laborforce
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -1561,7 +1495,6 @@ kpis:
     name_fr: "Détention d'un compte - milieu rural"
     business_objective: financial_inclusion
     definition: "Share of adults living in rural areas who own a bank or similar financial-institution account or a mobile-money account."
-    definition_fr: "Part des adultes vivant en milieu rural qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
     verification:
       status: verified
       evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
@@ -1582,7 +1515,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "surveyed adults aged 15+ in the subgroup urbanicity = rural", basis: survey_weighted_population_share}
-    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « milieu rural » ; part pondérée selon le plan de sondage."
     subgroup: urbanicity_rural
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2024]
@@ -1600,7 +1532,6 @@ kpis:
     name_fr: "Détention d'un compte - milieu urbain"
     business_objective: financial_inclusion
     definition: "Share of adults living in urban areas who own a bank or similar financial-institution account or a mobile-money account."
-    definition_fr: "Part des adultes vivant en milieu urbain qui détiennent un compte dans une banque ou une institution financière similaire, ou un compte de monnaie mobile."
     verification:
       status: verified
       evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
@@ -1621,7 +1552,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "surveyed adults aged 15+ in the subgroup urbanicity = urban", basis: survey_weighted_population_share}
-    denominator_fr: "Adultes de 15 ans et plus interrogés du sous-groupe « milieu urbain » ; part pondérée selon le plan de sondage."
     subgroup: urbanicity_urban
     reference_period: ownership at survey time; mobile-money eligibility follows the source definition
     valid_years: [2024]
@@ -1639,7 +1569,6 @@ kpis:
     name_fr: "Pas de compte : institutions financières trop éloignées"
     business_objective: financial_exclusion_vulnerability
     definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because financial institutions are too far away. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
-    definition_fr: "Part de l'ensemble des adultes (15 ans et plus) qui déclarent ne pas avoir de compte dans une banque ou une institution financière similaire parce que les institutions financières sont trop éloignées. Le dénominateur est l'ensemble des adultes, pas seulement les adultes sans compte ; les comptes de monnaie mobile n'entrent pas dans la question."
     verification:
       status: verified
       evidence: [findex_2025_glossary_fin11a, etl_contract]
@@ -1661,7 +1590,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: at survey time
     valid_years: [2024]
@@ -1680,7 +1608,6 @@ kpis:
     name_fr: "Pas de compte : services financiers trop chers"
     business_objective: financial_exclusion_vulnerability
     definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because financial services are too expensive. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
-    definition_fr: "Part de l'ensemble des adultes (15 ans et plus) qui déclarent ne pas avoir de compte dans une banque ou une institution financière similaire parce que les services financiers sont trop chers. Le dénominateur est l'ensemble des adultes, pas seulement les adultes sans compte ; les comptes de monnaie mobile n'entrent pas dans la question."
     verification:
       status: verified
       evidence: [findex_2025_glossary_fin11b, etl_contract]
@@ -1702,7 +1629,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: at survey time
     valid_years: [2024]
@@ -1721,7 +1647,6 @@ kpis:
     name_fr: "Pas de compte : documents requis manquants"
     business_objective: financial_exclusion_vulnerability
     definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because they lack the documentation needed to open one. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
-    definition_fr: "Part de l'ensemble des adultes (15 ans et plus) qui déclarent ne pas avoir de compte dans une banque ou une institution financière similaire faute des documents nécessaires pour en ouvrir un. Le dénominateur est l'ensemble des adultes, pas seulement les adultes sans compte ; les comptes de monnaie mobile n'entrent pas dans la question."
     verification:
       status: verified
       evidence: [findex_2025_glossary_fin11c, etl_contract]
@@ -1743,7 +1668,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: at survey time
     valid_years: [2024]
@@ -1762,7 +1686,6 @@ kpis:
     name_fr: "Pas de compte : pas assez d'argent"
     business_objective: financial_exclusion_vulnerability
     definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because they do not have enough money to use one. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
-    definition_fr: "Part de l'ensemble des adultes (15 ans et plus) qui déclarent ne pas avoir de compte dans une banque ou une institution financière similaire parce qu'ils n'ont pas assez d'argent pour en utiliser un. Le dénominateur est l'ensemble des adultes, pas seulement les adultes sans compte ; les comptes de monnaie mobile n'entrent pas dans la question."
     verification:
       status: verified
       evidence: [findex_2025_glossary_fin11d, etl_contract]
@@ -1784,7 +1707,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: at survey time
     valid_years: [2024]
@@ -1803,7 +1725,6 @@ kpis:
     name_fr: "Pas de compte : un membre de la famille en a déjà un"
     business_objective: financial_exclusion_vulnerability
     definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because someone else in their family already has one. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
-    definition_fr: "Part de l'ensemble des adultes (15 ans et plus) qui déclarent ne pas avoir de compte dans une banque ou une institution financière similaire parce qu'un autre membre de leur famille en a déjà un. Le dénominateur est l'ensemble des adultes, pas seulement les adultes sans compte ; les comptes de monnaie mobile n'entrent pas dans la question."
     verification:
       status: verified
       evidence: [findex_2025_glossary_fin11e, etl_contract]
@@ -1825,7 +1746,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: at survey time
     valid_years: [2024]
@@ -1844,7 +1764,6 @@ kpis:
     name_fr: "Pas de compte : manque de confiance dans les institutions financières"
     business_objective: financial_exclusion_vulnerability
     definition: "Share of all adults (aged 15+) who report not having a bank or similar financial-institution account because they do not trust financial institutions. The denominator is all adults, not only adults without an account; mobile-money accounts are outside the question."
-    definition_fr: "Part de l'ensemble des adultes (15 ans et plus) qui déclarent ne pas avoir de compte dans une banque ou une institution financière similaire parce qu'ils n'ont pas confiance dans les institutions financières. Le dénominateur est l'ensemble des adultes, pas seulement les adultes sans compte ; les comptes de monnaie mobile n'entrent pas dans la question."
     verification:
       status: verified
       evidence: [findex_2025_glossary_fin11f, etl_contract]
@@ -1866,7 +1785,6 @@ kpis:
     formula: {from_fact: "100 * value", from_wide: null}
     unit: percent
     denominator: {population: "all surveyed adults aged 15+", basis: survey_weighted_population_share}
-    denominator_fr: "Ensemble des adultes de 15 ans et plus interrogés ; part pondérée selon le plan de sondage."
     subgroup: total_population
     reference_period: at survey time
     valid_years: [2024]
@@ -1885,7 +1803,6 @@ kpis:
     name_fr: "Écart d'éducation de détention d'un compte"
     business_objective: financial_inclusion
     definition: Account ownership of adults with secondary education or more minus adults with primary education or less, same country and survey year, in percentage points.
-    definition_fr: "Détention d'un compte des adultes de niveau d'études secondaire ou plus moins celle des adultes de niveau primaire ou moins, même pays et même année d'enquête, en points de pourcentage."
     verification:
       status: derived_verified
       evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
@@ -1910,7 +1827,6 @@ kpis:
     formula: {from_fact: "100 * (value[secondary edu or more] - value[prim edu or less])", from_wide: null}
     unit: percentage_points
     denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
-    denominator_fr: "Adultes de 15 ans et plus de chacun des sous-groupes comparés ; différence entre les parts pondérées des sous-groupes."
     subgroup: education_secondary_or_more_minus_primary_or_less
     reference_period: same survey year for both subgroups; ownership at survey time
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -1928,7 +1844,6 @@ kpis:
     name_fr: "Écart d'activité de détention d'un compte"
     business_objective: financial_inclusion
     definition: Account ownership of adults in the labor force minus adults out of the labor force, same country and survey year, in percentage points.
-    definition_fr: "Détention d'un compte des adultes de la population active moins celle des adultes hors population active, même pays et même année d'enquête, en points de pourcentage."
     verification:
       status: derived_verified
       evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
@@ -1953,7 +1868,6 @@ kpis:
     formula: {from_fact: "100 * (value[in laborforce] - value[out of laborforce])", from_wide: null}
     unit: percentage_points
     denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
-    denominator_fr: "Adultes de 15 ans et plus de chacun des sous-groupes comparés ; différence entre les parts pondérées des sous-groupes."
     subgroup: laborforce_in_minus_out
     reference_period: same survey year for both subgroups; ownership at survey time
     valid_years: [2011, 2014, 2017, 2021, 2022, 2024]
@@ -1971,7 +1885,6 @@ kpis:
     name_fr: "Écart urbain-rural de détention d'un compte"
     business_objective: financial_inclusion
     definition: Account ownership of urban adults minus rural adults, same country and survey year, in percentage points.
-    definition_fr: "Détention d'un compte des adultes urbains moins celle des adultes ruraux, même pays et même année d'enquête, en points de pourcentage."
     verification:
       status: derived_verified
       evidence: [findex_2025_glossary_account, findex_subgroups_extended, etl_contract]
@@ -1996,7 +1909,6 @@ kpis:
     formula: {from_fact: "100 * (value[urban] - value[rural])", from_wide: null}
     unit: percentage_points
     denominator: {population: "adults aged 15+ in each compared subgroup", basis: difference_of_survey_weighted_subgroup_shares}
-    denominator_fr: "Adultes de 15 ans et plus de chacun des sous-groupes comparés ; différence entre les parts pondérées des sous-groupes."
     subgroup: urbanicity_urban_minus_rural
     reference_period: same survey year for both subgroups; ownership at survey time
     valid_years: [2024]

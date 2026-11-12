@@ -6,33 +6,46 @@ import { InsightsPdf } from "./pdf";
 import { Recommendations } from "./recommendations";
 import { UserComparisons } from "./comparisons";
 import { prettyDate } from "./format";
+import { t, tr } from "./i18n";
 import {
   AskInline, ChangesPanel, Insights, MetricStrip, MetricsGrid, NoticeList,
-  PipelineView, ReferenceCards, Simulator, XaiPanel,
+  PipelineView, ReferenceCards, XaiPanel,
 } from "./ui";
 
 function knownChart(page: Page, id: string): Chart | undefined {
   return page.charts.find((chart) => chart.id === id);
 }
 
-function ChartById({ page, id, wide = false }: { page: Page; id: string; wide?: boolean }) {
+function ChartById({
+  page, id, onAsk,
+}: {
+  page: Page;
+  id: string;
+  onAsk?: (question: string) => void;
+}) {
   const chart = knownChart(page, id);
   if (!chart) return null;
   return (
-    <div className={wide ? "chart-slot wide" : "chart-slot"}>
-      <ChartView chart={chart} />
+    <div className="chart-slot">
+      <ChartView chart={chart} insights={page.insights} xai={page.xai} onAsk={onAsk} />
     </div>
   );
 }
 
-function ExtraCharts({ page, exclude }: { page: Page; exclude: string[] }) {
+function ExtraCharts({
+  page, exclude, onAsk,
+}: {
+  page: Page;
+  exclude: string[];
+  onAsk?: (question: string) => void;
+}) {
   const extras = page.charts.filter((chart) => !exclude.includes(chart.id));
   if (extras.length === 0) return null;
   return (
     <div className="charts-grid">
       {extras.map((chart) => (
         <div key={chart.id} className="chart-slot">
-          <ChartView chart={chart} />
+          <ChartView chart={chart} insights={page.insights} xai={page.xai} onAsk={onAsk} />
         </div>
       ))}
     </div>
@@ -42,11 +55,9 @@ function ExtraCharts({ page, exclude }: { page: Page; exclude: string[] }) {
 function Block({ block, onAsk }: { block: InfoBlock; onAsk: (question: string) => void }) {
   switch (block.kind) {
     case "metric_strip":
-      return <MetricStrip block={block} />;
+      return <MetricStrip block={block} onAsk={onAsk} />;
     case "reference_cards":
-      return <ReferenceCards block={block} />;
-    case "simulator":
-      return <Simulator block={block} />;
+      return <ReferenceCards block={block} onAsk={onAsk} />;
     case "ask":
       return <AskInline block={block} onAsk={onAsk} />;
     case "pipeline":
@@ -68,11 +79,11 @@ export function PageView({
       <div className="page">
         <PageHead page={page} spec={spec} />
         <section className="panel empty-panel">
-          <h3>Page non disponible pour cette sélection</h3>
+          <h3>{t("Page non disponible pour cette sélection")}</h3>
           <p className="muted">
             {page.unavailable_reason
               ? plainText(page.unavailable_reason)
-              : "Les données de cette page ne sont pas disponibles pour ce pays et cette année."}
+              : t("Les données de cette page ne sont pas disponibles pour ce pays et cette année.")}
           </p>
         </section>
       </div>
@@ -84,15 +95,24 @@ export function PageView({
   return (
     <div className="page">
       <PageHead page={page} spec={spec} />
-      <MetricsGrid metrics={page.metrics} />
+      <MetricsGrid
+        metrics={page.metrics}
+        insights={page.insights}
+        xai={page.xai}
+        onAsk={onAsk}
+      />
 
       {page.id === "overview" && (
         <>
           <div className="charts-grid">
-            <ChartById page={page} id="account_ownership_history" wide />
-            <ChartById page={page} id="account_ownership_peers" wide />
+            <ChartById page={page} id="account_ownership_history" onAsk={onAsk} />
+            <ChartById page={page} id="account_ownership_peers" onAsk={onAsk} />
           </div>
-          <ExtraCharts page={page} exclude={["account_ownership_history", "account_ownership_peers"]} />
+          <ExtraCharts
+            page={page}
+            exclude={["account_ownership_history", "account_ownership_peers"]}
+            onAsk={onAsk}
+          />
           <Insights items={page.insights} />
           <ChangesPanel changes={page.changes} />
           {blockById("macro_context") && <Block block={blockById("macro_context")!} onAsk={onAsk} />}
@@ -104,14 +124,15 @@ export function PageView({
       {page.id === "inclusion" && (
         <>
           <div className="charts-grid">
-            <ChartById page={page} id="inclusion_funnel" wide />
-            <ChartById page={page} id="account_ownership_groups" wide />
-            <ChartById page={page} id="formal_vs_any" />
-            <ChartById page={page} id="gap_change" />
+            <ChartById page={page} id="inclusion_funnel" onAsk={onAsk} />
+            <ChartById page={page} id="account_ownership_groups" onAsk={onAsk} />
+            <ChartById page={page} id="formal_vs_any" onAsk={onAsk} />
+            <ChartById page={page} id="gap_change" onAsk={onAsk} />
           </div>
           <ExtraCharts
             page={page}
             exclude={["inclusion_funnel", "formal_vs_any", "account_ownership_groups", "gap_change"]}
+            onAsk={onAsk}
           />
           <Insights items={page.insights} />
         </>
@@ -120,38 +141,35 @@ export function PageView({
       {page.id === "access" && (
         <>
           <div className="charts-grid">
-            <ChartById page={page} id="physical_network" wide />
-            <ChartById page={page} id="supply_demand_index" wide />
-            <ChartById page={page} id="atm_peers" wide />
+            <ChartById page={page} id="physical_network" onAsk={onAsk} />
+            <ChartById page={page} id="atm_peers" onAsk={onAsk} />
+            <ChartById page={page} id="supply_demand_index" onAsk={onAsk} />
           </div>
-          <ExtraCharts page={page} exclude={["physical_network", "supply_demand_index", "atm_peers"]} />
+          <ExtraCharts
+            page={page}
+            exclude={["physical_network", "supply_demand_index", "atm_peers"]}
+            onAsk={onAsk}
+          />
           <Insights items={page.insights} />
         </>
       )}
 
       {page.id === "exclusion" && (
         <>
-          <div className="charts-grid">
-            <ChartById page={page} id="barriers_heatmap" wide />
-            <ChartById page={page} id="urban_rural" wide />
+          <div className="charts-grid align-start exclusion-grid">
+            <ChartById page={page} id="barriers_heatmap" onAsk={onAsk} />
+            <div className="chart-stack">
+              <ChartById page={page} id="urban_rural" onAsk={onAsk} />
+              {blockById("ask_finova") && (
+                <Block block={blockById("ask_finova")!} onAsk={onAsk} />
+              )}
+            </div>
           </div>
-          <ExtraCharts page={page} exclude={["barriers_heatmap", "urban_rural"]} />
+          <ExtraCharts page={page} exclude={["barriers_heatmap", "urban_rural"]} onAsk={onAsk} />
           {page.xai && <XaiPanel card={page.xai} />}
           {blockById("exclusion_context") && (
             <Block block={blockById("exclusion_context")!} onAsk={onAsk} />
           )}
-          <Insights items={page.insights} />
-          {blockById("ask_finova") && <Block block={blockById("ask_finova")!} onAsk={onAsk} />}
-        </>
-      )}
-
-      {page.id === "poverty" && (
-        <>
-          <ChartById page={page} id="smig_trajectory" wide />
-          <ExtraCharts page={page} exclude={["smig_trajectory"]} />
-          {blockById("poverty_context") && <Block block={blockById("poverty_context")!} onAsk={onAsk} />}
-          {blockById("fee_simulator") && <Block block={blockById("fee_simulator")!} onAsk={onAsk} />}
-          {blockById("income_context") && <Block block={blockById("income_context")!} onAsk={onAsk} />}
           <Insights items={page.insights} />
         </>
       )}
@@ -162,7 +180,7 @@ export function PageView({
           {page.blocks.map((block) => (
             <Block key={block.id} block={block} onAsk={onAsk} />
           ))}
-          <ExtraCharts page={page} exclude={[]} />
+          <ExtraCharts page={page} exclude={[]} onAsk={onAsk} />
           <Insights items={page.insights} />
         </>
       )}
@@ -179,21 +197,23 @@ function PageHead({ page, spec }: { page: Page; spec: Spec }) {
     <header className="page-head">
       <div>
         <span className="eyebrow">
-          {spec.country.name} · {spec.year}
+          {tr(spec.country.name)} · {spec.year}
         </span>
         <h2>{copy?.title ?? plainText(page.title)}</h2>
         {subtitle && <p className="page-sub">{subtitle}</p>}
       </div>
       <div className="page-head-badges">
-        <span className={`status ${page.available ? "status-available" : "status-warning"}`}>
-          {page.available ? "Données réelles" : "Indisponible"}
+        <span className="muted small">
+          {t("Mise à jour du {date}", { date: prettyDate(spec.generated_at) })}
         </span>
-        <span className="muted small">Mise à jour du {prettyDate(spec.generated_at)}</span>
         {page.id === "overview" && (
           <InsightsPdf
             iso3={spec.country.iso3}
             year={spec.year}
-            title={`Constats et pistes de recommandation — ${spec.country.name}, ${spec.year}`}
+            title={t("Constats et pistes de recommandation — {country}, {year}", {
+              country: tr(spec.country.name),
+              year: spec.year,
+            })}
           />
         )}
       </div>

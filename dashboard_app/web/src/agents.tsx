@@ -2,6 +2,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentRow, AgentsTimeline as Timeline, SourceJob } from "./types";
 import { ApiError, fetchAgents, fetchSourceJob, startDemo } from "./api";
 import { fmtNumber, prettyDate } from "./format";
+import { t } from "./i18n";
+import { plainText } from "./copy";
+import { getLang } from "./preferences";
+
+const AGENT_LABEL_AR: Record<string, string> = {
+  collector: "الجمع",
+  snapshot: "اللقطة",
+  profiler: "التحليل",
+  quality: "الجودة",
+  etl: "التحويل (ETL)",
+  semantic_kpi: "الدلالة والمؤشرات",
+  auditor: "المدقّق (BI Auditor / XAI)",
+  analyst: "المحلّل (FinOVA)",
+  dashboard_spec: "مواصفات لوحة المعلومات",
+  ask: "اسأل Finova",
+};
 
 const ACTIVE = ["queued", "running"];
 // etapes du recalcul (jobs.STEPS) ; « route2 » couvre l'Analyst et le Dashboard spec
@@ -41,18 +57,20 @@ function AgentItem({ agent, index, live }: { agent: AgentRow; index: number; liv
       <span className="agent-index" aria-hidden="true">{index}</span>
       <div className="agent-body">
         <div className="agent-head">
-          <strong>{agent.label}</strong>
+          <strong>{getLang() === "ar" ? (AGENT_LABEL_AR[agent.id] ?? agent.label) : agent.label}</strong>
           <span className={`agent-mode ${agent.llm ? "mode-llm" : "mode-det"}`}>
-            {agent.llm ? "LLM optionnel" : "déterministe"}
+            {agent.llm ? t("LLM optionnel") : t("déterministe")}
           </span>
-          <span className="agent-status">{live ? LIVE_LABEL[live] : statusLabel(agent)}</span>
+          <span className="agent-status">{live ? t(LIVE_LABEL[live]) : t(statusLabel(agent))}</span>
         </div>
-        <p className="muted small">{agent.role}</p>
+        <p className="muted small">{plainText(agent.role)}</p>
         <div className="agent-facts">
           {agent.duration_s !== null && <span>{fmtNumber(agent.duration_s, 2)} s</span>}
-          {agent.key_output && <span>{agent.key_output}</span>}
-          {agent.llm && agent.status === "success" && <span>appels LLM : {agent.llm_measured}</span>}
-          {agent.note && <span className="muted">{agent.note}</span>}
+          {agent.key_output && <span>{plainText(agent.key_output)}</span>}
+          {agent.llm && agent.status === "success" && (
+            <span>{t("appels LLM : {count}", { count: plainText(agent.llm_measured) })}</span>
+          )}
+          {agent.note && <span className="muted">{plainText(agent.note)}</span>}
         </div>
       </div>
     </li>
@@ -100,7 +118,7 @@ export function AgentsTimeline() {
       .then(setJob)
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.status === 409) setError(err.detail);
-        else setError(err instanceof Error ? err.message : "Démonstration impossible");
+        else setError(err instanceof Error ? err.message : "Recalcul impossible");
       });
   };
 
@@ -113,36 +131,45 @@ export function AgentsTimeline() {
     <section className="panel agents-timeline" aria-labelledby="agents-title">
       <div className="panel-head">
         <div>
-          <h3 id="agents-title">Agents</h3>
+          <h3 id="agents-title">{t("Agents")}</h3>
           <p className="muted small">
             {timeline
-              ? `Run ${timeline.route1_run_id} · snapshot ${timeline.snapshot_id} · ${
-                  timeline.route2_run_id ? `Route 2 ${timeline.route2_run_id}` : "Route 2 non exécutée"}`
-              : "Chargement du dernier run…"}
+              ? `${t("Run {id}", { id: timeline.route1_run_id })} · ${t("snapshot {id}", { id: timeline.snapshot_id })} · ${
+                  timeline.route2_run_id
+                    ? t("Route 2 {id}", { id: timeline.route2_run_id })
+                    : t("Route 2 non exécutée")}`
+              : t("Chargement du dernier run…")}
           </p>
         </div>
         <button type="button" className="primary-btn" onClick={start} disabled={running}>
-          {running ? "Démonstration en cours…" : "Relancer la démonstration"}
+          {running ? t("Recalcul en cours…") : t("Recalculer les données")}
         </button>
       </div>
       {job && (
         <div className={`agents-banner ${job.no_change ? "banner-info" : running ? "banner-run" : `banner-${job.status}`}`}
              role="status">
           {running
-            ? `Recalcul hors ligne en cours (sources officielles reprises du snapshot publié) — étape : ${job.step ?? "démarrage"}`
+            ? t("Recalcul hors ligne en cours (sources officielles reprises du snapshot publié) — étape : {step}", {
+                step: job.step ?? t("démarrage"),
+              })
             : job.no_change
-              ? "Aucune donnée nouvelle : le contenu est identique à la version publiée. Les agents suivants sont ignorés."
-              : job.message ?? job.status}
+              ? t("Aucune donnée nouvelle : le contenu est identique à la version publiée. Les agents suivants sont ignorés.")
+              : plainText(job.message) || t(job.status)}
           {!running && job.finished_at && (
-            <span className="muted small"> · terminé {prettyDate(job.finished_at)} ({fmtNumber(job.seconds, 1)} s)</span>
+            <span className="muted small">
+              {" "}· {t("terminé {date} ({seconds} s)", {
+                date: prettyDate(job.finished_at),
+                seconds: fmtNumber(job.seconds, 1),
+              })}
+            </span>
           )}
         </div>
       )}
-      {error && <p className="muted small">{error}</p>}
+      {error && <p className="muted small">{t(error)}</p>}
       {timeline && (
         <div className="agents-routes">
           <div>
-            <span className="eyebrow">Route 1 — fiabiliser les données</span>
+            <span className="eyebrow">{t("Route 1 — fiabiliser les données")}</span>
             <ol className="agent-list">
               {route1.map((agent, i) => (
                 <AgentItem key={agent.id} agent={agent} index={i + 1} live={liveState(agent, job)} />
@@ -150,13 +177,13 @@ export function AgentsTimeline() {
             </ol>
           </div>
           <div>
-            <span className="eyebrow">Route 2 — analyser et publier</span>
+            <span className="eyebrow">{t("Route 2 — analyser et publier")}</span>
             <ol className="agent-list">
               {route2.map((agent, i) => (
                 <AgentItem key={agent.id} agent={agent} index={route1.length + i + 1} live={liveState(agent, job)} />
               ))}
             </ol>
-            <span className="eyebrow">Interface</span>
+            <span className="eyebrow">{t("Interface")}</span>
             <ol className="agent-list">
               {ask.map((agent) => (
                 <AgentItem key={agent.id} agent={agent} index={route1.length + route2.length + 1} live={null} />

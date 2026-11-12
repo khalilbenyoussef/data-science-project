@@ -43,10 +43,8 @@ def official_kpis(catalog_path: str | Path = DEFAULT_CATALOG) -> dict[str, dict[
         if (kpi.get("verification") or {}).get("status") == USER_STATUS:
             continue
         out[kpi_id] = {"id": kpi_id, "name_fr": kpi.get("name_fr") or kpi.get("name") or kpi_id,
-                       "unit": kpi.get("unit"), "definition": kpi.get("definition_fr") or kpi.get("definition"),
-                       "denominator": kpi.get("denominator_fr") or _denominator(kpi),
-                       # source anglaise du catalogue, affichee en petit pour verifier le sens
-                       "definition_en": kpi.get("definition"), "denominator_en": _denominator(kpi)}
+                       "unit": kpi.get("unit"), "definition": kpi.get("definition"),
+                       "denominator": _denominator(kpi)}
     return out
 
 
@@ -82,8 +80,7 @@ def comparisons(user_data: UserData, warehouse: str | Path, iso3: str, year: int
         row: dict[str, Any] = {
             "indicator_code": item["code"], "label": item["label"], "unit": item["unit"], "kpi_id": kpi_id,
             "kpi": kpi["name_fr"] if kpi else kpi_id, "definition": (kpi or {}).get("definition"),
-            "denominator": (kpi or {}).get("denominator"), "definition_en": (kpi or {}).get("definition_en"),
-            "official_unit": (kpi or {}).get("unit"),
+            "denominator": (kpi or {}).get("denominator"), "official_unit": (kpi or {}).get("unit"),
             "user": None, "official": None, "status": "ok", "same_year": False, "notes": [],
         }
         if kpi is None:

@@ -251,7 +251,7 @@ def test_data_view_reads_only_the_user_source(cfg, tmp_path):
             ("TUN", 2024, "findex", "account_t_d", 0.378, "fraction")])
     client, _ = make_client(cfg, tmp_path, warehouse=warehouse)
     data = client.get("/api/sources/clients_demo/data", params={"iso3": "TUN"}).json()
-    assert data["chip"] == "Données utilisateur · non vérifiée par BIFlow" and data["provider"] == "user"
+    assert data["chip"] == "Vos données" and data["provider"] == "user"
     assert [(v["year"], v["value"]) for v in data["values"]] == [(2021, 120.5), (2022, 131.25)]
     listed = client.get("/api/sources").json()["sources"][0]
     assert (listed["status"], listed["rows"], listed["years"], listed["countries"]) == (

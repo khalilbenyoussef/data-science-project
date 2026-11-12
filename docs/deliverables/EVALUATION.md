@@ -1,34 +1,34 @@
 # Évaluation des agents et approche de référence
 
-- **Généré le** : 2026-11-06T05:32:36
-- **Run audité (Route 1)** : `user_delete_20261106T024500`
-- **Snapshot** : `v14`
-- **Version du catalogue KPI** : 1.8.0
-- **Run Route 2 (spec publiée)** : `route2_20261106T024403926588`
+- **Généré le** : 2026-11-05T22:20:39
+- **Run audité (Route 1)** : `user_delete_20261105T221858`
+- **Snapshot** : `v9`
+- **Version du catalogue KPI** : 1.7.0
+- **Run Route 2 (spec publiée)** : `route2_20261105T221924144045`
 - **Sources lues** : `outputs/reports/<run>/*.json`, `data/audit/evaluation.json`, `data/audit/audit_report.json`, `outputs/evaluation/agents.json`, `outputs/evaluation/ask_live.json`, `outputs/evaluation/baseline.json`, `docs/deliverables/manual_baseline.yaml`
 - Document généré par `scripts/build_deliverables.py` : ne pas modifier à la main.
 
 ## Fraîcheur des mesures
 
-- Dernier audit : 2026-11-06T02:43:55
-- Injection de fautes : 2026-11-06T05:23:29
-- Évaluation des agents (scripts/evaluate_agents.py) : 2026-11-06T05:32:30
-- Contrôle en direct d’Ask Finova : 2026-11-06T05:32:30
-- Approche de référence (scripts/baseline_reference.py) : 2026-11-06T05:23:33
+- Dernier audit : 2026-11-05T22:19:21
+- Injection de fautes : 2026-11-04T12:59:47 — **résultat antérieur au dernier audit**
+- Évaluation des agents (scripts/evaluate_agents.py) : 2026-11-05T18:20:31 — **résultat antérieur au dernier audit**
+- Contrôle en direct d’Ask Finova : 2026-11-05T18:20:31 — **résultat antérieur au dernier audit**
+- Approche de référence (scripts/baseline_reference.py) : 2026-11-05T18:12:24 — **résultat antérieur au dernier audit**
 
 ## Synthèse par agent
 
 | Agent | Mode | Statut | Durée | Lignes entrée → sortie | Sortie clé | Appels LLM |
 |---|---|---|---|---|---|---|
-| Collector | déterministe | réussi | 0,20 s | non disponible → 60 361 | 3 source(s) collectée(s) | 0 appel |
-| Snapshot | déterministe | réussi | 1,20 s | non disponible → 60 361 | snapshot v14 (new) | 0 appel |
-| Profiler | déterministe | réussi | 2,30 s | 60 361 → 60 361 | findex 8 577 × 36 ; fas 32 209 × 57 ; gdp 19 575 × 6 | 0 appel |
-| Quality | déterministe + LLM optionnel | réussi | 1,19 s | 60 361 → non disponible | score 0,936, gate réussi | 0 appel |
-| ETL | déterministe | réussi | 2,45 s | 60 361 → 90 732 | 90 732 lignes fact, 263 pays | 0 appel |
-| Semantic & KPI | déterministe | réussi | 5,79 s | 90 732 → 1 620 | 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue) | 0 appel |
-| Auditor (BI Auditor / XAI) | déterministe + LLM optionnel | réussi | 4,56 s | 1 620 → non disponible | verdict conforme avec avertissements (17 réussis, 2 avertissements, 0 échecs) | 0 appel |
-| Analyst (FinOVA) | déterministe | réussi | 0,01 s | 96 → 17 | 17 constats sur 96 faits, carte XAI oui | 0 appel |
-| Dashboard spec | déterministe | réussi | 0,68 s | non disponible → 96 | 6 pages, 96 faits, publication approuvée | 0 appel |
+| Collector | déterministe | réussi | 0.14 s | non disponible → 60 361 | 3 source(s) collectée(s) | 0 appel |
+| Snapshot | déterministe | réussi | 1.47 s | non disponible → 60 361 | snapshot v9 (new) | 0 appel |
+| Profiler | déterministe | réussi | 2.50 s | 60 361 → 60 361 | findex 8 577 × 36 ; fas 32 209 × 57 ; gdp 19 575 × 6 | 0 appel |
+| Quality | déterministe + LLM optionnel | réussi | 1.33 s | 60 361 → non disponible | score 0.936, gate réussi | 0 appel |
+| ETL | déterministe | réussi | 2.38 s | 60 361 → 90 732 | 90 732 lignes fact, 263 pays | 0 appel |
+| Semantic & KPI | déterministe | réussi | 6.70 s | 90 732 → 1 620 | 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue) | 0 appel |
+| Auditor (BI Auditor / XAI) | déterministe + LLM optionnel | réussi | 5.09 s | 1 620 → non disponible | verdict pass_with_warnings (17 réussis, 2 avertissements, 0 échecs) | 0 appel |
+| Analyst (FinOVA) | déterministe | réussi | 0.01 s | 96 → 17 | 17 constats sur 96 faits, carte XAI oui | 0 appel |
+| Dashboard spec | déterministe | réussi | 0.77 s | non disponible → 96 | 6 pages, 96 faits, publication approved | 0 appel |
 | Ask Finova | déterministe + LLM optionnel | à la demande | non disponible | non disponible → non disponible | réponses à la demande, nombres contrôlés contre les faits | non disponible |
 
 ## Collector
@@ -36,7 +36,7 @@
 *Collecte les sources officielles (Findex, FAS, PIB WDI) et les sources utilisateur confirmées ; calcule l'empreinte SHA-256 de chaque fichier.*
 
 - Mode : déterministe
-- Run : `user_delete_20261106T024500` — statut réussi, durée 0,20 s, 0 avertissement(s), 0 erreur(s)
+- Run : `user_delete_20261105T221858` — statut réussi, durée 0.14 s, 0 avertissement(s), 0 erreur(s)
 - Sortie clé : 3 source(s) collectée(s)
 - Appels LLM mesurés : 0 appel
 
@@ -45,17 +45,17 @@
 *Versionne les fichiers bruts (blobs dédupliqués par SHA-256) ; sans donnée nouvelle, le run s'arrête.*
 
 - Mode : déterministe
-- Run : `user_delete_20261106T024500` — statut réussi, durée 1,20 s, 0 avertissement(s), 0 erreur(s)
-- Sortie clé : snapshot v14 (new)
+- Run : `user_delete_20261105T221858` — statut réussi, durée 1.47 s, 0 avertissement(s), 0 erreur(s)
+- Sortie clé : snapshot v9 (new)
 - Appels LLM mesurés : 0 appel
-- Snapshot publié après l'audit : `v14` (published)
+- Snapshot publié après l'audit : `v9` (published)
 
 ## Profiler
 
 *Profile chaque source : dimensions, valeurs manquantes, types, colonnes de métadonnées, valeurs atypiques (IsolationForest).*
 
 - Mode : déterministe
-- Run : `user_delete_20261106T024500` — statut réussi, durée 2,30 s, 0 avertissement(s), 0 erreur(s)
+- Run : `user_delete_20261105T221858` — statut réussi, durée 2.50 s, 0 avertissement(s), 0 erreur(s)
 - Sortie clé : findex 8 577 × 36 ; fas 32 209 × 57 ; gdp 19 575 × 6
 - Appels LLM mesurés : 0 appel
 - Lignes profilées : 60 361
@@ -65,10 +65,10 @@
 *Contrôle qualité : score par source, gate (seuil configuré), anomalies classées par sévérité, diagnostics de plausibilité, exclusion des sources utilisateur non conformes.*
 
 - Mode : déterministe + LLM optionnel (plan de remédiation rédigé, sans effet sur le score ni le gate ; groq → gemini)
-- Run : `user_delete_20261106T024500` — statut réussi, durée 1,19 s, 0 avertissement(s), 0 erreur(s)
-- Sortie clé : score 0,936, gate réussi
+- Run : `user_delete_20261105T221858` — statut réussi, durée 1.33 s, 0 avertissement(s), 0 erreur(s)
+- Sortie clé : score 0.936, gate réussi
 - Appels LLM mesurés : 0 appel
-- Score global 0,936 (seuil 0,70), gate réussi
+- Score global 0.936 (seuil 0.70), gate réussi
 - Anomalies : critiques 0, élevées 0, moyennes 2, faibles 0
 - Diagnostics : 25 ; sources utilisateur exclues : 0
 
@@ -77,7 +77,7 @@
 *Harmonise les sources (codes pays ISO3, années, unités) et construit le modèle en étoile.*
 
 - Mode : déterministe
-- Run : `user_delete_20261106T024500` — statut réussi, durée 2,45 s, 0 avertissement(s), 0 erreur(s)
+- Run : `user_delete_20261105T221858` — statut réussi, durée 2.38 s, 0 avertissement(s), 0 erreur(s)
 - Sortie clé : 90 732 lignes fact, 263 pays
 - Appels LLM mesurés : 0 appel
 - Lignes fact par source : fas 15 753, findex 64 328, gdp 10 651
@@ -87,7 +87,7 @@
 *Calcule chaque KPI du catalogue pour le pays focus et les pairs, sur chaque année valide ; attribue un statut de publication.*
 
 - Mode : déterministe
-- Run : `user_delete_20261106T024500` — statut réussi, durée 5,79 s, 0 avertissement(s), 0 erreur(s)
+- Run : `user_delete_20261105T221858` — statut réussi, durée 6.70 s, 0 avertissement(s), 0 erreur(s)
 - Sortie clé : 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue)
 - Appels LLM mesurés : 0 appel
 
@@ -96,47 +96,45 @@
 *Vérification indépendante : recalcul depuis fact sans le code KPI, contrôles de cohérence et de traçabilité, verdict d'audit, explications par valeur ; décide la publication du snapshot.*
 
 - Mode : déterministe + LLM optionnel (reformulation de quelques explications, rejetée si un nombre n'est pas justifié ; groq → gemini)
-- Run : `user_delete_20261106T024500` — statut réussi, durée 4,56 s, 0 avertissement(s), 0 erreur(s)
-- Sortie clé : verdict conforme avec avertissements (17 réussis, 2 avertissements, 0 échecs)
+- Run : `user_delete_20261105T221858` — statut réussi, durée 5.09 s, 0 avertissement(s), 0 erreur(s)
+- Sortie clé : verdict pass_with_warnings (17 réussis, 2 avertissements, 0 échecs)
 - Appels LLM mesurés : 0 appel
 - Contrôles : 17 réussis, 2 avertissements, 0 échecs sur 1 620 lignes
 - Publication : 1 509 approuvées, 111 avec réserve, 0 bloquées
 
 ### Injection de fautes (9/9 détectées)
 
-Mesure : 2026-11-06T05:23:29
+Mesure : 2026-11-04T12:59:47 — **résultat antérieur au dernier audit**
 
 | Faute injectée | Contrôle attendu | Détectée | Verdict |
 |---|---|---|---|
-| 1. Valeur KPI modifiée (+0,05) | A1 – Valeurs recalculées<br><sub>`A1_recomputed_values`</sub> | oui | non conforme |
-| 2. Mauvaise unité (densité en percent) | B1 – Une unité par indicateur<br><sub>`B1_one_unit_per_kpi`</sub> | oui | non conforme |
-| 3. Ligne agrégat WLD dans kpi_values | B3 – Pays uniquement, sans agrégat<br><sub>`B3_country_entities_only`</sub> | oui | non conforme |
-| 4. Zéro au lieu de NULL | A2 – Valeurs indisponibles vides<br><sub>`A2_unavailable_rows_are_null`</sub> | oui | non conforme |
-| 5. snapshot_id incohérent | B5 – Version et run cohérents<br><sub>`B5_snapshot_and_run_ids`</sub> | oui | non conforme |
-| 6. Hash source modifié (rapport qualité) | B6 – Empreintes des sources<br><sub>`B6_source_hashes`</sub> | oui | non conforme |
-| 7. KPI provisoire dans le catalogue | B8 – Définitions du catalogue<br><sub>`B8_catalog_definitions`</sub> | oui | non conforme |
-| 8. Insight citant un mauvais chiffre | F1 – Constats fondés sur les chiffres<br><sub>`F1_insights_grounded`</sub> | oui | conforme avec avertissements |
-| 9. Insight avec un nombre non cité | F1 – Constats fondés sur les chiffres<br><sub>`F1_insights_grounded`</sub> | oui | conforme avec avertissements |
-
-Fautes 8–9 (constats) : elles sont détectées par le rejet du constat concerné ; les données restent exactes, donc le verdict des données reste « conforme avec avertissements ».
+| Valeur KPI modifiee (+0,05) | `A1_recomputed_values` | oui | fail |
+| Mauvaise unite (densite en percent) | `B1_one_unit_per_kpi` | oui | fail |
+| Ligne agregat WLD dans kpi_values | `B3_country_entities_only` | oui | fail |
+| Zero au lieu de NULL | `A2_unavailable_rows_are_null` | oui | fail |
+| snapshot_id incoherent | `B5_snapshot_and_run_ids` | oui | fail |
+| Hash source modifie (rapport qualite) | `B6_source_hashes` | oui | fail |
+| KPI provisoire dans le catalogue | `B8_catalog_definitions` | oui | fail |
+| Insight citant un mauvais chiffre | `F1_insights_grounded` | oui | pass_with_warnings |
+| Insight avec un nombre non cite | `F1_insights_grounded` | oui | pass_with_warnings |
 
 ## Analyst (FinOVA)
 
 *Écrit les constats et la carte XAI à partir des faits exportés ; tout nombre d'une phrase doit exister dans les faits (verify_numbers).*
 
 - Mode : déterministe (narration LLM désactivée : analyst.narrate = false)
-- Run : `route2_20261106T024403926588` — statut réussi, durée 0,01 s, 0 avertissement(s), 0 erreur(s)
+- Run : `route2_20261105T221924144045` — statut réussi, durée 0.01 s, 0 avertissement(s), 0 erreur(s)
 - Sortie clé : 17 constats sur 96 faits, carte XAI oui
 - Appels LLM mesurés : 0 appel
-- Audit des constats (run `route2_20261106T024403926588`) : 15 audités, 15 acceptés, 0 rejetés, 2 non auditables
+- Audit des constats (run `route2_20261105T221924144045`) : 15 audités, 15 acceptés, 0 rejetés, 2 non auditables
 
 ## Dashboard spec
 
 *Construit le contrat FinOVA 2.0 validé (pages, métriques, graphiques, faits, avertissements) ; ne calcule aucun KPI et n'approuve aucune publication.*
 
 - Mode : déterministe
-- Run : `route2_20261106T024403926588` — statut réussi, durée 0,68 s, 2 avertissement(s), 0 erreur(s)
-- Sortie clé : 6 pages, 96 faits, publication approuvée
+- Run : `route2_20261105T221924144045` — statut réussi, durée 0.77 s, 2 avertissement(s), 0 erreur(s)
+- Sortie clé : 6 pages, 96 faits, publication approved
 - Appels LLM mesurés : 0 appel
 
 ## Ask Finova
@@ -145,28 +143,28 @@ Fautes 8–9 (constats) : elles sont détectées par le rejet du constat concern
 
 - Mode : déterministe + LLM optionnel (conversation avec outils sur les faits, nombres contrôlés ; groq → gemini)
 - Exécution : à la demande (`POST /api/ask`), pas de rapport de run
-- Tests unitaires (LLM simulé), `tests/test_ask_chat.py` : 18/18 réussis, dont 3/3 tests de grounding (exécutés le 2026-11-06T05:29:19)
-- Contrôle en direct : **10/10 réponses fondées**, 9 rédigées par le LLM (les autres en repli déterministe) ; modèle groq (openai/gpt-oss-120b), le 2026-11-06 05:32:30.
+- Tests unitaires (LLM simulé), `tests/test_ask_chat.py` : 18/18 réussis, dont 4/4 tests de grounding (exécutés le 2026-11-05T18:13:34)
+- Contrôle en direct : **10/10 réponses fondées**, 9 rédigées par le LLM (les autres en repli déterministe) ; modèle groq (openai/gpt-oss-120b), le 2026-11-05T18:20:31.
 - Méthode : chaque nombre de la réponse doit figurer dans les faits FinOVA du pays focus et des pairs (même année), être une année de la spec ou un nombre d'un libellé d'unité ; le contrôle ne vérifie pas que le nombre est attribué au bon indicateur.
 
 | Question | Mode | Fondée | Nombres hors faits | Réponse |
 |---|---|---|---|---|
-| Quel est le taux de détention d'un compte en Tunisie ? | llm | oui | — | En 2024, le taux de détention d’un compte en Tunisie est de 37,8 %. Cette valeur provient du tableau de bord Finova pour l’année 2024. Si vous avez besoin d’autres indicateurs ou de comparaisons, n’hésitez pas à me le de |
-| Comment la Tunisie se compare-t-elle au Maroc pour la détention d'un compte ? | llm | oui | — | En 2024, la Tunisie affiche un taux de détention d’un compte de 37,8 %, contre 44,4 % au Maroc. Le Maroc se situe donc environ sept points de pourcentage au‑dessus de la Tunisie. Cette différence reflète un niveau d’incl |
-| Quel est l'écart entre les hommes et les femmes ? | llm | oui | — | En 2024, l’écart de détention de compte entre les hommes et les femmes en Tunisie est de +23,0 pt. Cela signifie que les hommes sont plus susceptibles de posséder un compte que les femmes de ce même écart. L’indicateur m |
-| Combien d'adultes utilisent les paiements numériques ? | llm | oui | — | En 2024, 23,7 % des adultes en Tunisie utilisent les paiements numériques. Cette proportion reflète la part des adultes qui ont effectué ou reçu un paiement numérique au cours de l'année. Aucun autre chiffre n’est dispon |
-| Combien y a-t-il d'agences bancaires pour 100 000 adultes ? | deterministic | oui | — | En 2024, le réseau d'agences est de 22,37 / 100k adultes. |
-| Pourquoi les adultes n'ont-ils pas de compte ? | llm | oui | — | En 2024, 9,2 % des adultes déclarent que les institutions financières sont trop éloignées, 12,4 % estiment que les services sont trop chers, et 13,3 % n’ont pas les documents requis. Ces trois obstacles – distance, coût  |
-| Quelle part des adultes épargne auprès d'une institution financière ? | llm | oui | — | En 2024, 48,2 % des adultes en Tunisie déclarent épargner auprès d’une institution financière. Cette proportion reflète l’ensemble des formes d’épargne recensées dans le pays. Aucun autre chiffre n’est disponible pour ce |
-| Le taux de détention a-t-il progressé depuis 2021 ? | llm | oui | — | Oui, le taux de détention d’un compte a progressé depuis 2021, affichant une hausse de +1,0 point en 2024. En 2024, le taux s’établit à 37,8 %. Cette évolution indique une légère amélioration de l’inclusion financière. |
-| Et pour le Maroc, quel est le taux de détention d'un compte ? | llm | oui | — | Le taux de détention d’un compte au Maroc est de 44,4 % en 2024. |
-| What is the main barrier to account ownership? | llm | oui | — | Le principal obstacle à la détention d’un compte en Tunisie est le coût perçu des services financiers, qui représente 12,4 % de la population en 2024. En comparaison, la distance des institutions financières constitue 9, |
+| Quel est le taux de détention d'un compte en Tunisie ? | llm | oui | — | En 2024, le taux de détention d’un compte en Tunisie est de 37.8 % (source : tableau de bord Finova). Cette donnée reflète la proportion d’adultes disposant d’un compte bancaire. Aucun autre chiffre n’est fourni dans le  |
+| Comment la Tunisie se compare-t-elle au Maroc pour la détention d'un compte ? | llm | oui | — | En 2024, le taux de détention d’un compte est de 37,8 % en Tunisie. Au même moment, le Maroc affiche 44,4 % de détention d’un compte. Ainsi, le Maroc dépasse la Tunisie de quelques points de pourcentage. |
+| Quel est l'écart entre les hommes et les femmes ? | llm | oui | — | En 2024, l’écart de détention de compte entre les hommes et les femmes en Tunisie s’élève à +23,0 points de pourcentage. (source : Finova, indicateur « Écart de compte — Genre », 2024). |
+| Combien d'adultes utilisent les paiements numériques ? | llm | oui | — | En 2024, 23,7 % des adultes en Tunisie ont effectué ou reçu un paiement numérique. Cette proportion reflète l’usage des services de paiement digital parmi la population adulte. Aucun autre chiffre n’est disponible pour l |
+| Combien y a-t-il d'agences bancaires pour 100 000 adultes ? | llm | oui | — | En 2024, la Tunisie comptait 22.37 agences bancaires pour 100 000 adultes. Cette densité reflète la disponibilité des services bancaires dans le pays. |
+| Pourquoi les adultes n'ont-ils pas de compte ? | deterministic | oui | — | En 2024, 37.8 % des adultes en Tunisie détiennent un compte. (+1.0 pt vs 2021) |
+| Quelle part des adultes épargne auprès d'une institution financière ? | llm | oui | — | En 2024, 48,2 % des adultes en Tunisie épargnent auprès d’une institution financière. |
+| Le taux de détention a-t-il progressé depuis 2021 ? | llm | oui | — | Oui, le taux de détention d’un compte a progressé. En 2024 il s’établit à 37,8 % (Tunisie, 2024) et il a augmenté d’un point de pourcentage par rapport à 2021 (variation +1,0 pt, 2024). Cela indique une légère améliorati |
+| Et pour le Maroc, quel est le taux de détention d'un compte ? | llm | oui | — | Le taux de détention d’un compte au Maroc en 2024 est de 44.4 %. Cette valeur n’a pas évolué par rapport à 2021, avec une variation de +0.0 point de pourcentage. |
+| What is the main barrier to account ownership? | llm | oui | — | En 2024, le principal obstacle à la détention d’un compte en Tunisie est l’absence de documents requis, avec 13,3 % des personnes non bancarisées. Ce taux dépasse celui des services trop chers (12,4 %) et de la distance  |
 
 ## Approche de référence
 
 Recalcul naïf de 4 indicateurs directement depuis les CSV bruts (`scripts/baseline_reference.py`), comme un analyste le ferait dans un tableur : filtrer le pays et l'année, lire la colonne, multiplier par 100 ou soustraire deux groupes. Comparaison avec `kpi_values` à la tolérance de l'Auditor.
 
-Mesure : 2026-11-06T05:23:33
+Mesure : 2026-11-05T18:12:24 — **résultat antérieur au dernier audit**
 
 | Indicateur | Valeurs comparées | Identiques | Temps Excel (manuel) |
 |---|---|---|---|
@@ -177,10 +175,10 @@ Mesure : 2026-11-06T05:23:33
 
 | Approche | Périmètre | Temps mesuré |
 |---|---|---|
-| Recalcul naïf (pandas) | 4 indicateurs, 5 pays, toutes années | 0,84 s |
-| Lecture de `kpi_values` | mêmes valeurs, déjà calculées et auditées | 0,01 s |
-| Agent Semantic & KPI | 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue) | 5,79 s |
-| Agent Auditor | recalcul indépendant et contrôles de toutes les lignes | 4,56 s |
+| Recalcul naïf (pandas) | 4 indicateurs, 5 pays, toutes années | 0.96 s |
+| Lecture de `kpi_values` | mêmes valeurs, déjà calculées et auditées | 0.01 s |
+| Agent Semantic & KPI | 44 KPI, 1 620 lignes kpi_values (1 267 disponibles, 111 avec revue) | 6.70 s |
+| Agent Auditor | recalcul indépendant et contrôles de toutes les lignes | 5.09 s |
 | Excel (manuel) | 4 indicateurs | non mesuré |
 
 Résultat : **132/132 valeurs identiques** (tolérance 1e-09), 0 écart(s), 0 valeur(s) publiée(s) introuvable(s) dans le calcul naïf. Le pipeline ajoute ce que le calcul naïf n'apporte pas : statut de publication, moyenne des pairs avec couverture, traçabilité jusqu'au fichier brut et audit indépendant.

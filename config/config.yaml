@@ -45,10 +45,8 @@ llm:
     max_calls_per_session: 30      # appels LLM par session de navigateur ; au-dela : mode simple
     max_tool_steps: 4              # appels LLM par tour (outils compris), hors regeneration
     history_turns: 10              # derniers messages de la session transmis au LLM
-    allow_user_data_to_llm: false  # « Vos donnees : IA externe » : true ne fait que SUGGERER l'option a
-                                   # l'ouverture d'Ask Finova ; chaque session reste locale tant que
-                                   # l'utilisateur n'a pas coche le consentement (choix en memoire)
-    user_data_llm_switch: true     # false : option masquee, donnees utilisateur toujours traitees en local
+    allow_user_data_to_llm: false  # donnees de « Mes donnees » envoyees au LLM externe ? non par defaut :
+                                   # les questions qui les concernent restent en mode simple (local)
 
 # --------------------------------------------------------------------------- Orchestrateur
 orchestrator:

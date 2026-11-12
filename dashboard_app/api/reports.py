@@ -32,6 +32,10 @@ SpecFor = Callable[[str, int], tuple[dict[str, Any], str]]
 
 ISO3 = re.compile(r"^[A-Z]{3}$")
 
+# Pages exclues des rapports telechargeables : leurs references (SMIG, pauvrete INS)
+# ne proviennent pas de l'entrepot de donnees.
+HIDDEN_REPORT_PAGES = {"poverty"}
+
 
 def scope(iso3: str, year: int) -> tuple[str, int]:
     code = iso3.strip().upper()
@@ -119,7 +123,10 @@ def create_reports_router(*, warehouse: Path, audit_dir: Path, spec_file: Path,
         code = str((spec.get("country") or {}).get("iso3") or code)
         year = int(spec.get("year") or year)
         kpis = load_catalog(catalog_path)["kpis"]
-        by_page = {page.get("id"): page.get("insights") or [] for page in spec.get("pages") or []}
+        # Hors entrepot : le SMIG et la pauvreté ne doivent pas reapparaitre dans le
+        # rapport telechargeable, même si le contrat les porte encore.
+        by_page = {page.get("id"): page.get("insights") or [] for page in spec.get("pages") or []
+                   if page.get("id") not in HIDDEN_REPORT_PAGES}
         claims, not_auditable = insights_from_finova(by_page, spec.get("facts") or [], kpis)
         rows = []
         if warehouse.is_file():

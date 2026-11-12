@@ -116,7 +116,7 @@ def test_flag_is_off_by_default_and_the_user_tool_is_not_bound():
     assert "get_user_indicator" in {t["function"]["name"] for t in tools_for(True)}
 
 
-def test_build_ask_llm_binds_the_user_tool_only_for_consenting_sessions(monkeypatch):
+def test_build_ask_llm_binds_the_user_tool_only_when_allowed(monkeypatch):
     bound = []
 
     class Model:
@@ -130,11 +130,8 @@ def test_build_ask_llm_binds_the_user_tool_only_for_consenting_sessions(monkeypa
     monkeypatch.setenv("FAKE_ASK_KEY", "x")
     cfg = {"llm": {"enabled": True, "providers": {"p": {"model": "m"}}, "routing": {"ask": ["p"]}, "ask": {}}}
     ask_module.build_ask_llm(cfg)
-    # le parametre de configuration ne lie jamais l'outil : seul le modele des sessions consentantes
     ask_module.build_ask_llm({"llm": {**cfg["llm"], "ask": {"allow_user_data_to_llm": True}}})
-    ask_module.build_ask_llm(cfg, with_user_tool=True)
-    assert "get_user_indicator" not in bound[0] and "get_user_indicator" not in bound[1]
-    assert "get_user_indicator" in bound[2]
+    assert "get_user_indicator" not in bound[0] and "get_user_indicator" in bound[1]
 
 
 def test_flag_off_user_question_is_answered_locally_and_labelled(user_data):

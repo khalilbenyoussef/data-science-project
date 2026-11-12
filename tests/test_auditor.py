@@ -374,7 +374,7 @@ def test_explanation_traces_value_to_raw_record(world):
     e = stored[("account_ownership", "TUN", 2024)]
     assert e["value"] == pytest.approx(37.844486) and e["unit"] == "percent"
     assert e["formula"] == "100 * value" and "x 100" in e["transformation"]
-    assert e["catalog_version"] == "1.8.0" and e["publication_status"] == "approved"
+    assert e["catalog_version"] == "1.7.0" and e["publication_status"] == "approved"
     item, = e["inputs"]
     assert item["fact_value"] == 0.37844486
     raw = item["raw"]
@@ -505,7 +505,7 @@ def test_explain_cli_reads_stored_explanations_only(world, monkeypatch, capsys):
                                       "2024", "--compare-year", "2021", "--warehouse", warehouse])
     assert cli.main() == 0
     out = capsys.readouterr().out
-    assert out.startswith("# Écart femmes-hommes de détention d'un compte - Tunisia 2024")  # name_fr (1.8.0)
+    assert out.startswith("# Écart femmes-hommes de détention d'un compte - Tunisia 2024")  # name_fr (1.7.0)
     assert "Décomposition : men +4,4 pts, women -2,1 pts." in out
     monkeypatch.setattr(sys, "argv", ["main.py", "explain", "--kpi", "branch_density", "--iso3", "TUN",
                                       "--year", "2023", "--compare-iso3", "PEERS", "--lang", "en",

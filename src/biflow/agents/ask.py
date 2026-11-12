@@ -160,8 +160,7 @@ REPLIES = {
     },
 }
 # Sources CSV de l'utilisateur (page « Mes données ») : lues uniquement par l'outil
-# get_user_indicator ; jamais transmises au LLM, sauf pour une session dont l'utilisateur a
-# active « Vos données : IA externe » avec son consentement (choix en memoire, par session).
+# get_user_indicator ; jamais transmises au LLM sauf si llm.ask.allow_user_data_to_llm.
 USER_SOURCE_CUES = ("mes donnees", "nos donnees", "vos donnees", "source utilisateur", "sources utilisateur",
                     "donnees utilisateur", "mon fichier", "mon csv", "fichier importe", "fichier depose",
                     "donnees importees", "ma banque", "notre banque", "my data", "our data", "user source",
@@ -175,10 +174,10 @@ NO_USER_DATA = {
           "user data as official.",
 }
 USER_POLICY_REASON = {
-    "fr": "Réponse en mode simple : vos données ne sont pas envoyées au service d'IA externe "
-          "(option « Vos données : IA externe » désactivée).",
+    "fr": "Réponse en mode simple : vos données ne sont pas transmises au service d'IA externe "
+          "(paramètre llm.ask.allow_user_data_to_llm désactivé).",
     "en": "Simple-mode answer: your data is not sent to the external AI service "
-          "(option « Vos données : IA externe » is off).",
+          "(setting llm.ask.allow_user_data_to_llm is off).",
 }
 USER_RULE = {
     True: "- Les données importées par l'utilisateur se lisent uniquement avec l'outil get_user_indicator ; "
@@ -566,48 +565,20 @@ def ask_settings(cfg: Mapping[str, Any]) -> dict[str, Any]:
             "max_calls_per_session": int(ask.get("max_calls_per_session", 30)),
             "max_tool_steps": int(ask.get("max_tool_steps", 4)),
             "history_turns": int(ask.get("history_turns", 10)),
-            # donnees utilisateur vers le LLM : decide par session (consentement), jamais par la
-            # configuration ; llm.ask.allow_user_data_to_llm ne fait que suggerer l'option
-            "allow_user_data_to_llm": False,
-            "suggest_user_data_llm": ask.get("allow_user_data_to_llm", False) is True,
-            "user_data_llm_switch": ask.get("user_data_llm_switch", True) is not False}
+            # donnees utilisateur transmises au LLM : jamais par defaut
+            "allow_user_data_to_llm": ask.get("allow_user_data_to_llm", False) is True}
 
 
-PROVIDER_LABELS = {"groq": "Groq", "gemini": "Gemini", "google": "Gemini", "google_genai": "Gemini"}
-
-
-def available_ask_provider(cfg: Mapping[str, Any]) -> str | None:
-    """Nom affiche du premier fournisseur de ``llm.routing.ask`` dont la cle est presente
-    (aucun appel reseau) ; None sans cle."""
-    llm_cfg = cfg.get("llm") or {}
-    if not llm_cfg.get("enabled", True):
-        return None
-    providers = llm_cfg.get("providers") or {}
-    for name in (llm_cfg.get("routing") or {}).get("ask") or []:
-        spec = providers.get(name)
-        if not spec:
-            continue
-        try:
-            key = os.getenv(provider_env_var(name, spec), "")
-        except LLMConfigError:
-            continue
-        if key and key_format_ok(name, spec, key):
-            kind = str(spec.get("type", name)).lower()
-            return PROVIDER_LABELS.get(name, PROVIDER_LABELS.get(kind, name.capitalize()))
-    return None
-
-
-def build_ask_llm(cfg: Mapping[str, Any], *, with_user_tool: bool = False) -> Any | None:
+def build_ask_llm(cfg: Mapping[str, Any]) -> Any | None:
     """Modeles de ``llm.routing.ask`` avec outils lies (primaire + replis) ; None
-    sans cle valide, sans appel reseau. L'outil utilisateur n'est lie que pour le
-    modele des sessions qui ont donne leur consentement (``with_user_tool``)."""
+    sans cle valide, sans appel reseau."""
     llm_cfg = cfg.get("llm") or {}
     if not llm_cfg.get("enabled", True):
         return None
     providers = llm_cfg.get("providers") or {}
     settings = ask_settings(cfg)
     temperature = settings["temperature"]
-    tools = tools_for(with_user_tool)
+    tools = tools_for(settings["allow_user_data_to_llm"])
     built = []
     for name in (llm_cfg.get("routing") or {}).get("ask") or []:
         spec = providers.get(name)
@@ -819,7 +790,7 @@ def answer_chat(request: ChatRequest, view: ViewProvider, *, iso3: str, year: in
                 user_data: UserData | None = None) -> dict[str, Any]:
     """Reponse d'un tour : LLM avec outils si disponible, sinon deterministe.
 
-    Donnees utilisateur : sans consentement de la session (defaut), une question
+    Donnees utilisateur : sans llm.ask.allow_user_data_to_llm (defaut), une question
     qui les concerne recoit une reponse deterministe (aucun appel LLM), l'outil
     get_user_indicator n'est jamais lie au LLM et l'historique transmis au LLM ne
     contient aucune reponse citant ces donnees."""
@@ -883,6 +854,6 @@ def answer_chat(request: ChatRequest, view: ViewProvider, *, iso3: str, year: in
 __all__ = [
     "ChatRequest", "ChatTurn", "FactTools", "SessionBudget", "TOOLS", "USER_TOOL", "answer_chat",
     "ask_settings", "tools_for", "user_answer",
-    "available_ask_provider", "build_ask_llm", "detect_language", "deterministic_answer", "llm_answer", "mentioned_countries",
+    "build_ask_llm", "detect_language", "deterministic_answer", "llm_answer", "mentioned_countries",
     "resolve_followup", "small_talk", "suggestions_for",
 ]

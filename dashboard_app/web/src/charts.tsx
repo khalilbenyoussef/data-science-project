@@ -1,14 +1,17 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { Bar, Chart, GapPoint, ReferenceLine, Series } from "./types";
+import type { Bar, Chart, GapPoint, Insight, ReferenceLine, Series, XaiCard } from "./types";
 import { fmtNumber, fmtPct, fmtSigned, fmtUnit, unitLabel } from "./format";
 import {
   CHART_TITLES, HEATMAP_ROW_LABELS, STEP_LABELS, chipLabel, chipNeedsReview, chipTitle, plainText,
 } from "./copy";
 import { SeeWaveButton } from "./waveNav";
+import { t } from "./i18n";
+import { ExplainDialog, buildChartExplanation } from "./explain";
 
 const BASE_W = 760;
 const MIN_W = 260;
-const PAD = { left: 62, right: 28, top: 26, bottom: 52 };
+// Marges resserrees : les graphiques tiennent en deux ou trois colonnes sans perdre de lisibilite.
+const PAD = { left: 52, right: 20, top: 22, bottom: 44 };
 
 /* Largeur reelle du graphique (ResizeObserver) : le viewBox suit les pixels affiches,
    donc une unite SVG = un pixel et les tailles de police CSS restent fixes. Sous
@@ -59,11 +62,20 @@ function valueLabel(value: number, unit: string | null): string {
   return fmtUnit(value, unit);
 }
 
-function ChartShell({ chart, children }: { chart: Chart; children: React.ReactNode }) {
+function ChartShell({
+  chart, insights, xai, onAsk, children,
+}: {
+  chart: Chart;
+  insights: Insight[];
+  xai: XaiCard | null;
+  onAsk?: (question: string) => void;
+  children: React.ReactNode;
+}) {
+  const [explain, setExplain] = useState(false);
   // les annees de l'evolution des ecarts suivent les vagues lues (jamais une vague posterieure)
   const span = chart.id === "gap_change" ? chart.gap_points[0] : undefined;
   const title = span
-    ? `Évolution des écarts entre ${span.from_year} et ${span.to_year}`
+    ? t("Évolution des écarts entre {from} et {to}", { from: span.from_year, to: span.to_year })
     : CHART_TITLES[chart.id] ?? plainText(chart.title);
   return (
     <section className="chart-card">
@@ -72,15 +84,21 @@ function ChartShell({ chart, children }: { chart: Chart; children: React.ReactNo
           <h3>{title}</h3>
           {chart.subtitle && <p className="card-sub">{plainText(chart.subtitle)}</p>}
         </div>
-        {chart.chip && (
-          <span
-            className={`chip chip-${chart.chip.provider}`}
-            title={chipTitle(chart.chip)}
-          >
-            {chipLabel(chart.chip)}
-            {chipNeedsReview(chart.chip) ? " · à vérifier" : ""}
-          </span>
-        )}
+        <div className="card-head-tools">
+          {chart.chip && (
+            <span
+              className={`chip chip-${chart.chip.provider}`}
+              title={chipTitle(chart.chip)}
+            >
+              {chipLabel(chart.chip)}
+              {chipNeedsReview(chart.chip) ? t(" · à vérifier") : ""}
+            </span>
+          )}
+          <button className="why-pill why-ask chart-why" onClick={() => setExplain(true)}>
+            <span className="why-q" aria-hidden="true">?</span>
+            {t("Pourquoi ?")}
+          </button>
+        </div>
       </header>
       {children}
       {chart.notes.length > 0 && (
@@ -92,9 +110,16 @@ function ChartShell({ chart, children }: { chart: Chart; children: React.ReactNo
       )}
       {chart.formula && (
         <details className="tech-details formula-details">
-          <summary>Formule de calcul</summary>
+          <summary>{t("Formule de calcul")}</summary>
           <p className="formula mono small">{plainText(chart.formula)}</p>
         </details>
+      )}
+      {explain && (
+        <ExplainDialog
+          content={buildChartExplanation(chart, insights, xai)}
+          onClose={() => setExplain(false)}
+          onAsk={onAsk}
+        />
       )}
     </section>
   );
@@ -117,14 +142,14 @@ function Legend({ series }: { series: Series[] }) {
 
 function LineChart({ chart }: { chart: Chart }) {
   const [box, W] = useChartWidth();
-  // hauteur proportionnelle a la largeur (meme rendu qu'avant), texte de taille fixe
-  const H = Math.max(220, Math.round((320 * W) / BASE_W));
+  // hauteur compacte : le graphique reste fin meme sur une colonne etroite
+  const H = Math.min(262, Math.max(196, Math.round((250 * W) / BASE_W)));
   const series = chart.series;
   const refs = chart.reference_lines;
   const years = Array.from(
     new Set(series.flatMap((item) => item.points.map((point) => point.year))),
   ).sort((a, b) => a - b);
-  if (years.length === 0) return <p className="empty">Aucune observation.</p>;
+  if (years.length === 0) return <p className="empty">{t("Aucune observation.")}</p>;
   const values = series.flatMap((item) =>
     item.points.filter((point) => point.value !== null).map((point) => point.value as number),
   );
@@ -150,20 +175,32 @@ function LineChart({ chart }: { chart: Chart }) {
   const sy = (value: number) => y0 - ((value - yMin) / (yMax - yMin)) * (y0 - y1);
   const ticks = 5;
   const yTicks = Array.from({ length: ticks + 1 }, (_, index) => yMin + ((yMax - yMin) * index) / ticks);
-  const xTickYears =
-    years.length <= 10
-      ? years
-      : years.filter((year, index) => index === 0 || index === years.length - 1 || year % 2 === 0);
+  // Etiquettes d'annees espacees selon la largeur reelle : plus de chevauchement
+  // quand le graphique tient dans une demi-colonne. Les annees sans observation
+  // (vague non renseignee) restent sur l'echelle mais ne recoivent pas d'etiquette.
+  const observedYears = new Set(
+    series.flatMap((item) =>
+      item.points.filter((point) => point.value !== null).map((point) => point.year),
+    ),
+  );
+  const labelYears = years.filter((year) => observedYears.has(year));
+  const candidates = labelYears.length >= 2 ? labelYears : years;
+  const maxLabels = Math.max(2, Math.floor((x1 - x0) / 42));
+  const stride = Math.max(1, Math.ceil((candidates.length - 1) / Math.max(1, maxLabels - 1)));
+  const xTickYears = candidates.filter(
+    (_, index) => index === 0 || index === candidates.length - 1 || index % stride === 0,
+  );
   const colors = ["var(--series)", "var(--accent)", "var(--green)"];
 
   return (
     <div ref={box} className="chart-measure">
       <Legend series={series} />
+      <ReferenceLinesLegend lines={refs} />
       <svg className="chart-svg" style={{ width: W }} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={plainText(chart.title)}>
         {yTicks.map((tick) => (
           <g key={tick}>
             <line x1={x0} x2={x1} y1={sy(tick)} y2={sy(tick)} className="grid" />
-            <text x={x0 - 10} y={sy(tick) + 4} textAnchor="end" className="tick">
+            <text x={x0 - 8} y={sy(tick) + 4} textAnchor="end" className="tick">
               {fmtNumber(tick, yMax - yMin < 5 ? 1 : 0)}
             </text>
           </g>
@@ -173,7 +210,7 @@ function LineChart({ chart }: { chart: Chart }) {
         {xTickYears.map((year) => (
           <g key={year}>
             <line x1={sx(year)} x2={sx(year)} y1={y0} y2={y0 + 5} className="axis" />
-            <text x={sx(year)} y={y0 + 20} textAnchor="middle" className="tick">
+            <text x={sx(year)} y={y0 + 18} textAnchor="middle" className="tick">
               {year}
             </text>
           </g>
@@ -181,12 +218,14 @@ function LineChart({ chart }: { chart: Chart }) {
         {refs.map((ref, index) => {
           const y = sy(ref.value);
           return (
-            <g key={`${ref.label}-${index}`}>
-              <line x1={x0} x2={x1} y1={y} y2={y} className="ref-line" />
-              <text x={x1} y={y - 6} textAnchor="end" className="ref-label">
-                {clip(plainText(ref.label), 34)} · {valueLabel(ref.value, ref.unit)} ({ref.year})
-              </text>
-            </g>
+            <line
+              key={`${ref.label}-${index}`}
+              x1={x0}
+              x2={x1}
+              y1={y}
+              y2={y}
+              className="ref-line"
+            />
           );
         })}
         {series.map((item, index) => {
@@ -200,18 +239,35 @@ function LineChart({ chart }: { chart: Chart }) {
           const labelAll = points.length <= 6;
           return (
             <g key={item.id}>
-              {points.length > 1 && <path d={path} fill="none" stroke={color} strokeWidth={2.5} />}
+              {points.length > 1 && (
+                <path
+                  d={path}
+                  className="series-line"
+                  pathLength={1}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={2.2}
+                />
+              )}
               {points.map((point, position) => {
                 const showLabel = labelAll || position === points.length - 1;
                 return (
                   <g key={point.year}>
-                    <circle cx={sx(point.year)} cy={sy(point.value)} r={4.5} fill={color} stroke="var(--card)" strokeWidth={1.5}>
+                    <circle
+                      className="point-dot"
+                      cx={sx(point.year)}
+                      cy={sy(point.value)}
+                      r={4}
+                      fill={color}
+                      stroke="var(--card)"
+                      strokeWidth={1.4}
+                    >
                       <title>{`${plainText(item.label)} · ${point.year} · ${valueLabel(point.value, item.unit)}`}</title>
                     </circle>
                     {showLabel && (
                       <text
                         x={sx(point.year) + (position === points.length - 1 && sx(point.year) > W - 170 ? -6 : 0)}
-                        y={sy(point.value) - 10 - (index % 2) * 11}
+                        y={sy(point.value) - 9 - (index % 2) * 10}
                         textAnchor={
                           position === points.length - 1 && sx(point.year) > W - 170 ? "end" : "middle"
                         }
@@ -227,24 +283,24 @@ function LineChart({ chart }: { chart: Chart }) {
           );
         })}
         {chart.x_label && (
-          <text x={(x0 + x1) / 2} y={H - 10} textAnchor="middle" className="axis-label">
-            {chart.x_label}
+          <text x={(x0 + x1) / 2} y={H - 8} textAnchor="middle" className="axis-label">
+            {plainText(chart.x_label)}
           </text>
         )}
         {chart.y_label && (
           <text
-            transform={`translate(14 ${(y0 + y1) / 2}) rotate(-90)`}
+            transform={`translate(11 ${(y0 + y1) / 2}) rotate(-90)`}
             textAnchor="middle"
             className="axis-label"
           >
-            {chart.y_label}
+            {plainText(chart.y_label)}
           </text>
         )}
       </svg>
       <p className="chart-hint">
-        Chaque point est un chiffre publié
-        {unitLabel(chart.unit) ? ` (${unitNote(unitLabel(chart.unit))})` : ""} ; aucune valeur
-        estimée.
+        {t("Chaque point est un chiffre publié{unit} ; aucune valeur estimée.", {
+          unit: unitLabel(chart.unit) ? t(` (${unitNote(unitLabel(chart.unit))})`) : "",
+        })}
       </p>
     </div>
   );
@@ -253,14 +309,18 @@ function LineChart({ chart }: { chart: Chart }) {
 function BarChart({ chart }: { chart: Chart }) {
   const [box, W] = useChartWidth();
   const bars = chart.bars;
-  if (bars.length === 0) return <p className="empty">Aucune valeur.</p>;
+  if (bars.length === 0) return <p className="empty">{t("Aucune valeur.")}</p>;
   const max = niceMax(Math.max(...bars.map((bar) => bar.value ?? 0)) * 1.15);
   // colonne des libelles a la taille du plus long (13 px, ~7 px par caractere), plafonnee
   const longest = Math.max(...bars.map((bar) => plainText(bar.label).length));
   const labelW = Math.min(Math.round(W * 0.45), Math.max(100, longest * 7 + 18));
   const labelChars = Math.max(8, Math.floor((labelW - 18) / 7));
-  const chartW = W - labelW - 96;
-  const height = Math.max(190, bars.length * 42 + 26);
+  // Marge droite dimensionnee sur la plus longue valeur affichee (ex. « 35,44 / 100 000 adultes »).
+  const longestValue = Math.max(...bars.map((bar) => plainText(bar.display).length));
+  const valueW = Math.min(170, Math.max(58, Math.round(longestValue * 6.3) + 14));
+  const chartW = Math.max(40, W - labelW - valueW);
+  const rowH = 36;
+  const height = Math.max(150, bars.length * rowH + 22);
   const x0 = labelW;
   const refToX = (value: number) => x0 + (value / max) * chartW;
   return (
@@ -268,35 +328,44 @@ function BarChart({ chart }: { chart: Chart }) {
     <svg className="chart-svg" style={{ width: W }} viewBox={`0 0 ${W} ${height}`} role="img" aria-label={plainText(chart.title)}>
       {chart.reference_lines.map((ref, index) => (
         <g key={`${ref.label}-${index}`}>
-          <line x1={refToX(ref.value)} x2={refToX(ref.value)} y1={6} y2={height - 8} className="ref-line" />
-          <text x={refToX(ref.value)} y={14} textAnchor="middle" className="ref-label">
+          <line x1={refToX(ref.value)} x2={refToX(ref.value)} y1={6} y2={height - 6} className="ref-line" />
+          <text x={refToX(ref.value)} y={13} textAnchor="middle" className="ref-label">
             {clip(plainText(ref.label), 22)}
           </text>
         </g>
       ))}
       {bars.map((bar, index) => {
-        const y = 24 + index * 42;
+        const y = 20 + index * rowH;
         const width = Math.max(2, ((bar.value ?? 0) / max) * chartW);
         const fill = bar.highlight ? "var(--accent)" : "var(--series)";
         return (
           <g key={bar.id}>
-            <text x={labelW - 12} y={y + 18} textAnchor="end" className="bar-label">
+            <text x={labelW - 10} y={y + 17} textAnchor="end" className="bar-label">
               {clip(plainText(bar.label), labelChars)}
             </text>
-            <rect x={x0} y={y + 3} width={chartW} height={22} rx={6} className="bar-track" />
-            <rect x={x0} y={y + 3} width={width} height={22} rx={6} fill={fill}>
+            <rect x={x0} y={y + 3} width={chartW} height={20} rx={5} className="bar-track" />
+            <rect
+              className="bar-fill"
+              style={{ animationDelay: `${120 + index * 70}ms` }}
+              x={x0}
+              y={y + 3}
+              width={width}
+              height={20}
+              rx={5}
+              fill={fill}
+            >
               <title>{`${plainText(bar.label)} · ${plainText(bar.display)} · ${bar.year}`}</title>
             </rect>
-            <text x={Math.min(x0 + width + 10, W - 4)} y={y + 19} className="bar-value">
+            <text x={Math.min(x0 + width + 8, W - 4)} y={y + 18} className="bar-value">
               {plainText(bar.display)}
             </text>
           </g>
         );
       })}
-      <line x1={x0} x2={x0} y1={2} y2={height - 8} className="axis" />
+      <line x1={x0} x2={x0} y1={2} y2={height - 6} className="axis" />
       {chart.x_label && (
-        <text x={x0 + chartW / 2} y={height - 1} textAnchor="middle" className="axis-label">
-          {chart.x_label}
+        <text x={x0 + chartW / 2} y={height - 2} textAnchor="middle" className="axis-label">
+          {plainText(chart.x_label)}
         </text>
       )}
     </svg>
@@ -306,7 +375,7 @@ function BarChart({ chart }: { chart: Chart }) {
 
 function FunnelChart({ chart }: { chart: Chart }) {
   const steps = chart.steps;
-  if (steps.length === 0) return <p className="empty">Aucune étape.</p>;
+  if (steps.length === 0) return <p className="empty">{t("Aucune étape.")}</p>;
   const max = Math.max(...steps.map((step) => step.value ?? 0), 1);
   return (
     <div className="funnel">
@@ -314,7 +383,9 @@ function FunnelChart({ chart }: { chart: Chart }) {
         <div key={step.id} className="funnel-step">
           {index > 0 && step.drop_from_previous_pp !== null && (
             <div className="funnel-drop">
-              {fmtSigned(step.drop_from_previous_pp)} points par rapport à l'étape précédente
+              {t("{value} points par rapport à l'étape précédente", {
+                value: fmtSigned(step.drop_from_previous_pp),
+              })}
             </div>
           )}
           <div className="funnel-row">
@@ -337,8 +408,7 @@ function FunnelChart({ chart }: { chart: Chart }) {
         </div>
       ))}
       <p className="chart-hint">
-        Chaque question est posée séparément : la baisse d'une étape à l'autre ne signifie
-        pas que les mêmes personnes quittent le système.
+        {t("Chaque question est posée séparément : la baisse d'une étape à l'autre ne signifie pas que les mêmes personnes quittent le système.")}
       </p>
     </div>
   );
@@ -352,7 +422,7 @@ function DumbbellChart({ chart }: { chart: Chart }) {
   const rows = chart.groups
     .flatMap((group) => group.rows.map((row) => ({ group, row })))
     .sort((a, b) => (b.row.gap_pp ?? -Infinity) - (a.row.gap_pp ?? -Infinity));
-  if (rows.length === 0) return <p className="empty">Aucun groupe.</p>;
+  if (rows.length === 0) return <p className="empty">{t("Aucun groupe.")}</p>;
   const max = chart.unit === "percent"
     ? 100
     : niceMax(Math.max(...rows.flatMap(({ row }) => [row.left.value ?? 0, row.right.value ?? 0])) * 1.2);
@@ -360,16 +430,18 @@ function DumbbellChart({ chart }: { chart: Chart }) {
   return (
     <div className="db">
       <div className="db-legend">
-        <span><i className="dot dot-series" />Groupe le moins équipé</span>
-        <span><i className="dot dot-accent" />Groupe le plus équipé</span>
+        <span><i className="dot dot-series" />{t("Groupe le moins équipé")}</span>
+        <span><i className="dot dot-accent" />{t("Groupe le plus équipé")}</span>
       </div>
       {rows.map(({ group, row }) => {
         const left = row.left.value;
         const right = row.right.value;
         const close = left !== null && right !== null && Math.abs(right - left) < DUMBBELL_CLOSE;
-        const gap = row.gap_pp !== null ? `${row.gap_pp >= 0 ? "+" : ""}${fmtNumber(row.gap_pp)} pts` : "—";
+        const gap = row.gap_pp !== null
+          ? t("{value} pts", { value: `${row.gap_pp >= 0 ? "+" : ""}${fmtNumber(row.gap_pp)}` })
+          : "—";
         const summary = `${plainText(group.title)}, ${row.year} : ${plainText(row.left.label)} ${plainText(row.left.display)}, `
-          + `${plainText(row.right.label)} ${plainText(row.right.display)}, écart ${gap}`;
+          + `${plainText(row.right.label)} ${plainText(row.right.display)}, ${t("écart {value}", { value: gap })}`;
         return (
           <div key={row.id} className="db-row" role="img" aria-label={summary} title={summary}>
             <div className="db-name">
@@ -424,7 +496,7 @@ function DumbbellChart({ chart }: { chart: Chart }) {
 function GapChart({ chart }: { chart: Chart }) {
   const [box, W] = useChartWidth();
   const points = chart.gap_points;
-  if (points.length === 0) return <p className="empty">Aucun écart.</p>;
+  if (points.length === 0) return <p className="empty">{t("Aucun écart.")}</p>;
   const changes = points.map((point) => point.change_pp);
   const min = Math.min(0, ...changes);
   const max = Math.max(0, ...changes);
@@ -432,29 +504,32 @@ function GapChart({ chart }: { chart: Chart }) {
   const left = Math.min(160, Math.max(130, Math.round(W * 0.42))); // libelles a 13 px
   const width = W - left - 100; // marge droite : valeur « +28,3 points » a 12 px
   const zero = left + ((0 - min) / span) * width;
-  const height = Math.max(200, points.length * 54 + 30);
+  const rowH = 44;
+  const height = Math.max(172, points.length * rowH + 26);
   const scale = (value: number) => left + ((value - min) / span) * width;
   return (
     <div ref={box} className="chart-measure">
     <svg className="chart-svg" style={{ width: W }} viewBox={`0 0 ${W} ${height}`} role="img" aria-label={plainText(chart.title)}>
-      <line x1={zero} x2={zero} y1={14} y2={height - 20} className="axis" />
+      <line x1={zero} x2={zero} y1={14} y2={height - 18} className="axis" />
       {points.map((point: GapPoint, index) => {
-        const y = 22 + index * 54;
+        const y = 18 + index * rowH;
         const barStart = scale(Math.min(0, point.change_pp));
         const barWidth = Math.max(2, Math.abs(scale(point.change_pp) - zero));
         return (
           <g key={point.id}>
-            <text x={left - 14} y={y + 20} textAnchor="end" className="bar-label">
+            <text x={left - 12} y={y + 16} textAnchor="end" className="bar-label">
               {plainText(point.label)}
             </text>
-            <rect x={barStart} y={y + 5} width={barWidth} height={22} rx={6} fill="var(--accent)">
-              <title>{`${plainText(point.label)} : ${fmtSigned(point.change_pp)} points`}</title>
+            <rect x={barStart} y={y + 4} width={barWidth} height={19} rx={5} fill="var(--accent)">
+              <title>{`${plainText(point.label)} : ${t("{value} points", { value: fmtSigned(point.change_pp) })}`}</title>
             </rect>
-            <text x={point.change_pp >= 0 ? zero + barWidth + 8 : zero - barWidth - 8} y={y + 21} textAnchor={point.change_pp >= 0 ? "start" : "end"} className="bar-value">
-              {fmtSigned(point.change_pp)} points
+            <text x={point.change_pp >= 0 ? zero + barWidth + 8 : zero - barWidth - 8} y={y + 17} textAnchor={point.change_pp >= 0 ? "start" : "end"} className="bar-value">
+              {t("{value} points", { value: fmtSigned(point.change_pp) })}
             </text>
-            <text x={left - 14} y={y + 38} textAnchor="end" className="tick">
-              {fmtNumber(point.gap_from_pp)} → {fmtNumber(point.gap_to_pp)} points
+            <text x={left - 12} y={y + 32} textAnchor="end" className="tick">
+              {t("{value} points", {
+                value: `${fmtNumber(point.gap_from_pp)} → ${fmtNumber(point.gap_to_pp)}`,
+              })}
             </text>
           </g>
         );
@@ -464,7 +539,7 @@ function GapChart({ chart }: { chart: Chart }) {
       </text>
       {chart.x_label && (
         <text x={left + width / 2} y={14} textAnchor="middle" className="axis-label">
-          {chart.x_label}
+          {plainText(chart.x_label)}
         </text>
       )}
     </svg>
@@ -480,14 +555,15 @@ function HeatmapChart({ chart }: { chart: Chart }) {
       return (
         <div className="empty">
           <p>
-            Les raisons de ne pas avoir de compte ne sont mesurées que depuis l'enquête{" "}
-            {chart.first_available_year}.
+            {t("Les raisons de ne pas avoir de compte ne sont mesurées que depuis l'enquête {year}.", {
+              year: chart.first_available_year,
+            })}
           </p>
           <SeeWaveButton year={chart.first_available_year} />
         </div>
       );
     }
-    return <p className="empty">Aucune observation de ces raisons pour ce pays dans les enquêtes disponibles.</p>;
+    return <p className="empty">{t("Aucune observation de ces raisons pour ce pays dans les enquêtes disponibles.")}</p>;
   }
   return (
     <div className="heatmap-wrap">
@@ -496,7 +572,7 @@ function HeatmapChart({ chart }: { chart: Chart }) {
           <tr>
             <th />
             {chart.columns.map((column) => (
-              <th key={column}>{column}</th>
+              <th key={column}>{plainText(column)}</th>
             ))}
           </tr>
         </thead>
@@ -511,7 +587,7 @@ function HeatmapChart({ chart }: { chart: Chart }) {
                     <span className={`heat-cell ${cell?.status === "available" ? "is-value" : ""}`} title={plainText(cell?.note) || ""}>
                       {cell?.status === "available" && cell.value !== null
                         ? fmtPct(cell.value)
-                        : plainText(cell?.display) || "En attente de données"}
+                        : plainText(cell?.display) || t("En attente de données")}
                     </span>
                   </td>
                 );
@@ -524,9 +600,16 @@ function HeatmapChart({ chart }: { chart: Chart }) {
   );
 }
 
-export function ChartView({ chart }: { chart: Chart }) {
+export function ChartView({
+  chart, insights = [], xai = null, onAsk,
+}: {
+  chart: Chart;
+  insights?: Insight[];
+  xai?: XaiCard | null;
+  onAsk?: (question: string) => void;
+}) {
   return (
-    <ChartShell chart={chart}>
+    <ChartShell chart={chart} insights={insights} xai={xai} onAsk={onAsk}>
       {chart.kind === "line" && <LineChart chart={chart} />}
       {chart.kind === "bar" && <BarChart chart={chart} />}
       {chart.kind === "funnel" && <FunnelChart chart={chart} />}
@@ -534,7 +617,7 @@ export function ChartView({ chart }: { chart: Chart }) {
       {chart.kind === "gap" && <GapChart chart={chart} />}
       {chart.kind === "heatmap" && <HeatmapChart chart={chart} />}
       {!["line", "bar", "funnel", "dumbbell", "gap", "heatmap"].includes(chart.kind) && (
-        <p className="empty">Type de graphique inconnu : {chart.kind}</p>
+        <p className="empty">{t("Type de graphique inconnu : {kind}", { kind: chart.kind })}</p>
       )}
     </ChartShell>
   );
@@ -547,7 +630,7 @@ export function ReferenceLinesLegend({ lines }: { lines: ReferenceLine[] }) {
       {lines.map((line) => (
         <span key={`${line.label}-${line.year}`} title={line.source}>
           <i />
-          {line.label} · {fmtUnit(line.value, line.unit)} ({line.year})
+          {plainText(line.label)} · {fmtUnit(line.value, line.unit)} ({line.year})
         </span>
       ))}
     </div>
@@ -559,9 +642,9 @@ export function BarsTable({ bars }: { bars: Bar[] }) {
     <table className="mini-table">
       <thead>
         <tr>
-          <th>Groupe</th>
-          <th>Valeur</th>
-          <th>Année</th>
+          <th>{t("Groupe")}</th>
+          <th>{t("Valeur")}</th>
+          <th>{t("Année")}</th>
         </tr>
       </thead>
       <tbody>

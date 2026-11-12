@@ -5,6 +5,7 @@ import duckdb
 import pytest
 from fastapi.testclient import TestClient
 
+from auth_support import authenticated_client
 from biflow.tools.analysis import AnalysisRequest, AnalysisService
 from biflow.tools.dashboard_spec import SPEC_KPIS, build_finova_spec, load_reference
 from biflow.tools.warehouse_reader import WarehouseReader
@@ -197,8 +198,8 @@ def test_api_exposes_survey_years(tmp_path):
     app = create_app(
         spec_path=spec_path, warehouse_path=tmp_path / "missing.duckdb",
         reports_dir=tmp_path / "reports", history_dir=tmp_path / "history",
-        web_dist=tmp_path / "dist",
+        web_dist=tmp_path / "dist", auth_db=tmp_path / "auth.sqlite3",
     )
-    response = TestClient(app).get("/api/spec")
+    response = authenticated_client(app).get("/api/spec")
     assert response.status_code == 200
     assert response.json()["survey_years"] == []

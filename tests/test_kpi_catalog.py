@@ -85,7 +85,7 @@ def catalog():
 
 def test_catalog_identity_and_versions(catalog):
     assert catalog["schema_version"] == 1
-    assert catalog["catalog_version"] == "1.8.0"
+    assert catalog["catalog_version"] == "1.7.0"
     assert catalog["status"] == "draft"
     assert catalog["scope"] == "country_year_total_population_and_subgroup_gaps"
     assert set(catalog["kpis"]) == (set(EXPECTED) | set(GAPS) | set(FAS_NEW) | set(FINDEX_NEW)

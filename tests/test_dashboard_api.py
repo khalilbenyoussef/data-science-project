@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from auth_support import authenticated_client
 from dashboard_app.api.app import create_app
 
 
@@ -64,8 +65,9 @@ def client(spec_path: Path, calls: list[tuple[str, int]], tmp_path: Path):
         spec_path=spec_path, warehouse_path=tmp_path / "missing.duckdb",
         reports_dir=tmp_path / "reports", history_dir=tmp_path / "history",
         web_dist=tmp_path / "dist", spec_builder=builder,
+        auth_db=tmp_path / "auth.sqlite3",
     )
-    return TestClient(app)
+    return authenticated_client(app)
 
 
 def test_health_and_current_spec(client):
@@ -154,9 +156,9 @@ def test_ask_chat_uses_the_llm_tools_and_session_history(spec_path, tmp_path):
         spec_path=spec_path, warehouse_path=tmp_path / "missing.duckdb",
         reports_dir=tmp_path / "reports", history_dir=tmp_path / "history",
         web_dist=tmp_path / "dist", spec_builder=lambda iso3, year: _spec(iso3, year),
-        ask_model=model,
+        ask_model=model, auth_db=tmp_path / "auth.sqlite3",
     )
-    body = TestClient(app).post("/api/ask", json={
+    body = authenticated_client(app).post("/api/ask", json={
         "question": "Et le taux de compte ?", "session_id": "abc", "page": "overview",
         "history": [{"role": "user", "text": "Bonjour"}, {"role": "assistant", "text": "Bonjour !"}],
     }).json()
@@ -171,8 +173,9 @@ def test_missing_spec_returns_503(tmp_path: Path):
         spec_path=tmp_path / "absent.json", warehouse_path=tmp_path / "w.duckdb",
         reports_dir=tmp_path / "reports", history_dir=tmp_path / "history",
         web_dist=tmp_path / "dist", spec_builder=lambda iso3, year: _spec(),
+        auth_db=tmp_path / "auth.sqlite3",
     )
-    other = TestClient(app)
+    other = authenticated_client(app)
     assert other.get("/api/spec").status_code == 503
     assert other.get("/api/health").json()["spec_loaded"] is False
 
