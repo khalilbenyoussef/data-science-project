@@ -220,6 +220,6 @@ def test_demo_script_reads_its_numbers(ctx, monkeypatch):
     assert "Détention d'un compte : 37,8 %" in text and "MAR 44,4 %" in text
     assert "Écart hommes − femmes : 23,0 pts ; revenu : 27,0 pts" in text
     assert "1 pistes ; ex. groupe cible « femmes »" in text
-    assert "pass : 18 réussis, 1 avertissements, 0 échecs" in text and "fautes 9/9" in text
+    assert "conforme : 18 réussis, 1 avertissements, 0 échecs" in text and "fautes 9/9" in text
     assert "contrôle en direct non mesuré" in text and "| 9:30–10:00 | Conclusion | — |" in text
     assert dl.TARGETS["DEMO.md"] == "docs/DEMO.md"

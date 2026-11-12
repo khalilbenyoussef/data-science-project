@@ -19,7 +19,7 @@ from biflow.tools.user_sources.canonical import indicator_code
 from biflow.tools.user_sources.countries import normalize_name
 from biflow.tools.user_sources.registry import list_mappings
 
-USER_CHIP = "Vos données"
+USER_CHIP = "Données utilisateur · non vérifiée par BIFlow"
 USER_MARKER = "D'après vos données (non vérifiées par BIFlow)"
 STOP_WORDS = {"pour", "adultes", "exemple", "fictif", "dans", "avec", "des", "les", "taux", "part", "nombre"}
 UNIT_TEXT = {"percent": "%", "fraction": "(fraction)", "per_100k_adults": "pour 100 000 adultes",

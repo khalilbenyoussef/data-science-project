@@ -192,7 +192,7 @@ def test_insights_pdf_annex_labels_every_user_value(env):
     assert "BIFlow ne les vérifie pas" in annex
     assert "30,8 pour 100 000 adultes (2024)" in annex and "26,4 % (2023)" in annex  # annee anterieure indiquee
     # chaque ligne de valeurs porte l'etiquette (cellule « Étiquette »), plus le chapeau de section
-    assert annex.count("Vos données") >= 3
+    assert annex.count("Données utilisateur") >= 3
     assert "Comparaison indicative : définition déclarée par l'utilisateur" in annex
     assert "35,44 pour 100 000 adultes (2024)" in annex  # KPI officiel compare, meme annee
     assert "Pistes à partir de vos données" in annex and "à partir de vos données) :" in annex

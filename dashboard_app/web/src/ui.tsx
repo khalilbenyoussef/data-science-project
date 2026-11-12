@@ -19,7 +19,7 @@ import {
   friendlyFilter, friendlyRule, friendlySource, noticeCopy, plainText, rejectedLabel, sourceName,
 } from "./copy";
 
-export const USER_CHIP_TEXT = "Vos données";
+export const USER_CHIP_TEXT = "Données utilisateur · non vérifiée par BIFlow";
 
 // Références hors entrepôt (SMIG, pauvreté INS) : jamais affichées dans l'interface.
 const HIDDEN_INFO_IDS = new Set([
